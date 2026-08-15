@@ -210,10 +210,10 @@ check('a broken chain reports zero', game.currentStreak('2026-03-20') === 0,
 check('an unbroken chain still reports', game.currentStreak('2026-03-06') === 1,
   `${game.currentStreak('2026-03-06')}`);
 
-// Master is the only difficulty, and it multiplies every authored player speed
-// by 1.45, so the raw figures below carry it.
-const MASTER_SCALE = 1.45;
-const MASTER_CRUISE = 125 * MASTER_SCALE;
+// The single difficulty profile leaves the authored player speeds alone, so a
+// run opens on the bare base cruise speed.
+const PLAYER_SCALE = 1;
+const BASE_CRUISE = 125 * PLAYER_SCALE;
 
 // --- countdown --------------------------------------------------------------
 // Three seconds where nothing moves, including the clock and the controls.
@@ -227,7 +227,7 @@ step(1.0);
 check('the world holds still during the countdown', game.player.distance === frozenAt,
   `${frozenAt.toFixed(2)} -> ${game.player.distance.toFixed(2)}`);
 check('the throttle is ignored during the countdown',
-  Math.abs(game.player.speed - MASTER_CRUISE) < 0.01,
+  Math.abs(game.player.speed - BASE_CRUISE) < 0.01,
   `${game.player.speed.toFixed(1)}`);
 check('the run clock has not started', game.run.elapsed === 0, `${game.run.elapsed}`);
 
@@ -258,6 +258,6 @@ check('the first ten passes are where the speed comes from', at10 - at0 >= 55,
 check('late passes add far less than early ones',
   (at200 - at50) / 150 < (at10 - at0) / 10 / 4,
   `early ${(at10 - at0) / 10}/pass, late ${((at200 - at50) / 150).toFixed(2)}/pass`);
-check('cruise speed is capped', at200 <= 380 * MASTER_SCALE, `${at200}`);
+check('cruise speed is capped', at200 <= 380 * PLAYER_SCALE, `${at200}`);
 
 finish();

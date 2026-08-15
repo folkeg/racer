@@ -84,7 +84,8 @@ var HarborLoop = (() => {
     todayKey: () => todayKey,
     totalStars: () => totalStars,
     touchStreak: () => touchStreak,
-    trackLength: () => trackLength
+    trackLength: () => trackLength,
+    trackScreenBounds: () => trackScreenBounds
   });
 
   // src/config.ts
@@ -133,15 +134,15 @@ var HarborLoop = (() => {
   // src/difficulty.ts
   var DIFFICULTY_PROFILES = {
     master: {
-      label: "MASTER",
-      blurb: "36 车 · 最快 · AI 几乎不让路",
-      playerSpeed: 1.45,
-      trafficSpeed: 1.42,
-      carCount: 36,
-      aiSafetyScale: 0.36,
-      aiDecisionScale: 0.4,
-      maxSimultaneousAi: 6,
-      invincibleSeconds: 0.75
+      label: "STANDARD",
+      blurb: "24 车 · 起步平缓 · 每超一辆车提速",
+      playerSpeed: 1,
+      trafficSpeed: 1,
+      carCount: 24,
+      aiSafetyScale: 0.75,
+      aiDecisionScale: 0.75,
+      maxSimultaneousAi: 3,
+      invincibleSeconds: 1.15
     }
   };
   var DIFFICULTY_LABEL = {
@@ -159,6 +160,169 @@ var HarborLoop = (() => {
     tuning.profile = profile;
     tuning.player = profile.playerSpeed;
     tuning.traffic = profile.trafficSpeed * trafficScale;
+  }
+
+  // src/platform.ts
+  var canvas = wx.createCanvas();
+  var context2d = canvas.getContext("2d");
+  if (!context2d) throw new Error("2D canvas context is unavailable");
+  var ctx = context2d;
+  function withRenderTarget(target, draw) {
+    const previous = ctx;
+    ctx = target;
+    try {
+      draw();
+    } finally {
+      ctx = previous;
+    }
+  }
+  function createOffscreenCanvas(width, height) {
+    try {
+      const offscreen = wx.createCanvas();
+      offscreen.width = width;
+      offscreen.height = height;
+      return offscreen;
+    } catch (error) {
+      return null;
+    }
+  }
+  var windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+  var VIEW_W = windowInfo.windowWidth;
+  var VIEW_H = windowInfo.windowHeight;
+  var DPR = Math.min(windowInfo.pixelRatio || 1, 3);
+  canvas.width = Math.floor(VIEW_W * DPR);
+  canvas.height = Math.floor(VIEW_H * DPR);
+  ctx.scale(DPR, DPR);
+  var DESIGN_W = 390;
+  var DESIGN_H = 844;
+  var scale = Math.min(VIEW_W / DESIGN_W, VIEW_H / DESIGN_H);
+  var offsetX = (VIEW_W - DESIGN_W * scale) * 0.5;
+  var offsetY = (VIEW_H - DESIGN_H * scale) * 0.5;
+  function screenToDesignX(screenX) {
+    return (screenX - offsetX) / scale;
+  }
+  function screenToDesignY(screenY) {
+    return (screenY - offsetY) / scale;
+  }
+  function vibrate(type) {
+    if (typeof wx.vibrateShort !== "function") return;
+    try {
+      wx.vibrateShort({ type });
+    } catch (error) {
+    }
+  }
+  function createCompatibleAudioContext() {
+    if (typeof wx !== "undefined" && typeof wx.createWebAudioContext === "function") {
+      try {
+        return wx.createWebAudioContext();
+      } catch (error) {
+      }
+    }
+    if (typeof globalThis !== "undefined") {
+      const scope = globalThis;
+      const BrowserAudioContext = scope.AudioContext || scope.webkitAudioContext;
+      if (BrowserAudioContext) {
+        try {
+          return new BrowserAudioContext();
+        } catch (error) {
+        }
+      }
+    }
+    return null;
+  }
+  var scheduleFrame = typeof requestAnimationFrame === "function" ? (callback) => {
+    requestAnimationFrame(callback);
+  } : (callback) => {
+    setTimeout(() => callback(Date.now()), 16);
+  };
+
+  // src/render/camera.ts
+  var PERSPECTIVE = true;
+  var PITCH = 0.9;
+  var HEIGHT = 900;
+  var NEAR = 700;
+  var FOCAL = 1400;
+  var SCREEN_CX = DESIGN_W / 2;
+  var FIT_X = 0.94;
+  var FIT_Y = 1.02;
+  var cosPitch = Math.cos(PITCH);
+  var sinPitch = Math.sin(PITCH);
+  var REFERENCE = (NEAR + DESIGN_H * 0.5) * cosPitch + HEIGHT * sinPitch;
+  var SAFE_MARGIN = 4;
+  var SAFE_TOP = 56;
+  var SAFE_BOTTOM = 726;
+  var fitScale = 1;
+  var fitDx = 0;
+  var fitDy = 0;
+  function clearCameraFit() {
+    fitScale = 1;
+    fitDx = 0;
+    fitDy = 0;
+  }
+  function projectedBounds(points) {
+    const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+    for (const point of points) {
+      const projected = project(point.x, point.y);
+      if (projected.x < bounds.minX) bounds.minX = projected.x;
+      if (projected.x > bounds.maxX) bounds.maxX = projected.x;
+      if (projected.y < bounds.minY) bounds.minY = projected.y;
+      if (projected.y > bounds.maxY) bounds.maxY = projected.y;
+    }
+    return bounds;
+  }
+  function fitCameraToPlane(points) {
+    clearCameraFit();
+    if (points.length === 0) return;
+    const { minX, maxX, minY, maxY } = projectedBounds(points);
+    const width = maxX - minX;
+    const height = maxY - minY;
+    if (!(width > 0) || !(height > 0)) return;
+    fitScale = Math.min(
+      1,
+      (DESIGN_W - SAFE_MARGIN * 2) / width,
+      (SAFE_BOTTOM - SAFE_TOP) / height
+    );
+    fitDx = DESIGN_W / 2 - fitScale * ((minX + maxX) / 2);
+    fitDy = (SAFE_TOP + SAFE_BOTTOM) / 2 - fitScale * ((minY + maxY) / 2);
+  }
+  function project(x, y) {
+    if (!PERSPECTIVE) {
+      return { x: x * fitScale + fitDx, y: y * fitScale + fitDy, scale: fitScale, depth: DESIGN_H - y };
+    }
+    const ground = NEAR + (DESIGN_H - y);
+    const lateral = x - SCREEN_CX;
+    const depth = ground * cosPitch + HEIGHT * sinPitch;
+    const vertical = ground * sinPitch - HEIGHT * cosPitch;
+    const scale2 = FOCAL / Math.max(1, depth);
+    return {
+      x: (SCREEN_CX + lateral * scale2 * FIT_X) * fitScale + fitDx,
+      y: -vertical * scale2 * FIT_Y * fitScale + fitDy,
+      // Sprites use one scale; the geometric mean keeps them from looking squashed.
+      scale: REFERENCE / Math.max(1, depth) * Math.sqrt(FIT_X * FIT_Y) * fitScale,
+      depth
+    };
+  }
+  function projectPath(points) {
+    return points.map((point) => project(point.x, point.y));
+  }
+  function projectedHeading(x, y, angle) {
+    const step = 2;
+    const a = project(x, y);
+    const b = project(x + Math.cos(angle) * step, y + Math.sin(angle) * step);
+    return Math.atan2(b.y - a.y, b.x - a.x);
+  }
+
+  // src/render/light.ts
+  var LIGHT_ANGLE = Math.PI * 0.32;
+  var SHADOW_X = Math.cos(LIGHT_ANGLE);
+  var SHADOW_Y = Math.sin(LIGHT_ANGLE);
+  var CAR_SHADOW_DISTANCE = 3.2;
+  var CAR_BODY_DEPTH = 1.5;
+  var ISLAND_DEPTH = 3.4;
+  var ROAD_DEPTH = 5;
+  function localLight(angle, distance) {
+    const local = LIGHT_ANGLE - angle;
+    return { x: Math.cos(local) * distance, y: Math.sin(local) * distance };
   }
 
   // src/tracks/index.ts
@@ -339,6 +503,7 @@ var HarborLoop = (() => {
   var DEFAULT_TRACK_ID = "long-bay";
 
   // src/track.ts
+  var ROAD_OUTER_EXTENT = ROAD_HALF_WIDTH + 7 + ROAD_DEPTH;
   var activeTrackId = DEFAULT_TRACK_ID;
   var centerPath = [];
   function buildArcData(points) {
@@ -469,6 +634,10 @@ var HarborLoop = (() => {
     laneDividerPaths = Array.from({ length: LANE_COUNT - 1 }, (_, i) => pathForLane(i + 0.5));
     outerRoadEdgePath = pathAtOffset(ROAD_HALF_WIDTH - 1.8);
     innerRoadEdgePath = pathAtOffset(-ROAD_HALF_WIDTH + 1.8);
+    fitCameraToPlane([...pathAtOffset(ROAD_OUTER_EXTENT), ...pathAtOffset(-ROAD_OUTER_EXTENT)]);
+  }
+  function trackScreenBounds() {
+    return projectedBounds([...pathAtOffset(ROAD_OUTER_EXTENT), ...pathAtOffset(-ROAD_OUTER_EXTENT)]);
   }
   setTrack(DEFAULT_TRACK_ID);
 
@@ -747,80 +916,6 @@ var HarborLoop = (() => {
     if (value > target) return Math.max(target, value - maxDelta);
     return target;
   }
-
-  // src/platform.ts
-  var canvas = wx.createCanvas();
-  var context2d = canvas.getContext("2d");
-  if (!context2d) throw new Error("2D canvas context is unavailable");
-  var ctx = context2d;
-  function withRenderTarget(target, draw) {
-    const previous = ctx;
-    ctx = target;
-    try {
-      draw();
-    } finally {
-      ctx = previous;
-    }
-  }
-  function createOffscreenCanvas(width, height) {
-    try {
-      const offscreen = wx.createCanvas();
-      offscreen.width = width;
-      offscreen.height = height;
-      return offscreen;
-    } catch (error) {
-      return null;
-    }
-  }
-  var windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-  var VIEW_W = windowInfo.windowWidth;
-  var VIEW_H = windowInfo.windowHeight;
-  var DPR = Math.min(windowInfo.pixelRatio || 1, 3);
-  canvas.width = Math.floor(VIEW_W * DPR);
-  canvas.height = Math.floor(VIEW_H * DPR);
-  ctx.scale(DPR, DPR);
-  var DESIGN_W = 390;
-  var DESIGN_H = 844;
-  var scale = Math.min(VIEW_W / DESIGN_W, VIEW_H / DESIGN_H);
-  var offsetX = (VIEW_W - DESIGN_W * scale) * 0.5;
-  var offsetY = (VIEW_H - DESIGN_H * scale) * 0.5;
-  function screenToDesignX(screenX) {
-    return (screenX - offsetX) / scale;
-  }
-  function screenToDesignY(screenY) {
-    return (screenY - offsetY) / scale;
-  }
-  function vibrate(type) {
-    if (typeof wx.vibrateShort !== "function") return;
-    try {
-      wx.vibrateShort({ type });
-    } catch (error) {
-    }
-  }
-  function createCompatibleAudioContext() {
-    if (typeof wx !== "undefined" && typeof wx.createWebAudioContext === "function") {
-      try {
-        return wx.createWebAudioContext();
-      } catch (error) {
-      }
-    }
-    if (typeof globalThis !== "undefined") {
-      const scope = globalThis;
-      const BrowserAudioContext = scope.AudioContext || scope.webkitAudioContext;
-      if (BrowserAudioContext) {
-        try {
-          return new BrowserAudioContext();
-        } catch (error) {
-        }
-      }
-    }
-    return null;
-  }
-  var scheduleFrame = typeof requestAnimationFrame === "function" ? (callback) => {
-    requestAnimationFrame(callback);
-  } : (callback) => {
-    setTimeout(() => callback(Date.now()), 16);
-  };
 
   // src/audio.ts
   function setAudioParam(param, value) {
@@ -2588,7 +2683,7 @@ var HarborLoop = (() => {
   var STARTING_MODE_COUNT = 3;
   var MODE_UNLOCK_COST = [3, 6, 10, 14, 19, 24, 30, 36, 43, 50, 58, 66, 75];
   var DIFFICULTY_STAR_SCALE = {
-    master: 1.3
+    master: 1
   };
   function starTarget(mode, tier, difficulty) {
     const base = mode.stars[tier];
@@ -3963,46 +4058,6 @@ var HarborLoop = (() => {
   }
   var debugPointerCount = () => activePointers.size;
 
-  // src/render/camera.ts
-  var PERSPECTIVE = true;
-  var PITCH = 0.3;
-  var HEIGHT = 900;
-  var NEAR = 700;
-  var FOCAL = 1400;
-  var SCREEN_CX = DESIGN_W / 2;
-  var SCREEN_CY = DESIGN_H * -0.3;
-  var FIT_X = 0.94;
-  var FIT_Y = 1.02;
-  var cosPitch = Math.cos(PITCH);
-  var sinPitch = Math.sin(PITCH);
-  var REFERENCE = (NEAR + DESIGN_H * 0.5) * cosPitch + HEIGHT * sinPitch;
-  function project(x, y) {
-    if (!PERSPECTIVE) {
-      return { x, y, scale: 1, depth: DESIGN_H - y };
-    }
-    const ground = NEAR + (DESIGN_H - y);
-    const lateral = x - SCREEN_CX;
-    const depth = ground * cosPitch + HEIGHT * sinPitch;
-    const vertical = ground * sinPitch - HEIGHT * cosPitch;
-    const scale2 = FOCAL / Math.max(1, depth);
-    return {
-      x: SCREEN_CX + lateral * scale2 * FIT_X,
-      y: SCREEN_CY - vertical * scale2 * FIT_Y,
-      // Sprites use one scale; the geometric mean keeps them from looking squashed.
-      scale: REFERENCE / Math.max(1, depth) * Math.sqrt(FIT_X * FIT_Y),
-      depth
-    };
-  }
-  function projectPath(points) {
-    return points.map((point) => project(point.x, point.y));
-  }
-  function projectedHeading(x, y, angle) {
-    const step = 2;
-    const a = project(x, y);
-    const b = project(x + Math.cos(angle) * step, y + Math.sin(angle) * step);
-    return Math.atan2(b.y - a.y, b.x - a.x);
-  }
-
   // src/render/overlays.ts
   function drawHazardLane() {
     if (effects.hazardLane < 0) return;
@@ -4081,19 +4136,6 @@ var HarborLoop = (() => {
       }
     }
     ctx.restore();
-  }
-
-  // src/render/light.ts
-  var LIGHT_ANGLE = Math.PI * 0.32;
-  var SHADOW_X = Math.cos(LIGHT_ANGLE);
-  var SHADOW_Y = Math.sin(LIGHT_ANGLE);
-  var CAR_SHADOW_DISTANCE = 3.2;
-  var CAR_BODY_DEPTH = 1.5;
-  var ISLAND_DEPTH = 3.4;
-  var ROAD_DEPTH = 5;
-  function localLight(angle, distance) {
-    const local = LIGHT_ANGLE - angle;
-    return { x: Math.cos(local) * distance, y: Math.sin(local) * distance };
   }
 
   // src/render/sprites.ts

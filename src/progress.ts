@@ -40,12 +40,16 @@ const STARTING_MODE_COUNT = 3;
 const MODE_UNLOCK_COST = [3, 6, 10, 14, 19, 24, 30, 36, 43, 50, 58, 66, 75];
 
 /**
- * Star thresholds are authored for the baseline field and scaled up for harder
- * settings. Master keeps the 1.3 it has always carried, so removing the softer
- * settings left every threshold a player actually faces exactly where it was.
+ * Star thresholds are authored per mode against the baseline field, then scaled
+ * up for settings harder than that baseline.
+ *
+ * This carried 1.3 while the only setting ran at 1.45x speed on 36 cars. The
+ * profile is back at the baseline now, so the surcharge has nothing left to
+ * price: leaving it at 1.3 would demand more points from a field that produces
+ * fewer of them, which is the opposite of what retuning was for.
  */
 const DIFFICULTY_STAR_SCALE: Record<Difficulty, number> = {
-  master: 1.3
+  master: 1
 };
 
 function starTarget(mode: ModeDefinition, tier: number, difficulty: Difficulty): number {

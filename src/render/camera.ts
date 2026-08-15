@@ -22,24 +22,32 @@ export interface Projected extends Vec2 {
   depth: number;
 }
 
-/**
- * Top-down or tilted.
- *
- * The tilted camera was tried and reverted: on a portrait phone the far side of
- * the circuit shrinks past the point where traffic can be read, and reading
- * traffic is the entire game. The projection stays in place because the
- * ribbon-filled road it forced is better rendering than the strokes it
- * replaced, and because turning it back on is one constant.
- */
+/** Perspective, or straight overhead. Overhead is kept only as an escape hatch. */
 const PERSPECTIVE = true;
 
 /**
- * A shallow pitch on a long lens. The steep version was tried and reverted:
- * it shrank the far side of the circuit past the point where traffic could be
- * read. This keeps the near-to-far size ratio under two, which is enough to
- * feel like a solid table without costing legibility.
+ * Angle down from horizontal: 0 looks along the plane, PI/2 looks straight down.
+ * So a *larger* number is a flatter, more top-down picture with less
+ * foreshortening — the opposite of what "pitch" suggests at a glance.
+ *
+ * This sat at 0.30 for a long time, which was the worst available choice on both
+ * counts. Measured across the four circuits:
+ *
+ *   pitch   near/far size   fit scale
+ *   0.30      1.86x           0.845
+ *   0.60      1.64x           0.942
+ *   0.90      1.46x           0.955
+ *   1.20      1.28x           0.881
+ *
+ * A shallow angle magnifies lateral distance near the bottom of the frame, so
+ * 0.30 both shrank the far side of the circuit the most *and* forced the hardest
+ * shrink-to-fit. 0.90 keeps a clear sense of depth while leaving traffic at the
+ * far end readable, and lets the circuit sit larger on screen than 0.30 did.
+ *
+ * Raise it towards 1.20 for a flatter board; past that the perspective stops
+ * reading and the fit starts costing size again.
  */
-const PITCH = 0.30;
+const PITCH = 0.90;
 /** Height above the plane, in design units. */
 const HEIGHT = 900;
 /** Ground distance from the camera to the nearest edge of the design area. */
@@ -53,9 +61,14 @@ const FOCAL = 1400;
  * Horizontal and vertical fit are separate on purpose: a portrait screen is
  * much taller than the projected plane is deep, so stretching only the vertical
  * fills the frame without pushing the near edge of the track off the sides.
+ *
+ * There is deliberately no vertical origin constant here. One used to exist, and
+ * because its value only made sense at one PITCH, changing the angle threw the
+ * whole scene off screen — which is most likely why an earlier attempt at a
+ * flatter camera was abandoned as unworkable. The fit below centres the circuit
+ * vertically instead, so PITCH can be changed on its own.
  */
 const SCREEN_CX = DESIGN_W / 2;
-const SCREEN_CY = DESIGN_H * -0.30;
 const FIT_X = 0.94;
 const FIT_Y = 1.02;
 
@@ -65,11 +78,87 @@ const sinPitch = Math.sin(PITCH);
 /** Reference depth, so `scale` is around 1 in the middle of the board. */
 const REFERENCE = (NEAR + DESIGN_H * 0.5) * cosPitch + HEIGHT * sinPitch;
 
+/**
+ * Shrink-to-fit, applied after projection.
+ *
+ * FIT_X above was tuned by eye against one circuit, and a constant cannot know
+ * how wide the next one is. Three of the four tracks
+ * spilled off a portrait screen: the road is drawn a further 39 units past the
+ * centre line, and perspective magnifies lateral distance by up to 1.31 near the
+ * bottom of the frame, so a centre line that sits inside the design box does not
+ * keep its road there.
+ *
+ * So the circuit is measured once per track and scaled down just enough to fit.
+ * It only ever shrinks — a track already inside the frame is left exactly as it
+ * was — and it scales uniformly about the projected centre, so the framing that
+ * was tuned by hand survives at a slightly smaller size instead of being
+ * squashed on one axis.
+ */
+const SAFE_MARGIN = 4;
+const SAFE_TOP = 56;
+const SAFE_BOTTOM = 726;
+
+let fitScale = 1;
+let fitDx = 0;
+let fitDy = 0;
+
+export interface Bounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+function clearCameraFit(): void {
+  fitScale = 1;
+  fitDx = 0;
+  fitDy = 0;
+}
+
+/** Projected bounds of a plane path under the fit currently installed. */
+export function projectedBounds(points: Vec2[]): Bounds {
+  const bounds: Bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  for (const point of points) {
+    const projected = project(point.x, point.y);
+    if (projected.x < bounds.minX) bounds.minX = projected.x;
+    if (projected.x > bounds.maxX) bounds.maxX = projected.x;
+    if (projected.y < bounds.minY) bounds.minY = projected.y;
+    if (projected.y > bounds.maxY) bounds.maxY = projected.y;
+  }
+  return bounds;
+}
+
+/**
+ * Measures `points` — the outermost geometry the track will draw — and installs
+ * the scale that keeps it on screen. Call from setTrack, before anything is
+ * projected for the new circuit.
+ */
+export function fitCameraToPlane(points: Vec2[]): void {
+  clearCameraFit();
+  if (points.length === 0) return;
+
+  const { minX, maxX, minY, maxY } = projectedBounds(points);
+  const width = maxX - minX;
+  const height = maxY - minY;
+  if (!(width > 0) || !(height > 0)) return;
+
+  fitScale = Math.min(
+    1,
+    (DESIGN_W - SAFE_MARGIN * 2) / width,
+    (SAFE_BOTTOM - SAFE_TOP) / height
+  );
+  // Centre on both axes. Vertical centring is what frees PITCH from needing a
+  // matching hand-tuned origin: whatever the angle does to the projected height,
+  // the circuit lands between the HUD and the control bar.
+  fitDx = DESIGN_W / 2 - fitScale * ((minX + maxX) / 2);
+  fitDy = (SAFE_TOP + SAFE_BOTTOM) / 2 - fitScale * ((minY + maxY) / 2);
+}
+
 export function project(x: number, y: number): Projected {
   if (!PERSPECTIVE) {
     // Straight overhead: design space is screen space. Depth still runs from the
     // far edge to the near one so draw ordering does not have to special-case it.
-    return { x, y, scale: 1, depth: DESIGN_H - y };
+    return { x: x * fitScale + fitDx, y: y * fitScale + fitDy, scale: fitScale, depth: DESIGN_H - y };
   }
 
   // Design y runs top (far) to bottom (near); ground distance runs the other way.
@@ -82,10 +171,10 @@ export function project(x: number, y: number): Projected {
 
   const scale = FOCAL / Math.max(1, depth);
   return {
-    x: SCREEN_CX + lateral * scale * FIT_X,
-    y: SCREEN_CY - vertical * scale * FIT_Y,
+    x: (SCREEN_CX + lateral * scale * FIT_X) * fitScale + fitDx,
+    y: -vertical * scale * FIT_Y * fitScale + fitDy,
     // Sprites use one scale; the geometric mean keeps them from looking squashed.
-    scale: (REFERENCE / Math.max(1, depth)) * Math.sqrt(FIT_X * FIT_Y),
+    scale: (REFERENCE / Math.max(1, depth)) * Math.sqrt(FIT_X * FIT_Y) * fitScale,
     depth
   };
 }

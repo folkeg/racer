@@ -100,13 +100,14 @@ const check = (name, pass, detail = '') => results.push({ name, pass: Boolean(pa
 
 // --- throttle -------------------------------------------------------------
 // The speed curve is authored on a 125 base cruise with a fixed 60 throttle
-// margin, then multiplied by the difficulty profile. Master is the only setting
-// left and it scales the player by 1.45, so every figure below carries it.
+// margin, then multiplied by the difficulty profile. The single profile sits at
+// 1.0 so a run opens on the authored base speed and each overtake is worth a
+// full banded step rather than a fraction of an already-inflated number.
 const BASE_CRUISE = 125;
 const THROTTLE_MARGIN = 60;
-const MASTER_SCALE = 1.45;
-const CRUISE = BASE_CRUISE * MASTER_SCALE;
-const THROTTLE_TOP = (BASE_CRUISE + THROTTLE_MARGIN) * MASTER_SCALE;
+const PLAYER_SCALE = 1;
+const CRUISE = BASE_CRUISE * PLAYER_SCALE;
+const THROTTLE_TOP = (BASE_CRUISE + THROTTLE_MARGIN) * PLAYER_SCALE;
 
 resetWithoutTraffic();
 check('idle: throttle off', game.inputState.throttle === false);

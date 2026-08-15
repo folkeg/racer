@@ -3,8 +3,16 @@
  *
  * Every track is built from exact lines and arcs rather than hand-placed control
  * points, which keeps curvature continuous and the six lanes evenly spaced. All
- * of them are closed, non-crossing, and stay inside x 40..350 and y 60..705 in
- * design space — clear of the HUD at the top and the control bar at y 738.
+ * of them are closed, non-crossing, and keep their *centre line* inside roughly
+ * x 40..350 and y 60..705 in design space.
+ *
+ * That box does not by itself keep a circuit on screen, and reading it as if it
+ * did is what let three of these four spill off the frame: the road is drawn a
+ * further 39 units to each side, and the perspective camera then magnifies
+ * lateral distance by up to 1.31 near the bottom of the plane. What guarantees
+ * the fit is `fitCameraToPlane`, which measures the projected road per track and
+ * scales it down when it has to — see src/render/camera.ts. Keep new circuits
+ * near the box anyway, or the fit will shrink everything to accommodate them.
  */
 
 import type { Vec2 } from '../types';

@@ -1,10 +1,12 @@
 /**
  * The difficulty profile for the active run.
  *
- * There is exactly one now. Master is the race the game was tuned around — a
- * full field, top speed, and traffic that will not move over for you — and
- * shipping softer settings alongside it just let players opt out of the thing
- * worth playing.
+ * There is exactly one now: shipping softer settings alongside the real one
+ * just let players opt out of the thing worth playing, and picking a difficulty
+ * before you have driven a lap is a choice nobody can make well anyway.
+ *
+ * The `master` key is a storage detail, not a claim about how hard this is —
+ * see `Difficulty` in modes/types.ts for why the key outlived the setting.
  *
  * The profile is still a record keyed by difficulty rather than a bare object,
  * so a second setting is a data change here plus a menu control, not a refactor
@@ -36,17 +38,31 @@ export interface DifficultyProfile {
   invincibleSeconds: number;
 }
 
+/**
+ * Retuned so the speed ramp is the thing you feel.
+ *
+ * The profile used to start you at 1.45x on a 36-car field, which meant the
+ * game opened at its own ceiling: you spent the first laps surviving rather
+ * than overtaking, never strung a combo together, and so never saw the one
+ * mechanic the scoring is built on. Starting at the authored base speed with a
+ * lighter field costs nothing at the top end — ten overtakes still take you to
+ * 185 — but it makes those ten overtakes reachable.
+ *
+ * `playerSpeed` multiplies the banded combo gains as well as the base, so
+ * holding it at 1.0 is also what keeps each pass worth a legible +6 rather than
+ * an invisible fraction of an already-high number.
+ */
 export const DIFFICULTY_PROFILES: Record<Difficulty, DifficultyProfile> = {
   master: {
-    label: 'MASTER',
-    blurb: '36 车 · 最快 · AI 几乎不让路',
-    playerSpeed: 1.45,
-    trafficSpeed: 1.42,
-    carCount: 36,
-    aiSafetyScale: 0.36,
-    aiDecisionScale: 0.4,
-    maxSimultaneousAi: 6,
-    invincibleSeconds: 0.75
+    label: 'STANDARD',
+    blurb: '24 车 · 起步平缓 · 每超一辆车提速',
+    playerSpeed: 1,
+    trafficSpeed: 1,
+    carCount: 24,
+    aiSafetyScale: 0.75,
+    aiDecisionScale: 0.75,
+    maxSimultaneousAi: 3,
+    invincibleSeconds: 1.15
   }
 };
 

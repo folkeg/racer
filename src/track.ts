@@ -10,8 +10,17 @@
  */
 
 import { LANE_COUNT, LANE_GAP, ROAD_HALF_WIDTH } from './config';
+import { fitCameraToPlane, projectedBounds, type Bounds } from './render/camera';
+import { ROAD_DEPTH } from './render/light';
 import { DEFAULT_TRACK_ID, trackById, type TrackId } from './tracks';
 import type { TrackSample, Vec2 } from './types';
+
+/**
+ * How far past the centre line the road actually reaches on screen: road.ts
+ * draws its deck shadow at ROAD_HALF_WIDTH + 7, then shifts that band a further
+ * ROAD_DEPTH towards the light. Fitting to anything narrower clips the shadow.
+ */
+const ROAD_OUTER_EXTENT = ROAD_HALF_WIDTH + 7 + ROAD_DEPTH;
 
 export let activeTrackId: TrackId = DEFAULT_TRACK_ID;
 export let centerPath: Vec2[] = [];
@@ -193,6 +202,15 @@ export function setTrack(id: TrackId): void {
   laneDividerPaths = Array.from({ length: LANE_COUNT - 1 }, (_, i) => pathForLane(i + 0.5));
   outerRoadEdgePath = pathAtOffset(ROAD_HALF_WIDTH - 1.8);
   innerRoadEdgePath = pathAtOffset(-ROAD_HALF_WIDTH + 1.8);
+
+  // Fit last: it measures the paths above, and everything projected from here on
+  // — the cached static layer included — has to be built under the new fit.
+  fitCameraToPlane([...pathAtOffset(ROAD_OUTER_EXTENT), ...pathAtOffset(-ROAD_OUTER_EXTENT)]);
+}
+
+/** Projected bounds of the outermost geometry, for the off-screen regression test. */
+export function trackScreenBounds(): Bounds {
+  return projectedBounds([...pathAtOffset(ROAD_OUTER_EXTENT), ...pathAtOffset(-ROAD_OUTER_EXTENT)]);
 }
 
 setTrack(DEFAULT_TRACK_ID);

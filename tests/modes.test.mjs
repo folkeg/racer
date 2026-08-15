@@ -103,20 +103,46 @@ check(
   `${slowSpeeds[0].toFixed(1)} vs ${normalSpeeds[0].toFixed(1)}`
 );
 
-// Master is the only setting left, so what matters is that every run actually
-// gets the Master field rather than the unscaled baseline.
+// The single profile is the whole difficulty curve now, so its two headline
+// numbers — field size and opening speed — are worth pinning directly.
+const BASE_CRUISE = 125; // PLAYER_CRUISE_BASE_SPEED in config.ts
 game.startMode('speed-monkey');
 game.clearCountdown();
-check('a run puts the full Master field on track', game.aiCars.length === 36,
-  `cars=${game.aiCars.length}`);
-// PLAYER_CRUISE_BASE_SPEED in config.ts; Master multiplies it by 1.45.
-const BASE_CRUISE = 125;
+check('a run puts 24 cars on track', game.aiCars.length === 24, `cars=${game.aiCars.length}`);
 check(
-  'Master scales the player off the baseline cruise speed',
-  game.player.speed > BASE_CRUISE * 1.4,
-  `${game.player.speed.toFixed(0)}`
+  'a run opens on the base cruise speed rather than a scaled-up one',
+  Math.abs(game.player.speed - BASE_CRUISE) < 0.01,
+  `${game.player.speed.toFixed(1)}`
 );
 check('every car sits in a valid lane', game.aiCars.every((car) => car.lane >= 0 && car.lane < 5));
+
+// The ramp is the point of the retune: the player must start slower than the
+// quickest traffic is capable of, or there is nothing for overtakes to earn.
+const fastestTraffic = Math.max(...game.aiCars.map((car) => car.baseSpeed));
+check('overtaking has somewhere to go', game.player.speed > fastestTraffic,
+  `player=${game.player.speed.toFixed(0)} vs fastest AI=${fastestTraffic.toFixed(0)}`);
+
+// --- no circuit spills off screen -----------------------------------------
+// Three of the four tracks used to project past the frame: the road reaches 39
+// units past the centre line and perspective magnifies that near the bottom, so
+// a centre line inside the design box is not enough. Checked per mode, because
+// the mode is what chooses the circuit.
+const DESIGN_W = 390;
+const DESIGN_H = 844;
+const seenTracks = new Set();
+for (const mode of game.MODES) {
+  game.startMode(mode.id);
+  game.clearCountdown();
+  seenTracks.add(mode.trackId);
+  const b = game.trackScreenBounds();
+  check(
+    `${mode.trackId} stays on screen (via ${mode.id})`,
+    b.minX >= 0 && b.maxX <= DESIGN_W && b.minY >= 0 && b.maxY <= DESIGN_H,
+    `x ${b.minX.toFixed(0)}..${b.maxX.toFixed(0)} y ${b.minY.toFixed(0)}..${b.maxY.toFixed(0)}`
+  );
+}
+check('every circuit was covered', seenTracks.size === game.TRACKS.length,
+  `${seenTracks.size} of ${game.TRACKS.length}`);
 
 // The static scene is cached on an offscreen canvas, which must be a *second*
 // canvas; drawing the layer onto the display canvas would blank the frame.
