@@ -88,7 +88,6 @@ function registerCloseCall(): void {
     colors: ['#C5FFF7', '#57D5CB'],
     streak: true
   });
-  addShake(1.8);
   audio.playCloseCall();
 
   run.banner = 'CLOSE!';
@@ -170,7 +169,6 @@ export function detectOvertakes(): void {
           colors: ['#C5FFF7', '#57D5CB', '#FFF4D8'],
           streak: true
         });
-        addShake(3.2);
       }
 
       vibrate(newTier > previousTier ? 'medium' : 'light');

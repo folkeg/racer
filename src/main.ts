@@ -22,7 +22,7 @@ import { audio } from './audio';
 import { frameDelta } from './clock';
 import { updateControlFlash } from './controls';
 import { updateCountdown } from './countdown';
-import { consumeHitStop, shakeOffsetX, shakeOffsetY, updateFeel } from './feel';
+import { consumeHitStop, updateFeel } from './feel';
 import { installInput, releaseAllPointers } from './input';
 import { updateOnboarding } from './onboarding';
 import { ctx, DPR, offsetX, offsetY, scale, scheduleFrame, VIEW_H, VIEW_W } from './platform';
@@ -72,8 +72,11 @@ function drawRace(): void {
   drawStaticScene();
 
   ctx.save();
-  // The shake displaces the world but not the HUD, which would look like a bug.
-  ctx.translate(offsetX + shakeOffsetX(), offsetY + shakeOffsetY());
+  // No shake here. An impact used to displace every car, particle and speed line
+  // against a road that stayed nailed down, which read as the whole picture
+  // sliding rather than as a hit. The shake now moves only the car that was in
+  // the collision; see drawCars.
+  ctx.translate(offsetX, offsetY);
   ctx.scale(scale, scale);
   drawHazardLane();
   drawSpeedLines();

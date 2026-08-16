@@ -1,5 +1,6 @@
 /** Car sprites: one shared top-down shape, restyled per vehicle. */
 
+import { shakeOffsetX, shakeOffsetY } from '../feel';
 import { ctx } from '../platform';
 import { aiCars, currentCruiseSpeed, player } from '../state';
 import { COLORS } from '../theme';
@@ -351,6 +352,13 @@ function drawAfterimage(): void {
   }
 }
 
+/**
+ * Shake strength in design units, relative to the raw value from feel.ts. The
+ * car is 16.4 units long, so the raw 9 of a crash would throw it more than half
+ * its own length; a quarter of that is a body rattle rather than a teleport.
+ */
+const CAR_SHAKE = 0.26;
+
 export function drawCars(): void {
   // Perspective means depth order matters: draw the far side of the board first.
   const ordered = aiCars
@@ -368,7 +376,18 @@ export function drawCars(): void {
     if (car.hasZone) drawZone(car);
     drawAiCar(car);
   }
+  // The impact shake belongs to the red car, not to the frame. Applied here it
+  // rattles the player and its trail while the road, the traffic and the HUD
+  // hold still, which is what makes it read as a collision.
+  const shakeX = shakeOffsetX() * CAR_SHAKE;
+  const shakeY = shakeOffsetY() * CAR_SHAKE;
+  const shaking = shakeX !== 0 || shakeY !== 0;
+  if (shaking) {
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+  }
   drawAfterimage();
   drawFireballAura();
   drawVehicle(player.distance, player.visualLane, PLAYER_STYLE, playerAlpha(), 0, false, 'player');
+  if (shaking) ctx.restore();
 }

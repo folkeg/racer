@@ -5068,6 +5068,7 @@ var HarborLoop = (() => {
       );
     }
   }
+  var CAR_SHAKE = 0.26;
   function drawCars() {
     const ordered = aiCars.map((car) => {
       const plane = sampleAtDistance(car.distance, car.visualLane);
@@ -5081,9 +5082,17 @@ var HarborLoop = (() => {
       if (car.hasZone) drawZone(car);
       drawAiCar(car);
     }
+    const shakeX = shakeOffsetX() * CAR_SHAKE;
+    const shakeY = shakeOffsetY() * CAR_SHAKE;
+    const shaking = shakeX !== 0 || shakeY !== 0;
+    if (shaking) {
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+    }
     drawAfterimage();
     drawFireballAura();
     drawVehicle(player.distance, player.visualLane, PLAYER_STYLE, playerAlpha(), 0, false, "player");
+    if (shaking) ctx.restore();
   }
 
   // src/scoring.ts
@@ -5143,7 +5152,6 @@ var HarborLoop = (() => {
       colors: ["#C5FFF7", "#57D5CB"],
       streak: true
     });
-    addShake(1.8);
     audio.playCloseCall();
     run.banner = "CLOSE!";
     run.bannerTimer = 0.55;
@@ -5209,7 +5217,6 @@ var HarborLoop = (() => {
             colors: ["#C5FFF7", "#57D5CB", "#FFF4D8"],
             streak: true
           });
-          addShake(3.2);
         }
         vibrate(newTier > previousTier ? "medium" : "light");
         (_b = (_a = activeMode).onOvertake) == null ? void 0 : _b.call(_a, overtakes, run);
@@ -5244,7 +5251,7 @@ var HarborLoop = (() => {
   function drawRace() {
     drawStaticScene();
     ctx.save();
-    ctx.translate(offsetX + shakeOffsetX(), offsetY + shakeOffsetY());
+    ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
     drawHazardLane();
     drawSpeedLines();
