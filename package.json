@@ -2,7 +2,7 @@
   "name": "harbor-loop",
   "version": "0.15.2",
   "private": true,
-  "description": "Harbor Loop - WeChat Mini Game racing prototype",
+  "description": "心跳加速-冲刺 - WeChat Mini Game racing prototype",
   "scripts": {
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",

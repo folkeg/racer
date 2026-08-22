@@ -13,8 +13,11 @@ export const deathRace: ModeDefinition = {
   timeLimit: 90,
   scoreUnit: 'POINTS',
   trafficScale: 0.85,
-  trackId: 'marina-sprint',
+  trackId: 'delta-run',
   stars: [800, 2000, 3600],
+  // Contact always destroys here, never crashes, so there's no crash to wait
+  // for — the clock has to be what ends the run.
+  timeoutIsFinal: true,
 
   setup() {
     // Armed for the whole run rather than in bursts.

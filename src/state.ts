@@ -7,6 +7,10 @@ import {
   AI_MAX_DECISION_DELAY,
   AI_MIN_DECISION_DELAY,
   CRUISE_SPEED_CAP,
+  OVERTAKE_KICK_EVERY,
+  OVERTAKE_KICK_SPEED,
+  OVERTAKE_KICK_SPEED_LATE,
+  OVERTAKE_KICK_TAPER_AFTER,
   PLAYER_CRUISE_BASE_SPEED,
   PLAYER_MAX_SPEED,
   SPEED_BANDS,
@@ -53,6 +57,29 @@ export const player: Player = {
 
 export let aiCars: AiCar[] = [];
 
+/**
+ * Lap length of Long Bay, the circuit the field size was tuned against.
+ * `carCount` in the difficulty profile means "this many cars on a lap this
+ * long", not a flat number for every track.
+ */
+const REFERENCE_LAP = 2988;
+/** Below this the road stops feeling like traffic and starts feeling empty. */
+const MIN_FIELD = 8;
+
+/**
+ * How many cars this circuit gets.
+ *
+ * A flat count made short tracks twice as crowded as long ones: Grand Oval and
+ * Delta Run are under half of Long Bay's lap, so the same 24 cars sat one every
+ * 58 units instead of one every 124, and the road was a wall. Scaling with lap
+ * length keeps the *spacing* constant instead, which is the thing that actually
+ * reads as busy or open.
+ */
+function fieldSize(): number {
+  const scaled = Math.round(tuning.profile.carCount * (arc.total / REFERENCE_LAP));
+  return Math.max(MIN_FIELD, scaled);
+}
+
 export function resetGame(): void {
   player.distance = arc.total * 0.03;
   player.lane = STARTING_LANE;
@@ -80,7 +107,7 @@ export function resetGame(): void {
   player.previousHeading = 0;
   player.cornering = 0;
 
-  aiCars = buildBlueprints(tuning.profile.carCount).map((blueprint, index) => {
+  aiCars = buildBlueprints(fieldSize()).map((blueprint, index) => {
     const distance = arc.total * blueprint.fraction;
     const baseSpeed = blueprint.speed * tuning.traffic;
     return {
@@ -135,6 +162,11 @@ export function cruiseSpeedForCombo(combo: number): number {
     remaining -= taken;
     if (remaining <= 0) break;
   }
+  const kicksTotal = Math.floor(Math.max(0, combo) / OVERTAKE_KICK_EVERY);
+  const kicksBeforeTaper = Math.floor(OVERTAKE_KICK_TAPER_AFTER / OVERTAKE_KICK_EVERY);
+  const fullKicks = Math.min(kicksTotal, kicksBeforeTaper);
+  const lateKicks = kicksTotal - fullKicks;
+  speed += fullKicks * OVERTAKE_KICK_SPEED + lateKicks * OVERTAKE_KICK_SPEED_LATE;
   return Math.min(CRUISE_SPEED_CAP, speed);
 }
 

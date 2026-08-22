@@ -491,6 +491,25 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Hard-stops every in-flight one-shot immediately, instead of letting it
+   * decay. update() is what normally fades these out, but it only runs while
+   * a race is playing — a crash that ends the run right on the frame it
+   * happens leaves its noise burst mid-decay with nothing left to tick it
+   * down, so it plays on into the result screen unless cut here.
+   */
+  stopTransients(): void {
+    for (const transient of this.transients) {
+      for (const node of transient.nodes) safelyStopNode(node);
+    }
+    this.transients.length = 0;
+    for (const voice of this.voices) {
+      safelyStopNode(voice.oscillator);
+      safelyStopNode(voice.gain);
+    }
+    this.voices.length = 0;
+  }
+
   suspend(): void {
     if (!this.context || typeof this.context.suspend !== 'function') return;
     try {

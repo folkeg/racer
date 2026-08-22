@@ -7,19 +7,21 @@
 
 import type { Control, ControlId } from './types';
 
-// The widest road stroke reaches y = 733 in design space, so this bottom strip
-// never covers the track or any car, and its lower edge stops at 810 to stay
-// clear of the iPhone home indicator.
-export const CONTROL_BAR_TOP = 738;
-export const CONTROL_H = 72;
-export const CONTROL_RADIUS = 18;
-export const CONTROL_HIT_PADDING = 10;
+// This bottom strip never covers the track, and its lower edge stops at 810 to
+// stay clear of the iPhone home indicator. The buttons were 72 tall sitting at
+// 738; shortening them and pushing them down to sit against that 810 line hands
+// the board back 22 points of height without shrinking the touch targets, which
+// keep their generous CONTROL_HIT_PADDING either way.
+export const CONTROL_BAR_TOP = 752;
+export const CONTROL_H = 58;
+export const CONTROL_RADIUS = 16;
+export const CONTROL_HIT_PADDING = 14;
 export const CONTROL_FLASH_DURATION = 0.14;
 
 export const CONTROLS: Control[] = [
-  { id: 'left', kind: 'lane', direction: +1, x: 20, w: 76 },
-  { id: 'right', kind: 'lane', direction: -1, x: 104, w: 76 },
-  { id: 'throttle', kind: 'throttle', direction: 0, x: 236, w: 134 }
+  { id: 'left', kind: 'lane', direction: +1, x: 20, w: 72 },
+  { id: 'right', kind: 'lane', direction: -1, x: 100, w: 72 },
+  { id: 'throttle', kind: 'throttle', direction: 0, x: 244, w: 126 }
 ].map((control) => ({ ...control, y: CONTROL_BAR_TOP, h: CONTROL_H })) as Control[];
 
 export function controlAtDesignPoint(x: number, y: number): Control | null {

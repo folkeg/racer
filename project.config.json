@@ -1,42 +1,42 @@
 {
-  "description": "Harbor Loop V0.15.2 - Combo Racers",
+  "description": "心跳加速-冲刺 V0.15.2 - Combo Racers",
   "packOptions": {
     "ignore": [
       {
-        "type": "folder",
-        "value": "node_modules"
+        "value": "node_modules",
+        "type": "folder"
       },
       {
-        "type": "folder",
-        "value": "src"
+        "value": "src",
+        "type": "folder"
       },
       {
-        "type": "folder",
-        "value": "scripts"
+        "value": "scripts",
+        "type": "folder"
       },
       {
-        "type": "folder",
-        "value": "tests"
+        "value": "tests",
+        "type": "folder"
       },
       {
-        "type": "file",
-        "value": "index.html"
+        "value": "index.html",
+        "type": "file"
       },
       {
-        "type": "file",
-        "value": "package.json"
+        "value": "package.json",
+        "type": "file"
       },
       {
-        "type": "file",
-        "value": "package-lock.json"
+        "value": "package-lock.json",
+        "type": "file"
       },
       {
-        "type": "file",
-        "value": "tsconfig.json"
+        "value": "tsconfig.json",
+        "type": "file"
       },
       {
-        "type": "folder",
-        "value": "cloudfunctions"
+        "value": "cloudfunctions",
+        "type": "folder"
       }
     ],
     "include": []
@@ -57,7 +57,7 @@
     "checkInvalidKey": true,
     "checkSiteMap": true,
     "uploadWithSourceMap": true,
-    "compileHotReLoad": false,
+    "compileHotReLoad": true,
     "useMultiFrameRuntime": true,
     "useApiHook": true,
     "babelSetting": {
@@ -79,7 +79,7 @@
   },
   "compileType": "game",
   "libVersion": "3.8.10",
-  "appid": "touristappid",
+  "appid": "wx80597a93b54f2005",
   "projectname": "harbor-loop-v0-11-0",
   "condition": {},
   "simulatorPluginLibVersion": {},

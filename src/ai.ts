@@ -79,9 +79,13 @@ function tryBeginAiLaneChange(car: AiCar): boolean {
   if (countActiveAiLaneChanges() >= tuning.profile.maxSimultaneousAi) return false;
   if (playerIsApproachingAi(car)) return false;
 
+  // Traffic used to weave for its own sake too, which read as busy rather than
+  // alive. Now a lane change only happens when a car is genuinely stuck behind
+  // a slower one — the rest of the variety comes from cars just running at
+  // different speeds.
   const ahead = nearestAiAhead(car, car.visualLane, 62);
   const needsToPass = Boolean(ahead && ahead.car.speed + 2 < car.baseSpeed && ahead.distance < 46);
-  if (!needsToPass && random() > 0.34) return false;
+  if (!needsToPass) return false;
 
   const directions = shuffledDirections();
   for (const direction of directions) {

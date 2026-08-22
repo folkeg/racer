@@ -15,9 +15,14 @@
 import { createOffscreenCanvas } from '../platform';
 import type { VehicleStyle } from '../types';
 
-/** Design-space footprint of a car. Sprites are drawn to this shape. */
-export const CAR_LENGTH = 16.4;
-export const CAR_WIDTH = 8.6;
+/**
+ * Design-space footprint of a car. Sprites are drawn to this shape.
+ *
+ * Scaled in step with LANE_GAP in config.ts — a car stays 87% of a lane's
+ * width, which is what keeps five of them side by side without touching.
+ */
+export const CAR_LENGTH = 20.5;
+export const CAR_WIDTH = 10.8;
 
 /** How many device pixels per design unit the artwork is drawn at. */
 const SUPERSAMPLE = 10;

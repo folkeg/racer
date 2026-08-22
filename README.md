@@ -58,16 +58,19 @@
 
 ### 赛道
 
-四条赛道，每个模式绑定一条，所以换模式就换场地，不需要额外的选择界面：
+三条赛道。每个模式有一条默认赛道，但选完模式会先进赛道选择界面，任何模式都能在任何一条上跑：
 
-| 赛道 | 圈长 | 特点 | 使用的模式 |
-|---|---:|---|---|
-| LONG BAY | ~2990 | 8 段长直道 + 宽发夹，圈最长，适合堆 Combo | Speed Monkey、Combo Racers、Fireball Frenzy、Chain Reaction、Endurance |
-| GRAND OVAL | ~1390 | 体育场式，只有两个弯，全程高速无处躲 | Sunday Drivers、Rush Hour、Pace Setter、Time Attack |
-| SWITCHBACK | ~2100 | 9 段短直道 + 密集发夹，弯道不断，车道选择最关键 | In The Zone、Hot Rods、Slipstream、Blackout |
-| MARINA SPRINT | ~2200 | 中等圈长，宽弯，节奏快但有喘息空间 | Death Race、Ghost Lane、Last Man |
+| 赛道 | 圈长 | 特点 |
+|---|---:|---|
+| LONG BAY | ~2990 | 8 段长直道 + 宽发夹，圈最长，适合堆 Combo |
+| GRAND OVAL | ~1390 | 体育场式，只有两个弯，全程高速无处躲 |
+| DELTA RUN | ~1450 | 不等边三角形，只有三个弯，最简单的一圈 |
 
 赛道用精确的直线和圆弧构造，曲率连续；景观装饰按赛道分别定义，不会压在路面上。
+
+车流数量按圈长铺开而不是写死，所以每条赛道的车距大致相同（约每 124 单位一辆），短赛道不会挤成一堵墙。
+
+SWITCHBACK 和 MARINA SPRINT 已移除：前者和 LONG BAY 形状太接近；后者在路面加宽后两段路会互相穿过，而这套伪 3D 渲染做不出上下分层的效果。新增赛道时注意 `tests/modes.test.mjs` 里的自交检查——路面总宽 62 单位，赛道任意两段远距离的中心线不能靠得比这更近。
 
 ### 难度
 

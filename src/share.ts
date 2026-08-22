@@ -25,7 +25,7 @@ export interface ShareContext {
   difficulty: Difficulty;
   score: number;
   scoreUnit: string;
-  stage: number;
+  daily: boolean;
   stars: number;
 }
 
@@ -36,9 +36,9 @@ export function setShareContext(next: ShareContext | null): void {
 }
 
 function shareTitle(): string {
-  if (!context) return 'Harbor Loop — 16 种模式的像素赛车';
-  if (context.stage > 0) {
-    return `每日挑战第 ${context.stage} 关我拿了 ${context.score}，你能过吗`;
+  if (!context) return '心跳加速-冲刺 — 16 种模式的像素赛车';
+  if (context.daily) {
+    return `每日挑战我拿了 ${context.score}，你能过吗`;
   }
   const mode = modeById(context.modeId);
   return `我在 ${mode.name}(${DIFFICULTY_LABEL[context.difficulty]}) 拿了 ${context.score} ${context.scoreUnit}，来超我`;
@@ -60,7 +60,7 @@ function shareImage(): string | undefined {
     score: context.score,
     scoreUnit: context.scoreUnit,
     stars: context.stars,
-    stage: context.stage
+    daily: context.daily
   });
   return path ?? undefined;
 }

@@ -198,6 +198,49 @@ export function saveStreak(streak: Streak): void {
   writeFlag(STREAK_KEY, JSON.stringify(streak));
 }
 
+const DAILY_BEST_KEY = 'harbor-loop-daily-best-v1';
+
+type DailyBestTable = Record<string, number>;
+
+let dailyBestCache: DailyBestTable | null = null;
+
+function dailyBestTable(): DailyBestTable {
+  if (dailyBestCache) return dailyBestCache;
+  const raw = readFlag(DAILY_BEST_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object') {
+        dailyBestCache = parsed as DailyBestTable;
+        return dailyBestCache;
+      }
+    } catch (error) {
+      /* corrupt payload: start clean rather than crash on launch */
+    }
+  }
+  dailyBestCache = {};
+  return dailyBestCache;
+}
+
+/**
+ * Best combo ever reached on the daily challenge, kept separate from the mode's
+ * ordinary-play best since the pinned daily traffic is not a fair comparison.
+ */
+export function dailyBestScore(modeId: ModeId): number | null {
+  const value = dailyBestTable()[modeId];
+  return typeof value === 'number' ? value : null;
+}
+
+/** Records a daily score if it beats the stored one. Returns true on a new best. */
+export function submitDailyBest(modeId: ModeId, score: number): boolean {
+  const current = dailyBestScore(modeId);
+  if (current !== null && score <= current) return false;
+
+  dailyBestTable()[modeId] = score;
+  writeFlag(DAILY_BEST_KEY, JSON.stringify(dailyBestTable()));
+  return true;
+}
+
 /** Total of every personal best, used as the single number for the friend ranking. */
 export function careerPoints(): number {
   return Object.entries(table()).reduce((total, [entryKey, value]) => {

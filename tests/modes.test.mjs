@@ -10,8 +10,42 @@ const { check, finish } = reporter();
 
 const THROTTLE = touch(1, 303, 774);
 const LEFT_BTN = touch(2, 58, 774);
+const RIGHT_BTN = touch(3, 142, 774);
 
-/** Drives a mode with the throttle down, weaving, until it ends or time runs out. */
+/**
+ * Parks a living car right on top of the player, so the next step collides.
+ *
+ * The fireball has to go out first. Fireball Frenzy and Chain Reaction turn
+ * contact into a kill while the car is lit, so staging a crash against an armed
+ * player just feeds it another victim — and in Fireball Frenzy those kills keep
+ * re-arming it, which is exactly how this loop used to run out its whole budget
+ * without ever ending the run. Death Race is unaffected: it destroys on contact
+ * regardless, which is why it sets timeoutIsFinal instead.
+ */
+function forceCrash() {
+  const victim = game.aiCars.find((car) => car.alive);
+  if (!victim) return false;
+  victim.distance = game.player.distance + 6;
+  victim.lane = game.player.lane;
+  victim.visualLane = game.player.visualLane;
+  victim.previousVisualLane = game.player.visualLane;
+  game.player.invincible = 0;
+  game.player.fireball = 0;
+  return true;
+}
+
+/**
+ * Drives a mode with the throttle down, weaving, until it ends or time runs
+ * out.
+ *
+ * Most modes no longer end on the clock alone — the run keeps going into
+ * overtime until the player actually crashes. Weaving alone is not a reliable
+ * way to arrange that: Last Man culls the field down to two cars, so a bot
+ * swerving at random can circulate for the whole budget without ever meeting
+ * one. Once overtime starts, a crash is therefore staged rather than hoped for,
+ * which is also the thing being tested — that a crash, not the clock, is what
+ * ends the run.
+ */
 function playMode(modeId, seconds, { weave = true } = {}) {
   game.startMode(modeId);
   game.clearCountdown();
@@ -21,12 +55,13 @@ function playMode(modeId, seconds, { weave = true } = {}) {
   while (played < seconds && game.app.screen === 'PLAYING') {
     step(slice);
     played += slice;
-    if (weave && Math.round(played / slice) % 6 === 0) {
+    if (game.run.timeRemaining <= 0) forceCrash();
+    else if (weave && Math.round(played / slice) % 6 === 0) {
       fire('start', [LEFT_BTN]);
       fire('end', [LEFT_BTN]);
     }
   }
-  fire('cancel', [THROTTLE, LEFT_BTN]);
+  fire('cancel', [THROTTLE, LEFT_BTN, RIGHT_BTN]);
   return played;
 }
 
@@ -109,6 +144,16 @@ const BASE_CRUISE = 125; // PLAYER_CRUISE_BASE_SPEED in config.ts
 game.startMode('speed-monkey');
 game.clearCountdown();
 check('a run puts 24 cars on track', game.aiCars.length === 24, `cars=${game.aiCars.length}`);
+
+// Field size scales with the lap, so short circuits are not twice as crowded as
+// long ones. What has to stay constant is the gap between cars, not the count.
+for (const track of game.TRACKS) {
+  game.startMode('speed-monkey', track.id);
+  game.clearCountdown();
+  const spacing = game.trackLength() / game.aiCars.length;
+  check(`${track.id} keeps the traffic spacing`, spacing > 105 && spacing < 145,
+    `${game.aiCars.length} cars, one every ${spacing.toFixed(0)}`);
+}
 check(
   'a run opens on the base cruise speed rather than a scaled-up one',
   Math.abs(game.player.speed - BASE_CRUISE) < 0.01,
@@ -123,26 +168,29 @@ check('overtaking has somewhere to go', game.player.speed > fastestTraffic,
   `player=${game.player.speed.toFixed(0)} vs fastest AI=${fastestTraffic.toFixed(0)}`);
 
 // --- no circuit spills off screen -----------------------------------------
-// Three of the four tracks used to project past the frame: the road reaches 39
-// units past the centre line and perspective magnifies that near the bottom, so
-// a centre line inside the design box is not enough. Checked per mode, because
-// the mode is what chooses the circuit.
+// Three of the four original tracks used to project past the frame: the road
+// reaches 39 units past the centre line and perspective magnifies that near the
+// bottom, so a centre line inside the design box is not enough. Every circuit is
+// now raceable in every mode, so this walks the track list directly rather than
+// only the defaults the modes happen to name.
 const DESIGN_W = 390;
 const DESIGN_H = 844;
-const seenTracks = new Set();
-for (const mode of game.MODES) {
-  game.startMode(mode.id);
+const anyMode = game.MODES[0].id;
+for (const track of game.TRACKS) {
+  game.startMode(anyMode, track.id);
   game.clearCountdown();
-  seenTracks.add(mode.trackId);
   const b = game.trackScreenBounds();
   check(
-    `${mode.trackId} stays on screen (via ${mode.id})`,
+    `${track.id} stays on screen`,
     b.minX >= 0 && b.maxX <= DESIGN_W && b.minY >= 0 && b.maxY <= DESIGN_H,
     `x ${b.minX.toFixed(0)}..${b.maxX.toFixed(0)} y ${b.minY.toFixed(0)}..${b.maxY.toFixed(0)}`
   );
 }
-check('every circuit was covered', seenTracks.size === game.TRACKS.length,
-  `${seenTracks.size} of ${game.TRACKS.length}`);
+
+// A mode with no circuit named still races its own default.
+game.startMode(anyMode);
+check('a mode with no circuit picked uses its own default',
+  game.MODES[0].trackId === game.TRACKS.find((t) => t.id === game.MODES[0].trackId)?.id);
 
 // The static scene is cached on an offscreen canvas, which must be a *second*
 // canvas; drawing the layer onto the display canvas would blank the frame.
@@ -151,9 +199,49 @@ game.clearCountdown();
 step(0.1);
 check('an offscreen layer canvas is created', canvasCount() >= 2, `${canvasCount()} canvases`);
 
+// The five alternating lane bands must exactly fill the surface between the two
+// kerbs. When they overran it the outer two were clipped and read as narrower
+// than the middle three, which is a thing you can only see by eye.
+const laneSpan = game.LANE_COUNT * game.LANE_GAP;
+const surface = (game.ROAD_HALF_WIDTH - game.KERB_WIDTH) * 2;
+check('the lane bands exactly fill the road surface',
+  Math.abs(laneSpan - surface) < 0.001,
+  `bands ${laneSpan.toFixed(2)} vs surface ${surface.toFixed(2)}`);
+
+// No circuit's driving surface may cross itself. Widening the road is what
+// makes this fail — Marina Sprint's two halves passed 40 apart, which was fine
+// at the old width and a road laid straight through itself at the new one. The
+// kerbs are excluded: they are decoration, and Long Bay's graze at the top-left
+// corner without any lane overlapping.
+for (const track of game.TRACKS) {
+  const points = track.build();
+  const n = points.length;
+  const steps = points.map((p, i) => {
+    const q = points[(i + 1) % n];
+    return Math.hypot(q.x - p.x, q.y - p.y);
+  });
+  const lap = steps.reduce((a, b) => a + b, 0);
+  let closest = Infinity;
+  for (let i = 0; i < n; i++) {
+    let along = 0;
+    for (let k = 1; k < n; k++) {
+      along += steps[(i + k - 1) % n];
+      // Only compare stretches genuinely far apart around the lap, so a point
+      // is never measured against its own neighbours or its own corner.
+      if (along < 150 || lap - along < 150) continue;
+      const j = (i + k) % n;
+      const d = Math.hypot(points[j].x - points[i].x, points[j].y - points[i].y);
+      if (d < closest) closest = d;
+    }
+  }
+  const surface = game.LANE_COUNT * game.LANE_GAP;
+  check(`${track.id} never laps over itself`, closest >= surface,
+    `closest ${closest.toFixed(0)}, driving surface needs ${surface.toFixed(0)}`);
+}
+
 // Circuits: every mode names a real one, and they are not all the same.
 const trackIds = new Set(game.MODES.map((mode) => mode.trackId));
-check('four circuits are in rotation', trackIds.size === 4, [...trackIds].join(', '));
+check('three circuits are in rotation', trackIds.size === 3, [...trackIds].join(', '));
 check('every mode names a known circuit',
   game.MODES.every((mode) => typeof mode.trackId === 'string' && mode.trackId.length > 0));
 
@@ -247,12 +335,34 @@ check('tapping the daily card starts the daily run',
   game.app.screen === 'PLAYING' && game.run.daily === true, `screen=${game.app.screen}`);
 game.clearCountdown();
 
+// A mode row now opens the circuit picker rather than starting straight away.
 game.openMenu();
 fire('start', [touch(11, 195, 170)]);
 fire('end', [touch(11, 195, 170)]);
-check('tapping the mode row starts that mode',
+check('tapping the mode row opens the circuit picker',
+  game.app.screen === 'TRACKS', `screen=${game.app.screen}`);
+
+// The picker's back button (y=768..820) returns to the mode list.
+fire('start', [touch(12, 195, 790)]);
+fire('end', [touch(12, 195, 790)]);
+check('the picker goes back to the mode list', game.app.screen === 'MENU', game.app.screen);
+
+// Picking a circuit starts the race on it. The picker is a grid of square cards
+// three across, 113 wide, starting at (14, 64); (70, 120) is the centre of the
+// first one. Taps between cards must not select anything, so this aims at a
+// centre rather than anywhere inside the grid's bounding box.
+fire('start', [touch(13, 195, 170)]);
+fire('end', [touch(13, 195, 170)]);
+fire('start', [touch(14, 70, 120)]);
+fire('end', [touch(14, 70, 120)]);
+check('picking a circuit starts the race',
   game.app.screen === 'PLAYING' && game.run.daily === false, `screen=${game.app.screen}`);
 game.clearCountdown();
+
+// Leaving a run started from the picker goes back to the picker, not the menu.
+game.goBack();
+check('leaving a picked run returns to the circuit picker',
+  game.app.screen === 'TRACKS', game.app.screen);
 
 // The difficulty pills are gone and the cards below moved up. A tap in the strip
 // they vacated (y=84..95) must fall through rather than hit the daily card.

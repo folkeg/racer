@@ -2,7 +2,9 @@
 
 import { shakeOffsetX, shakeOffsetY } from '../feel';
 import { ctx } from '../platform';
-import { aiCars, currentCruiseSpeed, player } from '../state';
+import { PLAYER_MAX_SPEED } from '../config';
+import { tuning } from '../difficulty';
+import { aiCars, baseCruiseSpeed, player } from '../state';
 import { COLORS } from '../theme';
 import { forwardPathDistance, sampleAtDistance } from '../track';
 import type { AiCar, VehicleStyle } from '../types';
@@ -263,12 +265,36 @@ function drawFireballAura(): void {
  * Every dimension scales with speed: length, width, opacity and the number of
  * ghosts. At cruise there is nothing at all.
  */
-const TRAIL_SEGMENTS = 9;
+/**
+ * How many samples the smear spans, from cruise to flat out.
+ *
+ * The count used to be a flat 9, which made the trail barely change with speed:
+ * the only thing that grew was the gap between samples, and that tops out
+ * quickly. Scaling the segment count as well is what makes the tail visibly
+ * stretch as the car winds up — at full speed it reaches nearly three times as
+ * far back as it did. TRAIL_LENGTH in player.ts has to cover
+ * TRAIL_MAX_SEGMENTS * TRAIL_STRIDE, or the smear runs out of history.
+ */
+const TRAIL_MIN_SEGMENTS = 8;
+const TRAIL_MAX_SEGMENTS = 26;
+const TRAIL_STRIDE = 2;
 const GHOSTS_MAX = 3;
 
+/**
+ * How much trail there is, from none at the opening speed to full at the cap.
+ *
+ * Measured against absolute speed, not against the car's own cruise target.
+ * The old version divided by the *current* target, which asks "how hard are you
+ * pushing past your own cruise" rather than "how fast are you" — so a 60-combo
+ * car doing 380 scored 0.28 while a standing start on the throttle at 185
+ * scored 0.45, and the smear was shorter at high speed than at low. That is the
+ * whole reason the trail read as absent once the car got quick.
+ */
 function trailIntensity(): number {
-  const cruise = currentCruiseSpeed();
-  return Math.min(1, Math.max(0, (player.speed - cruise * 0.88) / 165));
+  const base = baseCruiseSpeed();
+  const span = PLAYER_MAX_SPEED * tuning.player - base;
+  if (span <= 0) return 0;
+  return Math.min(1, Math.max(0, (player.speed - base) / span));
 }
 
 function drawAfterimage(): void {
@@ -278,10 +304,15 @@ function drawAfterimage(): void {
   const intensity = trailIntensity();
   if (intensity <= 0.04) return;
 
-  // Sample the recorded path, newest first, at a stride that lengthens with speed.
-  const stride = Math.max(1, Math.round(1 + intensity * 2));
+  // Sample the recorded path, newest first. The car covers more ground per
+  // frame the faster it goes, so a fixed span already lengthens with speed;
+  // scaling the count on top is what makes that growth actually read.
+  const stride = TRAIL_STRIDE;
+  const segments = Math.round(
+    TRAIL_MIN_SEGMENTS + intensity * (TRAIL_MAX_SEGMENTS - TRAIL_MIN_SEGMENTS)
+  );
   const points: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < TRAIL_SEGMENTS; i++) {
+  for (let i = 0; i < segments; i++) {
     const index = trail.length - 1 - i * stride;
     if (index < 0) break;
     const sample = trail[index];

@@ -52,10 +52,6 @@ export interface RunState {
   closeCalls: number;
   /** True while running the daily challenge. */
   daily: boolean;
-  /** Daily stage, 1 or 2; 0 for an ordinary run. */
-  stage: number;
-  /** Score that clears the current daily stage; 0 when there is no target. */
-  stageTarget: number;
   /** Revives already spent this run. */
   revives: number;
   outcome: RunOutcome;
@@ -88,6 +84,13 @@ export interface ModeDefinition {
   stars: [number, number, number];
   /** Higher score is better for every mode except those that set this false. */
   lowerIsBetter?: boolean;
+  /**
+   * Most modes treat a crash as a setback, not a stop, so the clock running out
+   * no longer ends the run by itself — it only does once the player actually
+   * crashes. Set this for a mode where contact never resolves as a crash (Death
+   * Race always destroys), so the clock stays the only way to end it.
+   */
+  timeoutIsFinal?: boolean;
 
   setup?(run: RunState, cars: AiCar[]): void;
   update?(dt: number, run: RunState, cars: AiCar[]): void;

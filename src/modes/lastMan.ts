@@ -20,7 +20,7 @@ export const lastMan: ModeDefinition = {
   timeLimit: 75,
   scoreUnit: 'PASSES',
   trafficScale: 0.95,
-  trackId: 'marina-sprint',
+  trackId: 'delta-run',
   stars: [12, 24, 38],
 
   setup() {

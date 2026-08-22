@@ -1,6 +1,6 @@
 /** Mode select: progress header, the daily card, and one card per mode. */
 
-import { app, startDaily, startMode } from '../app';
+import { app, openTrackPicker, startDaily } from '../app';
 import { audio } from '../audio';
 import { dailyPlan } from '../daily';
 import { DIFFICULTY_PROFILES } from '../difficulty';
@@ -59,7 +59,7 @@ export function drawMenu(): void {
   screenBackground(DESIGN_W, DESIGN_H);
   const stars = totalStars();
 
-  headline('HARBOR LOOP', MARGIN, 42, 28, UI.card);
+  headline('心跳加速-冲刺', MARGIN, 42, 28, UI.card);
 
   // Star total is the progression currency, so it gets the loud slot.
   const starText = `${stars}/${maxStars()}`;
@@ -146,7 +146,7 @@ function drawDailyCard(): void {
   ctx.font = '600 9.5px sans-serif';
   ctx.fillStyle = 'rgba(34,50,63,0.7)';
   ctx.fillText(
-    `${plan.day} · ${mode ? mode.name : ''} · 两关 · 全服同一份车流`,
+    `${plan.day} · ${mode ? mode.name : ''} · 全服同一份车流`,
     DAILY_RECT.x + 14,
     DAILY_RECT.y + 35
   );
@@ -250,7 +250,7 @@ export function handleMenuTap(x: number, y: number): boolean {
       showToast(`需要 ${modeUnlockCost(mode.id)} 颗星解锁`);
     } else {
       audio.playUiConfirm();
-      startMode(mode.id);
+      openTrackPicker(mode.id);
     }
     return true;
   }

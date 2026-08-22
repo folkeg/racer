@@ -26,7 +26,7 @@ export interface ShareCardData {
   score: number;
   scoreUnit: string;
   stars: number;
-  stage: number;
+  daily: boolean;
 }
 
 type FileCanvas = WxCanvas & {
@@ -118,11 +118,11 @@ export function renderShareCard(data: ShareCardData): string | null {
     target.textAlign = 'left';
     target.fillStyle = UI.primary;
     target.font = '900 20px sans-serif';
-    target.fillText('HARBOR LOOP', 40, 56);
+    target.fillText('心跳加速-冲刺', 40, 56);
 
     target.fillStyle = UI.card;
     target.font = '900 34px sans-serif';
-    target.fillText(data.stage > 0 ? `每日挑战 第 ${data.stage} 关` : mode.name, 40, 108);
+    target.fillText(data.daily ? '每日挑战' : mode.name, 40, 108);
 
     target.fillStyle = 'rgba(255,246,228,0.6)';
     target.font = '700 15px sans-serif';

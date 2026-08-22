@@ -55,7 +55,9 @@ export interface DifficultyProfile {
 export const DIFFICULTY_PROFILES: Record<Difficulty, DifficultyProfile> = {
   master: {
     label: 'STANDARD',
-    blurb: '24 车 · 起步平缓 · 每超一辆车提速',
+    // The field is no longer a flat number: it scales with the circuit's lap so
+    // the spacing between cars stays the same everywhere.
+    blurb: '车流按赛道长度铺开 · 起步平缓 · 每超一辆车提速',
     playerSpeed: 1,
     trafficSpeed: 1,
     carCount: 24,

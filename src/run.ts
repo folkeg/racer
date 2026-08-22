@@ -13,6 +13,7 @@ import { clearFloaters, clearParticles } from './render/particles';
 import { resetFeel } from './feel';
 import { aiCars, player, resetGame } from './state';
 import { setTrack } from './track';
+import type { TrackId } from './tracks';
 
 export const run: RunState = {
   modeId: MODES[0].id,
@@ -24,8 +25,6 @@ export const run: RunState = {
   crashes: 0,
   closeCalls: 0,
   daily: false,
-  stage: 0,
-  stageTarget: 0,
   revives: 0,
   outcome: 'running',
   progress: -1,
@@ -37,11 +36,14 @@ export let activeMode: ModeDefinition = MODES[0];
 
 export interface DailyRunOptions {
   seed: number;
-  stage: 1 | 2;
-  target: number;
 }
 
-export function startRun(modeId: ModeId, difficulty: Difficulty, daily?: DailyRunOptions): void {
+export function startRun(
+  modeId: ModeId,
+  difficulty: Difficulty,
+  daily?: DailyRunOptions,
+  trackId?: TrackId
+): void {
   activeMode = modeById(modeId);
 
   // Seed before anything that draws randomness, so the whole run is reproducible.
@@ -50,7 +52,7 @@ export function startRun(modeId: ModeId, difficulty: Difficulty, daily?: DailyRu
 
   // Order matters: the circuit defines the lap length that car placement uses,
   // and tuning defines the speeds they are built with.
-  setTrack(activeMode.trackId);
+  setTrack(trackId ?? activeMode.trackId);
   applyTuning(difficulty, activeMode.trafficScale);
   resetGame();
   resetEffects();
@@ -72,8 +74,6 @@ export function startRun(modeId: ModeId, difficulty: Difficulty, daily?: DailyRu
   run.crashes = 0;
   run.closeCalls = 0;
   run.daily = Boolean(daily);
-  run.stage = daily ? daily.stage : 0;
-  run.stageTarget = daily ? daily.target : 0;
   run.revives = 0;
   run.outcome = 'running';
   run.progress = -1;
@@ -99,13 +99,16 @@ export function updateRun(dt: number): void {
   // A mode's own update may already have ended the run (Speed Monkey on contact).
   if (run.outcome !== 'running') return;
 
-  // A daily stage is cleared by its own target, not the mode's usual objective.
-  if (run.daily) {
-    if (run.score >= run.stageTarget) run.outcome = 'cleared';
-  } else if (activeMode.cleared?.(run, aiCars)) run.outcome = 'cleared';
+  if (activeMode.cleared?.(run, aiCars)) run.outcome = 'cleared';
   if (run.outcome !== 'running') return;
   if (activeMode.failed?.(run, aiCars)) run.outcome = 'wrecked';
-  else if (run.timeRemaining <= 0) run.outcome = 'timeout';
+  else if (run.timeRemaining <= 0) {
+    // The clock alone doesn't end the run — most modes treat a crash as a
+    // setback, not a stop, so running the clock out mid-drive used to end
+    // things arbitrarily. Overtime keeps going until the player actually
+    // crashes, unless the mode has no crash to wait for.
+    if (activeMode.timeoutIsFinal || player.state === 'CRASHED') run.outcome = 'timeout';
+  }
 }
 
 export function runIsOver(): boolean {

@@ -9,6 +9,7 @@ import { audio } from './audio';
 import {
   COLLISION_LANE_DISTANCE,
   COLLISION_PATH_DISTANCE,
+  OVERTAKE_KICK_EVERY,
   PLAYER_TIER_BOOST_DURATION
 } from './config';
 import { addHitStop, addShake } from './feel';
@@ -25,7 +26,8 @@ const WRECK_SECONDS = 0.9;
 
 /** A pass this close to another car counts as a near miss. */
 const CLOSE_CALL_LANE_DISTANCE = 1.25;
-const CLOSE_CALL_PATH_DISTANCE = 34;
+/** In plane units, so it scales with the car; the lane figure above does not. */
+const CLOSE_CALL_PATH_DISTANCE = 42;
 /** Seconds of boosted acceleration awarded for threading a gap. */
 const CLOSE_CALL_BOOST = 0.55;
 
@@ -90,8 +92,6 @@ function registerCloseCall(): void {
   });
   audio.playCloseCall();
 
-  run.banner = 'CLOSE!';
-  run.bannerTimer = 0.55;
   activeMode.onCloseCall?.(run);
 }
 
@@ -154,12 +154,16 @@ export function detectOvertakes(): void {
       const passPoint = project(passPlane.x, passPlane.y);
       floatText(passPoint.x, passPoint.y - 14 * passPoint.scale, `${player.combo}`, '#C5FFF7', 26 * passPoint.scale);
 
-      if (newTier > previousTier) {
-        player.tierBoostElapsed = PLAYER_TIER_BOOST_DURATION;
-        audio.playSpeedTierUp(newTier);
-      }
+      // Every fifth car is a felt kick: the cruise target already jumped in
+      // state.ts, so ramp into it fast instead of crawling up at the normal
+      // rate — that ramp is what makes the jump actually land.
+      const kicked = Math.floor(player.combo / OVERTAKE_KICK_EVERY) >
+        Math.floor(previousCombo / OVERTAKE_KICK_EVERY);
+      if (kicked) player.tierBoostElapsed = PLAYER_TIER_BOOST_DURATION;
 
-      if (newTier > previousTier) {
+      if (newTier > previousTier) audio.playSpeedTierUp(newTier);
+
+      if (kicked) {
         const point = sampleAtDistance(player.distance, player.visualLane);
         burst(point.x, point.y, {
           count: 18,
@@ -171,7 +175,7 @@ export function detectOvertakes(): void {
         });
       }
 
-      vibrate(newTier > previousTier ? 'medium' : 'light');
+      vibrate(kicked ? 'medium' : 'light');
       activeMode.onOvertake?.(overtakes, run);
 
       // Judged at the moment of the pass, while the cars are still alongside.

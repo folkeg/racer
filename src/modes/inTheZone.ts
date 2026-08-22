@@ -19,7 +19,7 @@ export const inTheZone: ModeDefinition = {
   timeLimit: 75,
   scoreUnit: 'POINTS',
   trafficScale: 0.9,
-  trackId: 'switchback',
+  trackId: 'grand-oval',
   stars: [1000, 2100, 3300],
 
   setup(_run, cars) {

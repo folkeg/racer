@@ -134,8 +134,13 @@ function updateCornering(dt: number): void {
 /**
  * Fixed-length history; the afterimage reads it back at a stride that widens
  * with speed, so the buffer has to be long enough for the longest smear.
+ *
+ * It was 26, which the trail could exhaust at full speed — 9 segments at a
+ * stride of 3 reaches 27 — so the smear hit the end of its own history and
+ * stopped growing exactly when the car was going fast enough to want it most.
+ * Sized here for the longest trail render/vehicles.ts can ask for.
  */
-const TRAIL_LENGTH = 26;
+const TRAIL_LENGTH = 56;
 
 function recordTrail(): void {
   player.trail.push({ distance: player.distance, lane: player.visualLane });

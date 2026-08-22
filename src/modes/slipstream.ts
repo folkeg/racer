@@ -22,7 +22,7 @@ export const slipstream: ModeDefinition = {
   timeLimit: 60,
   scoreUnit: 'POINTS',
   trafficScale: 0.95,
-  trackId: 'switchback',
+  trackId: 'long-bay',
   stars: [1400, 3000, 5000],
 
   setup() {

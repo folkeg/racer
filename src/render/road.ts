@@ -10,7 +10,7 @@
  * is computed once per circuit.
  */
 
-import { LANE_COUNT, ROAD_HALF_WIDTH } from '../config';
+import { KERB_WIDTH, LANE_COUNT, ROAD_HALF_WIDTH } from '../config';
 import { ctx } from '../platform';
 import { COLORS } from '../theme';
 import { pathAtOffset, pathForLane, sampleAtDistance } from '../track';
@@ -47,8 +47,8 @@ export function drawTrack(): void {
   fillRibbon(outerEdge, innerEdge, COLORS.roadEdge);
 
   const outerKerb = edge(ROAD_HALF_WIDTH);
-  const outerRoad = edge(ROAD_HALF_WIDTH - 3.2);
-  const innerRoad = edge(-ROAD_HALF_WIDTH + 3.2);
+  const outerRoad = edge(ROAD_HALF_WIDTH - KERB_WIDTH);
+  const innerRoad = edge(-ROAD_HALF_WIDTH + KERB_WIDTH);
   const innerKerb = edge(-ROAD_HALF_WIDTH);
 
   // Continuous tan lines down both sides, as on the original circuit; the
@@ -70,7 +70,7 @@ export function drawTrack(): void {
 
   drawSlabVariation(outerRoad, innerRoad);
   drawSlabSeams(outerRoad, innerRoad);
-  drawEdgeGrime(outerRoad, innerRoad);
+  drawEdgeGrime();
   drawStartLine();
 }
 
@@ -128,22 +128,42 @@ function drawSlabSeams(outer: ReturnType<typeof projectPath>, inner: ReturnType<
  *
  * Roads are cleanest where the traffic runs and dirtiest at the margins, and
  * that gradient is most of what separates a used surface from a new one.
+ *
+ * It stays on the kerb. Reaching 8.5 units in from the road edge put it over
+ * the outer 5.3 units of the outermost lane — 43% of that lane, darkened on one
+ * side only — which is what made the two edge lanes read as narrower than the
+ * three in the middle even though all five bands are the same width. Confined
+ * to the kerb it still dirties the margin without touching a driving lane.
  */
-function drawEdgeGrime(outer: ReturnType<typeof projectPath>, inner: ReturnType<typeof projectPath>): void {
-  const outerGrime = edge(ROAD_HALF_WIDTH - 8.5);
-  const innerGrime = edge(-ROAD_HALF_WIDTH + 8.5);
+function drawEdgeGrime(): void {
+  const outerKerb = edge(ROAD_HALF_WIDTH);
+  const outerLane = edge(ROAD_HALF_WIDTH - KERB_WIDTH);
+  const innerLane = edge(-ROAD_HALF_WIDTH + KERB_WIDTH);
+  const innerKerb = edge(-ROAD_HALF_WIDTH);
 
-  fillRibbon(outer, outerGrime, 'rgba(112,112,100,0.22)');
-  fillRibbon(innerGrime, inner, 'rgba(112,112,100,0.22)');
+  fillRibbon(outerKerb, outerLane, 'rgba(112,112,100,0.3)');
+  fillRibbon(innerLane, innerKerb, 'rgba(112,112,100,0.3)');
 
-  // A narrower, darker band right against the line.
-  const outerDark = edge(ROAD_HALF_WIDTH - 5);
-  const innerDark = edge(-ROAD_HALF_WIDTH + 5);
-  fillRibbon(outer, outerDark, 'rgba(88,88,78,0.2)');
-  fillRibbon(innerDark, inner, 'rgba(88,88,78,0.2)');
+  // A narrower, darker band right against the outside line.
+  const outerDark = edge(ROAD_HALF_WIDTH - 1.4);
+  const innerDark = edge(-ROAD_HALF_WIDTH + 1.4);
+  fillRibbon(outerKerb, outerDark, 'rgba(88,88,78,0.26)');
+  fillRibbon(innerDark, innerKerb, 'rgba(88,88,78,0.26)');
 }
 
-/** Start/finish chequer, projected onto the plane like everything else. */
+/**
+ * Start/finish chequer, projected onto the plane like everything else.
+ *
+ * Spans the full road. It used to be a fixed six cells — about 28 units — which
+ * covered the middle of the old road and less than half of the current one, so
+ * the chequer read as a patch in the centre with a plain line running out to
+ * each kerb. That line was never drawn: it is the slab seam from drawSlabSeams
+ * that happens to fall here, and it only looked deliberate because the chequer
+ * stopped short of it. Sizing the cells off ROAD_HALF_WIDTH keeps the pattern
+ * edge to edge whatever the road width becomes.
+ */
+const CHEQUER_CELLS = 14;
+
 function drawStartLine(): void {
   const centre = sampleAtDistance(0, (LANE_COUNT - 1) / 2);
   const heading = projectedHeading(centre.x, centre.y, centre.angle);
@@ -152,12 +172,14 @@ function drawStartLine(): void {
   ctx.save();
   ctx.translate(origin.x, origin.y);
   ctx.rotate(heading);
-  const size = 4.6 * origin.scale;
-  for (let i = -3; i <= 2; i++) {
+  const cell = ((ROAD_HALF_WIDTH * 2) / CHEQUER_CELLS) * origin.scale;
+  const half = CHEQUER_CELLS / 2;
+  // Two columns along the track, centred on the line; CHEQUER_CELLS across it.
+  for (let i = -half; i < half; i++) {
     ctx.fillStyle = i % 2 === 0 ? '#F5F0E2' : '#242A2E';
-    ctx.fillRect(-size * 0.5, i * size, size, size);
+    ctx.fillRect(-cell, i * cell, cell, cell);
     ctx.fillStyle = i % 2 === 0 ? '#242A2E' : '#F5F0E2';
-    ctx.fillRect(size * 0.5, i * size, size, size);
+    ctx.fillRect(0, i * cell, cell, cell);
   }
   ctx.restore();
 }

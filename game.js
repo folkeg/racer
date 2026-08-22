@@ -39,8 +39,12 @@ var HarborLoop = (() => {
   // src/main.ts
   var main_exports = {};
   __export(main_exports, {
+    KERB_WIDTH: () => KERB_WIDTH,
+    LANE_COUNT: () => LANE_COUNT,
+    LANE_GAP: () => LANE_GAP,
     MODES: () => MODES,
     RELEASED_MODES: () => RELEASED_MODES,
+    ROAD_HALF_WIDTH: () => ROAD_HALF_WIDTH,
     TRACKS: () => TRACKS,
     activeParticles: () => activeParticles,
     aiCars: () => aiCars,
@@ -56,10 +60,11 @@ var HarborLoop = (() => {
     cruiseSpeedForCombo: () => cruiseSpeedForCombo,
     currentCruiseSpeed: () => currentCruiseSpeed,
     currentStreak: () => currentStreak,
+    dailyBestScore: () => dailyBestScore,
     dailyPlan: () => dailyPlan,
-    dailyStage: () => dailyStage,
     debugPointerCount: () => debugPointerCount,
     feelState: () => feelState,
+    goBack: () => goBack,
     inputState: () => inputState,
     isSeeded: () => isSeeded,
     laneButtonFlash: () => laneButtonFlash,
@@ -68,6 +73,7 @@ var HarborLoop = (() => {
     modeUnlocked: () => modeUnlocked,
     onboardingActive: () => onboardingActive,
     openMenu: () => openMenu,
+    openTrackPicker: () => openTrackPicker,
     player: () => player,
     random: () => random,
     renderShareCard: () => renderShareCard,
@@ -81,6 +87,7 @@ var HarborLoop = (() => {
     starsFor: () => starsFor,
     startDaily: () => startDaily,
     startMode: () => startMode,
+    submitDailyBest: () => submitDailyBest,
     todayKey: () => todayKey,
     totalStars: () => totalStars,
     touchStreak: () => touchStreak,
@@ -90,8 +97,9 @@ var HarborLoop = (() => {
 
   // src/config.ts
   var LANE_COUNT = 5;
-  var LANE_GAP = 9.9;
-  var ROAD_HALF_WIDTH = 27;
+  var LANE_GAP = 12.4;
+  var KERB_WIDTH = 3.2;
+  var ROAD_HALF_WIDTH = LANE_COUNT * LANE_GAP / 2 + KERB_WIDTH;
   var PLAYER_CRUISE_BASE_SPEED = 125;
   var SPEED_BANDS = [
     [10, 6],
@@ -99,6 +107,10 @@ var HarborLoop = (() => {
     [25, 1.5],
     [Infinity, 0.55]
   ];
+  var OVERTAKE_KICK_EVERY = 5;
+  var OVERTAKE_KICK_SPEED = 18;
+  var OVERTAKE_KICK_TAPER_AFTER = 30;
+  var OVERTAKE_KICK_SPEED_LATE = 6;
   var CRUISE_SPEED_CAP = 380;
   var THROTTLE_MARGIN = 60;
   var PLAYER_MAX_SPEED = CRUISE_SPEED_CAP + THROTTLE_MARGIN;
@@ -116,7 +128,7 @@ var HarborLoop = (() => {
   var AI_PLAYER_MAX_SAFETY_DISTANCE = 265;
   var AI_PLAYER_SAFETY_PER_SPEED = 0.39;
   var AI_PLAYER_REAR_SAFETY_DISTANCE = 30;
-  var COLLISION_PATH_DISTANCE = 11.5;
+  var COLLISION_PATH_DISTANCE = 14.4;
   var COLLISION_LANE_DISTANCE = 0.48;
   function buildBlueprints(count) {
     const blueprints = [];
@@ -125,7 +137,7 @@ var HarborLoop = (() => {
       blueprints.push({
         fraction: i * 0.6180339887498949 % 1,
         lane,
-        speed: 84 + lane * 7 + i % 3 * 3
+        speed: 84 + lane * 7 + i % 3 * 5
       });
     }
     return blueprints;
@@ -135,7 +147,9 @@ var HarborLoop = (() => {
   var DIFFICULTY_PROFILES = {
     master: {
       label: "STANDARD",
-      blurb: "24 车 · 起步平缓 · 每超一辆车提速",
+      // The field is no longer a flat number: it scales with the circuit's lap so
+      // the spacing between cars stays the same everywhere.
+      blurb: "车流按赛道长度铺开 · 起步平缓 · 每超一辆车提速",
       playerSpeed: 1,
       trafficSpeed: 1,
       carCount: 24,
@@ -238,7 +252,7 @@ var HarborLoop = (() => {
 
   // src/render/camera.ts
   var PERSPECTIVE = true;
-  var PITCH = 0.9;
+  var PITCH = 1.5;
   var HEIGHT = 900;
   var NEAR = 700;
   var FOCAL = 1400;
@@ -247,15 +261,17 @@ var HarborLoop = (() => {
   var FIT_Y = 1.02;
   var cosPitch = Math.cos(PITCH);
   var sinPitch = Math.sin(PITCH);
-  var REFERENCE = (NEAR + DESIGN_H * 0.5) * cosPitch + HEIGHT * sinPitch;
   var SAFE_MARGIN = 4;
-  var SAFE_TOP = 56;
-  var SAFE_BOTTOM = 726;
+  var SAFE_TOP = 50;
+  var SAFE_BOTTOM = 742;
+  var MAX_VERTICAL_STRETCH = 1.22;
   var fitScale = 1;
+  var fitScaleY = 1;
   var fitDx = 0;
   var fitDy = 0;
   function clearCameraFit() {
     fitScale = 1;
+    fitScaleY = 1;
     fitDx = 0;
     fitDy = 0;
   }
@@ -277,17 +293,16 @@ var HarborLoop = (() => {
     const width = maxX - minX;
     const height = maxY - minY;
     if (!(width > 0) || !(height > 0)) return;
-    fitScale = Math.min(
-      1,
-      (DESIGN_W - SAFE_MARGIN * 2) / width,
-      (SAFE_BOTTOM - SAFE_TOP) / height
-    );
+    const roomX = (DESIGN_W - SAFE_MARGIN * 2) / width;
+    const roomY = (SAFE_BOTTOM - SAFE_TOP) / height;
+    fitScale = Math.min(roomX, roomY);
+    fitScaleY = Math.min(roomY, fitScale * MAX_VERTICAL_STRETCH);
     fitDx = DESIGN_W / 2 - fitScale * ((minX + maxX) / 2);
-    fitDy = (SAFE_TOP + SAFE_BOTTOM) / 2 - fitScale * ((minY + maxY) / 2);
+    fitDy = (SAFE_TOP + SAFE_BOTTOM) / 2 - fitScaleY * ((minY + maxY) / 2);
   }
   function project(x, y) {
     if (!PERSPECTIVE) {
-      return { x: x * fitScale + fitDx, y: y * fitScale + fitDy, scale: fitScale, depth: DESIGN_H - y };
+      return { x: x * fitScale + fitDx, y: y * fitScaleY + fitDy, scale: fitScale, depth: DESIGN_H - y };
     }
     const ground = NEAR + (DESIGN_H - y);
     const lateral = x - SCREEN_CX;
@@ -296,9 +311,18 @@ var HarborLoop = (() => {
     const scale2 = FOCAL / Math.max(1, depth);
     return {
       x: (SCREEN_CX + lateral * scale2 * FIT_X) * fitScale + fitDx,
-      y: -vertical * scale2 * FIT_Y * fitScale + fitDy,
-      // Sprites use one scale; the geometric mean keeps them from looking squashed.
-      scale: REFERENCE / Math.max(1, depth) * Math.sqrt(FIT_X * FIT_Y) * fitScale,
+      y: -vertical * scale2 * FIT_Y * fitScaleY + fitDy,
+      // Sprite scale is the same magnification the road gets, so a car always
+      // covers the same share of its lane. It used to be `midBoardDepth / depth`,
+      // which carries no focal length and so is a purely relative number, and it
+      // only ever matched the road because at the original PITCH of 0.90 that
+      // depth works out to 1402 — a rounding error away from FOCAL's 1400. The
+      // coincidence broke as soon as the angle moved: by PITCH 1.50 it falls to
+      // 977, and every car had quietly shrunk to 70% of its proper size while the
+      // road around it kept growing.
+      // Sprites take one scale, so the geometric mean of the two fit axes keeps
+      // them from looking squashed when those axes differ.
+      scale: scale2 * Math.sqrt(FIT_X * FIT_Y) * Math.sqrt(fitScale * fitScaleY),
       depth
     };
   }
@@ -404,48 +428,52 @@ var HarborLoop = (() => {
     path.arcTo(midX, bottom, radius, 0, Math.PI);
     return path.close();
   }
-  function buildSwitchback() {
-    const path = new PathBuilder().start(140, 92);
-    const radius = 30;
-    const leftX = 140;
-    const rightX = 296;
-    const rows = 9;
-    const step = 60;
-    for (let row = 0; row < rows; row++) {
-      const y = 92 + row * step;
-      const goingRight = row % 2 === 0;
-      path.lineTo(goingRight ? rightX : leftX, y);
-      if (row === rows - 1) break;
-      const cx = goingRight ? rightX : leftX;
-      const cy = y + radius;
-      if (goingRight) path.arcTo(cx, cy, radius, -Math.PI / 2, Math.PI / 2);
-      else path.arcTo(cx, cy, radius, -Math.PI / 2, -3 * Math.PI / 2);
+  function roundedPolygon(vertices, radius) {
+    const count = vertices.length;
+    const corners = vertices.map((vertex, index) => {
+      const previous = vertices[(index - 1 + count) % count];
+      const next = vertices[(index + 1) % count];
+      const toPreviousLength = Math.hypot(previous.x - vertex.x, previous.y - vertex.y);
+      const toNextLength = Math.hypot(next.x - vertex.x, next.y - vertex.y);
+      const toPrevious = { x: (previous.x - vertex.x) / toPreviousLength, y: (previous.y - vertex.y) / toPreviousLength };
+      const toNext = { x: (next.x - vertex.x) / toNextLength, y: (next.y - vertex.y) / toNextLength };
+      const dot = Math.max(-1, Math.min(1, toPrevious.x * toNext.x + toPrevious.y * toNext.y));
+      const interior = Math.acos(dot);
+      const tangent = radius / Math.tan(interior / 2);
+      const bisectorLength = Math.hypot(toPrevious.x + toNext.x, toPrevious.y + toNext.y);
+      const bisector = {
+        x: (toPrevious.x + toNext.x) / bisectorLength,
+        y: (toPrevious.y + toNext.y) / bisectorLength
+      };
+      const centreDistance = radius / Math.sin(interior / 2);
+      return {
+        entry: { x: vertex.x + toPrevious.x * tangent, y: vertex.y + toPrevious.y * tangent },
+        exit: { x: vertex.x + toNext.x * tangent, y: vertex.y + toNext.y * tangent },
+        centre: { x: vertex.x + bisector.x * centreDistance, y: vertex.y + bisector.y * centreDistance }
+      };
+    });
+    const path = new PathBuilder().start(corners[0].exit.x, corners[0].exit.y);
+    for (let i = 1; i <= count; i++) {
+      const corner = corners[i % count];
+      path.lineTo(corner.entry.x, corner.entry.y);
+      const from = Math.atan2(corner.entry.y - corner.centre.y, corner.entry.x - corner.centre.x);
+      const to = Math.atan2(corner.exit.y - corner.centre.y, corner.exit.x - corner.centre.x);
+      let sweep = to - from;
+      while (sweep > Math.PI) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI) sweep += Math.PI * 2;
+      path.arcTo(corner.centre.x, corner.centre.y, radius, from, from + sweep);
     }
-    path.arcTo(rightX, 611, 39, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(88, 650);
-    path.arcTo(88, 598, 52, Math.PI / 2, Math.PI);
-    path.lineTo(36, 144);
-    path.arcTo(88, 144, 52, Math.PI, 3 * Math.PI / 2);
-    path.lineTo(leftX, 92);
     return path.close();
   }
-  function buildMarinaSprint() {
-    const path = new PathBuilder().start(128, 110);
-    path.lineTo(288, 110);
-    path.arcTo(288, 168, 58, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(168, 226);
-    path.arcTo(168, 284, 58, -Math.PI / 2, -3 * Math.PI / 2);
-    path.lineTo(288, 342);
-    path.arcTo(288, 400, 58, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(168, 458);
-    path.arcTo(168, 516, 58, -Math.PI / 2, -3 * Math.PI / 2);
-    path.lineTo(288, 574);
-    path.arcTo(288, 632, 58, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(128, 690);
-    path.arcTo(128, 632, 58, Math.PI / 2, Math.PI);
-    path.lineTo(70, 168);
-    path.arcTo(128, 168, 58, Math.PI, 3 * Math.PI / 2);
-    return path.close();
+  function buildDeltaRun() {
+    return roundedPolygon([
+      { x: 64, y: -20 },
+      // top of the long straight
+      { x: 392, y: 415 },
+      // east apex
+      { x: 64, y: 772 }
+      // foot of the long straight
+    ], 58);
   }
   var LONG_BAY_DECOR = {
     medians: [
@@ -461,10 +489,10 @@ var HarborLoop = (() => {
     umbrellas: [[242, 119, 0.38], [252, 389, 0.38], [220, 659, 0.38]],
     buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
     boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
-    rocks: [[-14, 24, 96, 74, 3], [318, 18, 96, 66, 7], [-16, 690, 92, 80, 11], [322, 700, 92, 74, 5]],
-    buildings: [[196, 748, 92, 40, 0], [300, 752, 58, 32, 0], [96, 754, 54, 30, 0]],
+    rocks: [],
+    buildings: [],
     bridges: [[358, 150, 388, 150, 13], [4, 320, 32, 320, 13], [358, 440, 388, 440, 13], [4, 570, 32, 570, 13]],
-    chequers: [[130, 742, 54, 26, 0]]
+    chequers: []
   };
   var GRAND_OVAL_DECOR = {
     medians: [[170, 216, 50, 356]],
@@ -472,10 +500,10 @@ var HarborLoop = (() => {
     umbrellas: [[195, 326, 0.4], [195, 468, 0.4]],
     buoys: [[40, 150], [352, 210], [40, 640], [352, 620]],
     boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, 1.57], [52, 540, 0.72, 1.57]],
-    rocks: [[-18, 40, 88, 88, 2], [326, 46, 88, 82, 9], [-18, 660, 88, 84, 6], [326, 668, 88, 80, 13]],
-    buildings: [[150, 736, 96, 38, 0], [260, 742, 60, 30, 0]],
+    rocks: [],
+    buildings: [],
     bridges: [[36, 286, 70, 286, 14], [322, 386, 356, 386, 14], [36, 526, 70, 526, 14]],
-    chequers: [[76, 734, 52, 24, 0]]
+    chequers: []
   };
   var OPEN_WATER_DECOR = {
     medians: [],
@@ -483,16 +511,15 @@ var HarborLoop = (() => {
     umbrellas: [],
     buoys: [[20, 120], [372, 200], [20, 560], [372, 660], [18, 380]],
     boats: [[12, 250, 0.6, 1.57], [376, 340, 0.6, 1.57], [12, 620, 0.58, 1.57]],
-    rocks: [[-16, 30, 84, 70, 4], [330, 34, 84, 68, 8], [-16, 700, 84, 74, 12], [330, 706, 84, 70, 1]],
-    buildings: [[176, 748, 88, 36, 0], [286, 752, 54, 28, 0]],
+    rocks: [],
+    buildings: [],
     bridges: [[2, 236, 30, 236, 12], [360, 326, 388, 326, 12], [2, 606, 30, 606, 12]],
-    chequers: [[112, 744, 50, 24, 0]]
+    chequers: []
   };
   var TRACKS = [
     { id: "long-bay", name: "LONG BAY", build: buildLongBay, decor: LONG_BAY_DECOR },
     { id: "grand-oval", name: "GRAND OVAL", build: buildGrandOval, decor: GRAND_OVAL_DECOR },
-    { id: "switchback", name: "SWITCHBACK", build: buildSwitchback, decor: OPEN_WATER_DECOR },
-    { id: "marina-sprint", name: "MARINA SPRINT", build: buildMarinaSprint, decor: OPEN_WATER_DECOR }
+    { id: "delta-run", name: "DELTA RUN", build: buildDeltaRun, decor: OPEN_WATER_DECOR }
   ];
   var BY_ID = new Map(TRACKS.map((track) => [track.id, track]));
   function trackById(id) {
@@ -703,6 +730,12 @@ var HarborLoop = (() => {
     cornering: 0
   };
   var aiCars = [];
+  var REFERENCE_LAP = 2988;
+  var MIN_FIELD = 8;
+  function fieldSize() {
+    const scaled = Math.round(tuning.profile.carCount * (arc.total / REFERENCE_LAP));
+    return Math.max(MIN_FIELD, scaled);
+  }
   function resetGame() {
     player.distance = arc.total * 0.03;
     player.lane = STARTING_LANE;
@@ -729,7 +762,7 @@ var HarborLoop = (() => {
     player.trail.length = 0;
     player.previousHeading = 0;
     player.cornering = 0;
-    aiCars = buildBlueprints(tuning.profile.carCount).map((blueprint, index) => {
+    aiCars = buildBlueprints(fieldSize()).map((blueprint, index) => {
       const distance = arc.total * blueprint.fraction;
       const baseSpeed = blueprint.speed * tuning.traffic;
       return {
@@ -770,6 +803,11 @@ var HarborLoop = (() => {
       remaining -= taken;
       if (remaining <= 0) break;
     }
+    const kicksTotal = Math.floor(Math.max(0, combo) / OVERTAKE_KICK_EVERY);
+    const kicksBeforeTaper = Math.floor(OVERTAKE_KICK_TAPER_AFTER / OVERTAKE_KICK_EVERY);
+    const fullKicks = Math.min(kicksTotal, kicksBeforeTaper);
+    const lateKicks = kicksTotal - fullKicks;
+    speed += fullKicks * OVERTAKE_KICK_SPEED + lateKicks * OVERTAKE_KICK_SPEED_LATE;
     return Math.min(CRUISE_SPEED_CAP, speed);
   }
   function currentCruiseSpeed() {
@@ -844,7 +882,7 @@ var HarborLoop = (() => {
     if (playerIsApproachingAi(car)) return false;
     const ahead = nearestAiAhead(car, car.visualLane, 62);
     const needsToPass = Boolean(ahead && ahead.car.speed + 2 < car.baseSpeed && ahead.distance < 46);
-    if (!needsToPass && random() > 0.34) return false;
+    if (!needsToPass) return false;
     const directions = shuffledDirections();
     for (const direction of directions) {
       const targetLane = car.lane + direction;
@@ -1332,6 +1370,24 @@ var HarborLoop = (() => {
         }
       }
     }
+    /**
+     * Hard-stops every in-flight one-shot immediately, instead of letting it
+     * decay. update() is what normally fades these out, but it only runs while
+     * a race is playing — a crash that ends the run right on the frame it
+     * happens leaves its noise burst mid-decay with nothing left to tick it
+     * down, so it plays on into the result screen unless cut here.
+     */
+    stopTransients() {
+      for (const transient of this.transients) {
+        for (const node of transient.nodes) safelyStopNode(node);
+      }
+      this.transients.length = 0;
+      for (const voice of this.voices) {
+        safelyStopNode(voice.oscillator);
+        safelyStopNode(voice.gain);
+      }
+      this.voices.length = 0;
+    }
     suspend() {
       if (!this.context || typeof this.context.suspend !== "function") return;
       try {
@@ -1371,7 +1427,7 @@ var HarborLoop = (() => {
     timeLimit: 60,
     scoreUnit: "PASSES",
     trafficScale: 0.9,
-    trackId: "switchback",
+    trackId: "delta-run",
     stars: [15, 28, 43],
     setup() {
       effects.dim = 0;
@@ -1466,8 +1522,11 @@ var HarborLoop = (() => {
     timeLimit: 90,
     scoreUnit: "POINTS",
     trafficScale: 0.85,
-    trackId: "marina-sprint",
+    trackId: "delta-run",
     stars: [800, 2e3, 3600],
+    // Contact always destroys here, never crashes, so there's no crash to wait
+    // for — the clock has to be what ends the run.
+    timeoutIsFinal: true,
     setup() {
       player.fireball = Number.POSITIVE_INFINITY;
     },
@@ -1723,6 +1782,35 @@ var HarborLoop = (() => {
   function saveStreak(streak) {
     writeFlag(STREAK_KEY, JSON.stringify(streak));
   }
+  var DAILY_BEST_KEY = "harbor-loop-daily-best-v1";
+  var dailyBestCache = null;
+  function dailyBestTable() {
+    if (dailyBestCache) return dailyBestCache;
+    const raw = readFlag(DAILY_BEST_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          dailyBestCache = parsed;
+          return dailyBestCache;
+        }
+      } catch (error) {
+      }
+    }
+    dailyBestCache = {};
+    return dailyBestCache;
+  }
+  function dailyBestScore(modeId) {
+    const value = dailyBestTable()[modeId];
+    return typeof value === "number" ? value : null;
+  }
+  function submitDailyBest(modeId, score) {
+    const current = dailyBestScore(modeId);
+    if (current !== null && score <= current) return false;
+    dailyBestTable()[modeId] = score;
+    writeFlag(DAILY_BEST_KEY, JSON.stringify(dailyBestTable()));
+    return true;
+  }
   function careerPoints() {
     return Object.entries(table()).reduce((total, [entryKey, value]) => {
       if (entryKey.startsWith("time-attack:")) return total;
@@ -1867,7 +1955,7 @@ var HarborLoop = (() => {
     const response = load > player.cornering ? 9 : 3.2;
     player.cornering += (load - player.cornering) * (1 - Math.exp(-dt * response));
   }
-  var TRAIL_LENGTH = 26;
+  var TRAIL_LENGTH = 56;
   function recordTrail() {
     player.trail.push({ distance: player.distance, lane: player.visualLane });
     if (player.trail.length > TRAIL_LENGTH) player.trail.shift();
@@ -1885,7 +1973,7 @@ var HarborLoop = (() => {
     timeLimit: 60,
     scoreUnit: "PASSES",
     trafficScale: 1,
-    trackId: "marina-sprint",
+    trackId: "delta-run",
     stars: [10, 20, 33],
     setup() {
       timer = SWITCH_SECONDS;
@@ -1924,7 +2012,7 @@ var HarborLoop = (() => {
     timeLimit: 60,
     scoreUnit: "METRES",
     trafficScale: 1,
-    trackId: "switchback",
+    trackId: "delta-run",
     stars: [4e3, 8200, 12500],
     setup() {
       player.heat = 0;
@@ -1961,7 +2049,7 @@ var HarborLoop = (() => {
     timeLimit: 75,
     scoreUnit: "POINTS",
     trafficScale: 0.9,
-    trackId: "switchback",
+    trackId: "grand-oval",
     stars: [1e3, 2100, 3300],
     setup(_run, cars) {
       const stride = Math.max(1, Math.floor(cars.length / ZONE_COUNT));
@@ -2016,7 +2104,7 @@ var HarborLoop = (() => {
     timeLimit: 75,
     scoreUnit: "PASSES",
     trafficScale: 0.95,
-    trackId: "marina-sprint",
+    trackId: "delta-run",
     stars: [12, 24, 38],
     setup() {
       timer2 = CULL_INTERVAL;
@@ -2110,7 +2198,7 @@ var HarborLoop = (() => {
     timeLimit: 60,
     scoreUnit: "POINTS",
     trafficScale: 0.95,
-    trackId: "switchback",
+    trackId: "long-bay",
     stars: [1400, 3e3, 5e3],
     setup() {
       charge = 0;
@@ -2258,13 +2346,6 @@ var HarborLoop = (() => {
     const seed = hashSeed(`harbor-loop:${day}`);
     const modeIndex = hashSeed(`mode:${day}`) % DAILY_POOL.length;
     return { day, modeId: DAILY_POOL[modeIndex], seed };
-  }
-  function dailyStage(plan, stage) {
-    const mode = modeById(plan.modeId);
-    if (stage === 1) {
-      return { stage: 1, difficulty: DEFAULT_DIFFICULTY, target: mode.stars[0] };
-    }
-    return { stage: 2, difficulty: DEFAULT_DIFFICULTY, target: Math.round(mode.stars[2] * 1.45) };
   }
 
   // src/render/icons.ts
@@ -2452,10 +2533,10 @@ var HarborLoop = (() => {
       target.textAlign = "left";
       target.fillStyle = UI.primary;
       target.font = "900 20px sans-serif";
-      target.fillText("HARBOR LOOP", 40, 56);
+      target.fillText("心跳加速-冲刺", 40, 56);
       target.fillStyle = UI.card;
       target.font = "900 34px sans-serif";
-      target.fillText(data.stage > 0 ? `每日挑战 第 ${data.stage} 关` : mode.name, 40, 108);
+      target.fillText(data.daily ? "每日挑战" : mode.name, 40, 108);
       target.fillStyle = "rgba(255,246,228,0.6)";
       target.font = "700 15px sans-serif";
       target.fillText(data.difficultyLabel, 40, 134);
@@ -2495,9 +2576,9 @@ var HarborLoop = (() => {
     context = next;
   }
   function shareTitle() {
-    if (!context) return "Harbor Loop — 16 种模式的像素赛车";
-    if (context.stage > 0) {
-      return `每日挑战第 ${context.stage} 关我拿了 ${context.score}，你能过吗`;
+    if (!context) return "心跳加速-冲刺 — 16 种模式的像素赛车";
+    if (context.daily) {
+      return `每日挑战我拿了 ${context.score}，你能过吗`;
     }
     const mode = modeById(context.modeId);
     return `我在 ${mode.name}(${DIFFICULTY_LABEL[context.difficulty]}) 拿了 ${context.score} ${context.scoreUnit}，来超我`;
@@ -2515,7 +2596,7 @@ var HarborLoop = (() => {
       score: context.score,
       scoreUnit: context.scoreUnit,
       stars: context.stars,
-      stage: context.stage
+      daily: context.daily
     });
     return path != null ? path : void 0;
   }
@@ -2990,8 +3071,6 @@ var HarborLoop = (() => {
     crashes: 0,
     closeCalls: 0,
     daily: false,
-    stage: 0,
-    stageTarget: 0,
     revives: 0,
     outcome: "running",
     progress: -1,
@@ -2999,12 +3078,12 @@ var HarborLoop = (() => {
     bannerTimer: 0
   };
   var activeMode = MODES[0];
-  function startRun(modeId, difficulty, daily) {
+  function startRun(modeId, difficulty, daily, trackId) {
     var _a;
     activeMode = modeById(modeId);
     if (daily) setSeed(daily.seed);
     else clearSeed();
-    setTrack(activeMode.trackId);
+    setTrack(trackId != null ? trackId : activeMode.trackId);
     applyTuning(difficulty, activeMode.trafficScale);
     resetGame();
     resetEffects();
@@ -3024,8 +3103,6 @@ var HarborLoop = (() => {
     run.crashes = 0;
     run.closeCalls = 0;
     run.daily = Boolean(daily);
-    run.stage = daily ? daily.stage : 0;
-    run.stageTarget = daily ? daily.target : 0;
     run.revives = 0;
     run.outcome = "running";
     run.progress = -1;
@@ -3044,12 +3121,12 @@ var HarborLoop = (() => {
     if (run.bannerTimer <= 0) run.banner = "";
     (_a = activeMode.update) == null ? void 0 : _a.call(activeMode, dt, run, aiCars);
     if (run.outcome !== "running") return;
-    if (run.daily) {
-      if (run.score >= run.stageTarget) run.outcome = "cleared";
-    } else if ((_b = activeMode.cleared) == null ? void 0 : _b.call(activeMode, run, aiCars)) run.outcome = "cleared";
+    if ((_b = activeMode.cleared) == null ? void 0 : _b.call(activeMode, run, aiCars)) run.outcome = "cleared";
     if (run.outcome !== "running") return;
     if ((_c = activeMode.failed) == null ? void 0 : _c.call(activeMode, run, aiCars)) run.outcome = "wrecked";
-    else if (run.timeRemaining <= 0) run.outcome = "timeout";
+    else if (run.timeRemaining <= 0) {
+      if (activeMode.timeoutIsFinal || player.state === "CRASHED") run.outcome = "timeout";
+    }
   }
   function runIsOver() {
     return run.outcome !== "running";
@@ -3082,27 +3159,35 @@ var HarborLoop = (() => {
     difficulty: DEFAULT_DIFFICULTY,
     /** Pixels the mode list is scrolled by; only used when the list overflows. */
     menuScroll: 0,
+    /** Mode the track picker is choosing a circuit for. */
+    trackPickerMode: null,
+    /** Circuit the current run is on, so a finished run can go back to the picker. */
+    trackId: null,
     result: null
   };
   function openMenu() {
     app.screen = "MENU";
+    app.trackPickerMode = null;
+    app.trackId = null;
   }
-  function startMode(modeId) {
+  function openTrackPicker(modeId) {
     if (!modeUnlocked(modeId)) return false;
-    startRun(modeId, app.difficulty);
+    app.trackPickerMode = modeId;
+    app.screen = "TRACKS";
+    return true;
+  }
+  function startMode(modeId, trackId) {
+    if (!modeUnlocked(modeId)) return false;
+    app.trackId = trackId != null ? trackId : null;
+    startRun(modeId, app.difficulty, void 0, trackId);
     app.screen = "PLAYING";
     return true;
   }
   function startDaily() {
     const plan = dailyPlan();
-    const stage = dailyStage(plan, 1);
-    startRun(plan.modeId, stage.difficulty, { seed: plan.seed, stage: 1, target: stage.target });
-    app.screen = "PLAYING";
-  }
-  function startDailyStageTwo() {
-    const plan = dailyPlan();
-    const stage = dailyStage(plan, 2);
-    startRun(plan.modeId, stage.difficulty, { seed: plan.seed, stage: 2, target: stage.target });
+    app.trackPickerMode = null;
+    app.trackId = null;
+    startRun(plan.modeId, DEFAULT_DIFFICULTY, { seed: plan.seed });
     app.screen = "PLAYING";
   }
   function shareForRevive() {
@@ -3113,7 +3198,7 @@ var HarborLoop = (() => {
       difficulty: run.difficulty,
       score: run.score,
       scoreUnit: modeById(run.modeId).scoreUnit,
-      stage: run.stage,
+      daily: run.daily,
       stars: starsFor(run.modeId, run.difficulty)
     });
     shareRun();
@@ -3126,37 +3211,36 @@ var HarborLoop = (() => {
     return reviveAvailable();
   }
   function retryRun() {
+    var _a;
     const summary = app.result;
     if (!summary) {
       startMode(MODES[0].id);
       return;
     }
-    if (summary.stage === 1) startDaily();
-    else if (summary.stage === 2) startDailyStageTwo();
+    if (summary.daily) startDaily();
     else {
-      startRun(summary.modeId, summary.difficulty);
+      startRun(summary.modeId, summary.difficulty, void 0, (_a = app.trackId) != null ? _a : void 0);
       app.screen = "PLAYING";
     }
+  }
+  function goBack() {
+    if (app.trackPickerMode) app.screen = "TRACKS";
+    else openMenu();
   }
   function finishRun() {
     const mode = modeById(run.modeId);
     const lowerIsBetter = Boolean(mode.lowerIsBetter);
-    if (run.daily && run.stage === 1 && run.outcome === "cleared") {
-      startDailyStageTwo();
-      return;
-    }
     const scoreCounts = run.score > 0 && !(lowerIsBetter && run.outcome !== "cleared");
-    const newBest = !run.daily && scoreCounts && submitScore(run.modeId, run.difficulty, run.score, lowerIsBetter);
+    const newBest = scoreCounts && (run.daily ? submitDailyBest(run.modeId, run.score) : submitScore(run.modeId, run.difficulty, run.score, lowerIsBetter));
     app.result = {
       modeId: run.modeId,
       difficulty: run.difficulty,
       outcome: run.outcome,
       score: run.score,
-      best: bestScore(run.modeId, run.difficulty),
+      best: run.daily ? dailyBestScore(run.modeId) : bestScore(run.modeId, run.difficulty),
       newBest,
       scoreUnit: mode.scoreUnit,
-      stage: run.stage,
-      stageTarget: run.stageTarget,
+      daily: run.daily,
       day: run.daily ? todayKey() : ""
     };
     setShareContext({
@@ -3164,7 +3248,7 @@ var HarborLoop = (() => {
       difficulty: run.difficulty,
       score: run.score,
       scoreUnit: mode.scoreUnit,
-      stage: run.stage,
+      daily: run.daily,
       stars: starsFor(run.modeId, run.difficulty)
     });
     if (run.daily) {
@@ -3178,15 +3262,15 @@ var HarborLoop = (() => {
   }
 
   // src/controls.ts
-  var CONTROL_BAR_TOP = 738;
-  var CONTROL_H = 72;
-  var CONTROL_RADIUS = 18;
-  var CONTROL_HIT_PADDING = 10;
+  var CONTROL_BAR_TOP = 752;
+  var CONTROL_H = 58;
+  var CONTROL_RADIUS = 16;
+  var CONTROL_HIT_PADDING = 14;
   var CONTROL_FLASH_DURATION = 0.14;
   var CONTROLS = [
-    { id: "left", kind: "lane", direction: 1, x: 20, w: 76 },
-    { id: "right", kind: "lane", direction: -1, x: 104, w: 76 },
-    { id: "throttle", kind: "throttle", direction: 0, x: 236, w: 134 }
+    { id: "left", kind: "lane", direction: 1, x: 20, w: 72 },
+    { id: "right", kind: "lane", direction: -1, x: 100, w: 72 },
+    { id: "throttle", kind: "throttle", direction: 0, x: 244, w: 126 }
   ].map((control) => __spreadProps(__spreadValues({}, control), { y: CONTROL_BAR_TOP, h: CONTROL_H }));
   function controlAtDesignPoint(x, y) {
     for (const control of CONTROLS) {
@@ -3235,23 +3319,23 @@ var HarborLoop = (() => {
   }
 
   // src/render/hud.ts
-  var BACK_BUTTON = { x: DESIGN_W - 52, y: 12, w: 40, h: 40 };
+  var BACK_BUTTON = { x: DESIGN_W - 46, y: 9, w: 34, h: 34 };
   function drawComboPill() {
     ctx.fillStyle = "rgba(8,17,25,0.66)";
-    roundRect(ctx, 12, 12, 78, 44, 13);
+    roundRect(ctx, 12, 9, 66, 34, 11);
     ctx.fill();
     ctx.fillStyle = "rgba(247,244,234,0.5)";
-    ctx.font = "700 7.5px sans-serif";
+    ctx.font = "700 6.5px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("BEST", 51, 24);
+    ctx.fillText("BEST", 45, 19);
     ctx.fillStyle = player.bestCombo > 0 ? COLORS.accentLight : COLORS.text;
     const tierPulse = player.tierBoostElapsed > 0 ? 1 + Math.sin((PLAYER_TIER_BOOST_DURATION - player.tierBoostElapsed) * Math.PI * 8) * 0.08 : 1;
     ctx.save();
-    ctx.translate(51, 42);
+    ctx.translate(45, 33);
     ctx.scale(tierPulse, tierPulse);
-    ctx.font = "900 23px monospace";
+    ctx.font = "900 18px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`x${player.bestCombo}`, 0, 4);
+    ctx.fillText(`x${player.bestCombo}`, 0, 3);
     ctx.restore();
   }
   function drawCountdown() {
@@ -3274,20 +3358,20 @@ var HarborLoop = (() => {
     if (Number.isFinite(run.timeRemaining)) {
       const urgent = run.timeRemaining <= 10;
       ctx.fillStyle = "rgba(8,17,25,0.66)";
-      roundRect(ctx, 88, 12, 74, 42, 13);
+      roundRect(ctx, 84, 9, 62, 34, 11);
       ctx.fill();
       ctx.textAlign = "center";
       ctx.fillStyle = urgent ? "#FF7A6B" : COLORS.text;
-      ctx.font = "900 22px monospace";
-      ctx.fillText(run.timeRemaining.toFixed(1), 125, 41);
+      ctx.font = "900 18px monospace";
+      ctx.fillText(run.timeRemaining.toFixed(1), 115, 32);
     }
     ctx.textAlign = "right";
     ctx.fillStyle = COLORS.accentLight;
-    ctx.font = "900 20px monospace";
-    ctx.fillText(String(run.score), DESIGN_W - 60, 34);
+    ctx.font = "900 17px monospace";
+    ctx.fillText(String(run.score), DESIGN_W - 54, 27);
     ctx.fillStyle = COLORS.muted;
-    ctx.font = "700 8px sans-serif";
-    ctx.fillText(mode.scoreUnit, DESIGN_W - 60, 46);
+    ctx.font = "700 7px sans-serif";
+    ctx.fillText(mode.scoreUnit, DESIGN_W - 54, 38);
     ctx.textAlign = "center";
   }
   function drawBackButton() {
@@ -3298,8 +3382,8 @@ var HarborLoop = (() => {
     ctx.strokeStyle = COLORS.buttonEdge;
     ctx.stroke();
     ctx.fillStyle = COLORS.text;
-    ctx.fillRect(BACK_BUTTON.x + 14, BACK_BUTTON.y + 12, 4, 16);
-    ctx.fillRect(BACK_BUTTON.x + 22, BACK_BUTTON.y + 12, 4, 16);
+    ctx.fillRect(BACK_BUTTON.x + 11, BACK_BUTTON.y + 10, 4, 14);
+    ctx.fillRect(BACK_BUTTON.x + 19, BACK_BUTTON.y + 10, 4, 14);
   }
   function drawObjectiveBar() {
     if (run.progress < 0) return;
@@ -3354,9 +3438,9 @@ var HarborLoop = (() => {
       ctx.fillStyle = color;
       ctx.fillText(text, cx, cy + size * 0.36);
     };
-    if (hints.lane) hint("点这里换车道", 96, 716, 11, COLORS.accentLight);
-    if (hints.throttle) hint("按住加速", 303, 716, 11, COLORS.accentLight);
-    if (hints.lane || hints.throttle) hint("超车加 Combo · 撞车清零", DESIGN_W / 2, 684, 10, COLORS.text);
+    if (hints.lane) hint("点这里换车道", 96, 738, 11, COLORS.accentLight);
+    if (hints.throttle) hint("按住加速", 307, 738, 11, COLORS.accentLight);
+    if (hints.lane || hints.throttle) hint("超车加 Combo · 撞车清零", DESIGN_W / 2, 708, 10, COLORS.text);
     ctx.restore();
   }
   function drawHud() {
@@ -3514,7 +3598,7 @@ var HarborLoop = (() => {
   function drawMenu() {
     screenBackground(DESIGN_W, DESIGN_H);
     const stars = totalStars();
-    headline("HARBOR LOOP", MARGIN, 42, 28, UI.card);
+    headline("心跳加速-冲刺", MARGIN, 42, 28, UI.card);
     const starText = `${stars}/${maxStars()}`;
     ctx.font = "900 12px sans-serif";
     const starWidth = Math.max(78, ctx.measureText(starText).width + 42);
@@ -3585,7 +3669,7 @@ var HarborLoop = (() => {
     ctx.font = "600 9.5px sans-serif";
     ctx.fillStyle = "rgba(34,50,63,0.7)";
     ctx.fillText(
-      `${plan.day} · ${mode ? mode.name : ""} · 两关 · 全服同一份车流`,
+      `${plan.day} · ${mode ? mode.name : ""} · 全服同一份车流`,
       DAILY_RECT.x + 14,
       DAILY_RECT.y + 35
     );
@@ -3670,7 +3754,7 @@ var HarborLoop = (() => {
         showToast(`需要 ${modeUnlockCost(mode.id)} 颗星解锁`);
       } else {
         audio.playUiConfirm();
-        startMode(mode.id);
+        openTrackPicker(mode.id);
       }
       return true;
     }
@@ -3726,8 +3810,8 @@ var HarborLoop = (() => {
     const mode = modeById(summary.modeId);
     const outcome = (_a = OUTCOME[summary.outcome]) != null ? _a : OUTCOME.running;
     screenBackground(DESIGN_W, DESIGN_H);
-    const title = summary.stage > 0 ? `每日挑战 · 第 ${summary.stage} 关` : mode.name;
-    headline(title, DESIGN_W / 2, 56, summary.stage > 0 ? 21 : 24, UI.card, "center");
+    const title = summary.daily ? "每日挑战" : mode.name;
+    headline(title, DESIGN_W / 2, 56, summary.daily ? 21 : 24, UI.card, "center");
     ctx.font = "900 11px sans-serif";
     const diffLabel = DIFFICULTY_PROFILES[summary.difficulty].label;
     const diffWidth = Math.max(72, ctx.measureText(diffLabel).width + 32);
@@ -3748,23 +3832,15 @@ var HarborLoop = (() => {
     ctx.fillStyle = UI.inkSoft;
     ctx.font = "900 11px sans-serif";
     ctx.fillText(summary.scoreUnit, DESIGN_W / 2, SCORE_CARD.y + 138);
-    const earned = summary.stage > 0 ? 0 : starsFor(summary.modeId, summary.difficulty);
-    for (let i = 0; i < 3 && summary.stage === 0; i++) {
+    const earned = summary.daily ? 0 : starsFor(summary.modeId, summary.difficulty);
+    for (let i = 0; i < 3 && !summary.daily; i++) {
       drawStar(DESIGN_W / 2 - 34 + i * 34, SCORE_CARD.y + 162, 14, i < earned ? UI.primary : "rgba(34,50,63,0.16)", i < earned);
     }
-    const target = nextStarTarget(summary.modeId, summary.difficulty);
+    const target = summary.daily ? null : nextStarTarget(summary.modeId, summary.difficulty);
     ctx.textAlign = "center";
     ctx.fillStyle = UI.inkSoft;
     ctx.font = "700 10px sans-serif";
-    if (summary.stage > 0) {
-      ctx.fillStyle = summary.outcome === "cleared" ? UI.good : UI.inkSoft;
-      ctx.font = "900 11px sans-serif";
-      ctx.fillText(
-        summary.outcome === "cleared" ? `过关目标 ${summary.stageTarget} ${summary.scoreUnit}` : `差 ${Math.max(0, summary.stageTarget - summary.score)} ${summary.scoreUnit} 过关`,
-        DESIGN_W / 2,
-        SCORE_CARD.y + 192
-      );
-    } else if (summary.newBest) {
+    if (summary.newBest) {
       ctx.fillStyle = UI.primaryDeep;
       ctx.font = "900 11px sans-serif";
       ctx.fillText("NEW BEST!", DESIGN_W / 2, SCORE_CARD.y + 192);
@@ -3780,7 +3856,7 @@ var HarborLoop = (() => {
       chunkyButton(RETRY, "再来一次", "primary", 18);
     }
     chunkyButton(SHARE, "分享成绩", "good", 15);
-    chunkyButton(MENU, "选择模式", "plain", 15);
+    chunkyButton(MENU, app.trackPickerMode ? "选择赛道" : "选择模式", "plain", 15);
   }
   function drawRankingPanel() {
     panel(RANK_CARD, { fill: UI.chip, radius: 16, lift: 5 });
@@ -3830,7 +3906,7 @@ var HarborLoop = (() => {
       ctx.fillText("见 README 的云开发部署说明", DESIGN_W / 2, RANK_CARD.y + RANK_CARD.h / 2 + 10);
       return;
     }
-    const board = summary.stage > 0 ? globalBoard("daily", summary.difficulty, summary.day) : globalBoard(summary.modeId, summary.difficulty);
+    const board = summary.daily ? globalBoard("daily", summary.difficulty, summary.day) : globalBoard(summary.modeId, summary.difficulty);
     if (board.state === "loading") {
       ctx.fillStyle = "rgba(255,246,228,0.38)";
       ctx.font = "600 11px sans-serif";
@@ -3889,12 +3965,103 @@ var HarborLoop = (() => {
     }
     if (hits(MENU, x, y)) {
       audio.playUiTap();
-      openMenu();
+      goBack();
       return true;
     }
     if (hits(SHARE, x, y)) {
       audio.playUiConfirm();
       shareRun();
+      return true;
+    }
+    return false;
+  }
+
+  // src/screens/trackSelect.ts
+  var MARGIN3 = 14;
+  var GAP = 12;
+  var COLUMNS = 3;
+  var CELL = (DESIGN_W - MARGIN3 * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
+  var GRID_TOP = 64;
+  var INSET = CELL * 0.13;
+  var BACK = { x: MARGIN3, y: DESIGN_H - 84, w: DESIGN_W - MARGIN3 * 2, h: 54 };
+  var boundsCache = /* @__PURE__ */ new Map();
+  function trackBounds(trackId) {
+    const cached = boundsCache.get(trackId);
+    if (cached) return cached;
+    const points = TRACKS.find((track) => track.id === trackId).build();
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const point of points) {
+      if (point.x < minX) minX = point.x;
+      if (point.y < minY) minY = point.y;
+      if (point.x > maxX) maxX = point.x;
+      if (point.y > maxY) maxY = point.y;
+    }
+    const measured = { points, minX, minY, width: maxX - minX, height: maxY - minY };
+    boundsCache.set(trackId, measured);
+    return measured;
+  }
+  function cardRect(index) {
+    const column = index % COLUMNS;
+    const row = Math.floor(index / COLUMNS);
+    return {
+      x: MARGIN3 + column * (CELL + GAP),
+      y: GRID_TOP + row * (CELL + GAP),
+      w: CELL,
+      h: CELL
+    };
+  }
+  function drawThumbnail(trackId, box) {
+    const bounds = trackBounds(trackId);
+    const scale2 = Math.min(box.w / bounds.width, box.h / bounds.height);
+    const originX = box.x + (box.w - bounds.width * scale2) / 2;
+    const originY = box.y + (box.h - bounds.height * scale2) / 2;
+    ctx.beginPath();
+    bounds.points.forEach((point, index) => {
+      const x = originX + (point.x - bounds.minX) * scale2;
+      const y = originY + (point.y - bounds.minY) * scale2;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.lineWidth = CELL * 0.075;
+    ctx.strokeStyle = "rgba(34,50,63,0.35)";
+    ctx.stroke();
+    ctx.lineWidth = CELL * 0.011;
+    ctx.strokeStyle = "rgba(255,246,228,0.5)";
+    ctx.stroke();
+  }
+  function drawTrackSelect() {
+    screenBackground(DESIGN_W, DESIGN_H);
+    TRACKS.forEach((track, index) => {
+      const rect = cardRect(index);
+      panel(rect, { fill: UI.card, radius: 12, lift: 3, outlineWidth: 2 });
+      drawThumbnail(track.id, {
+        x: rect.x + INSET,
+        y: rect.y + INSET,
+        w: rect.w - INSET * 2,
+        h: rect.h - INSET * 2
+      });
+    });
+    chunkyButton(BACK, "返回", "plain", 16);
+    ctx.textAlign = "center";
+  }
+  function handleTrackSelectTap(x, y) {
+    if (hits(BACK, x, y)) {
+      audio.playUiTap();
+      openMenu();
+      return true;
+    }
+    const modeId = app.trackPickerMode;
+    if (!modeId) return false;
+    for (let i = 0; i < TRACKS.length; i++) {
+      if (!hits(cardRect(i), x, y)) continue;
+      audio.playUiConfirm();
+      startMode(modeId, TRACKS[i].id);
       return true;
     }
     return false;
@@ -3924,13 +4091,17 @@ var HarborLoop = (() => {
       handleMenuTap(x, y);
       return;
     }
+    if (app.screen === "TRACKS") {
+      handleTrackSelectTap(x, y);
+      return;
+    }
     if (app.screen === "RESULT") {
       handleResultTap(x, y);
       return;
     }
     if (x >= BACK_BUTTON.x && x <= BACK_BUTTON.x + BACK_BUTTON.w && y >= BACK_BUTTON.y && y <= BACK_BUTTON.y + BACK_BUTTON.h) {
       releaseAllPointers();
-      openMenu();
+      goBack();
       return;
     }
     const control = controlAtDesignPoint(x, y);
@@ -3991,7 +4162,7 @@ var HarborLoop = (() => {
       handled = true;
     } else if (key2 === "escape" || code === "Escape" || keyCode === 27) {
       releaseAllPointers();
-      openMenu();
+      goBack();
       handled = true;
     }
     if (handled && typeof event.preventDefault === "function") event.preventDefault();
@@ -4139,8 +4310,8 @@ var HarborLoop = (() => {
   }
 
   // src/render/sprites.ts
-  var CAR_LENGTH = 16.4;
-  var CAR_WIDTH = 8.6;
+  var CAR_LENGTH = 20.5;
+  var CAR_WIDTH = 10.8;
   var SUPERSAMPLE = 10;
   var SPRITE_W = Math.round(CAR_LENGTH * SUPERSAMPLE);
   var SPRITE_H = Math.round(CAR_WIDTH * SUPERSAMPLE);
@@ -4405,8 +4576,8 @@ var HarborLoop = (() => {
     const innerEdge = edge(-ROAD_HALF_WIDTH - 4);
     fillRibbon(outerEdge, innerEdge, COLORS.roadEdge);
     const outerKerb = edge(ROAD_HALF_WIDTH);
-    const outerRoad = edge(ROAD_HALF_WIDTH - 3.2);
-    const innerRoad = edge(-ROAD_HALF_WIDTH + 3.2);
+    const outerRoad = edge(ROAD_HALF_WIDTH - KERB_WIDTH);
+    const innerRoad = edge(-ROAD_HALF_WIDTH + KERB_WIDTH);
     const innerKerb = edge(-ROAD_HALF_WIDTH);
     fillRibbon(outerKerb, outerRoad, COLORS.curbLight);
     fillRibbon(innerRoad, innerKerb, COLORS.curbLight);
@@ -4419,7 +4590,7 @@ var HarborLoop = (() => {
     if (grain) fillRibbon(outerRoad, innerRoad, grain);
     drawSlabVariation(outerRoad, innerRoad);
     drawSlabSeams(outerRoad, innerRoad);
-    drawEdgeGrime(outerRoad, innerRoad);
+    drawEdgeGrime();
     drawStartLine();
   }
   var SEAM_SPACING = 6;
@@ -4452,16 +4623,19 @@ var HarborLoop = (() => {
     }
     ctx.restore();
   }
-  function drawEdgeGrime(outer, inner) {
-    const outerGrime = edge(ROAD_HALF_WIDTH - 8.5);
-    const innerGrime = edge(-ROAD_HALF_WIDTH + 8.5);
-    fillRibbon(outer, outerGrime, "rgba(112,112,100,0.22)");
-    fillRibbon(innerGrime, inner, "rgba(112,112,100,0.22)");
-    const outerDark = edge(ROAD_HALF_WIDTH - 5);
-    const innerDark = edge(-ROAD_HALF_WIDTH + 5);
-    fillRibbon(outer, outerDark, "rgba(88,88,78,0.2)");
-    fillRibbon(innerDark, inner, "rgba(88,88,78,0.2)");
+  function drawEdgeGrime() {
+    const outerKerb = edge(ROAD_HALF_WIDTH);
+    const outerLane = edge(ROAD_HALF_WIDTH - KERB_WIDTH);
+    const innerLane = edge(-ROAD_HALF_WIDTH + KERB_WIDTH);
+    const innerKerb = edge(-ROAD_HALF_WIDTH);
+    fillRibbon(outerKerb, outerLane, "rgba(112,112,100,0.3)");
+    fillRibbon(innerLane, innerKerb, "rgba(112,112,100,0.3)");
+    const outerDark = edge(ROAD_HALF_WIDTH - 1.4);
+    const innerDark = edge(-ROAD_HALF_WIDTH + 1.4);
+    fillRibbon(outerKerb, outerDark, "rgba(88,88,78,0.26)");
+    fillRibbon(innerDark, innerKerb, "rgba(88,88,78,0.26)");
   }
+  var CHEQUER_CELLS = 14;
   function drawStartLine() {
     const centre = sampleAtDistance(0, (LANE_COUNT - 1) / 2);
     const heading = projectedHeading(centre.x, centre.y, centre.angle);
@@ -4469,12 +4643,13 @@ var HarborLoop = (() => {
     ctx.save();
     ctx.translate(origin.x, origin.y);
     ctx.rotate(heading);
-    const size = 4.6 * origin.scale;
-    for (let i = -3; i <= 2; i++) {
+    const cell = ROAD_HALF_WIDTH * 2 / CHEQUER_CELLS * origin.scale;
+    const half = CHEQUER_CELLS / 2;
+    for (let i = -half; i < half; i++) {
       ctx.fillStyle = i % 2 === 0 ? "#F5F0E2" : "#242A2E";
-      ctx.fillRect(-size * 0.5, i * size, size, size);
+      ctx.fillRect(-cell, i * cell, cell, cell);
       ctx.fillStyle = i % 2 === 0 ? "#242A2E" : "#F5F0E2";
-      ctx.fillRect(size * 0.5, i * size, size, size);
+      ctx.fillRect(0, i * cell, cell, cell);
     }
     ctx.restore();
   }
@@ -4994,20 +5169,27 @@ var HarborLoop = (() => {
     ctx.fill();
     ctx.restore();
   }
-  var TRAIL_SEGMENTS2 = 9;
+  var TRAIL_MIN_SEGMENTS = 8;
+  var TRAIL_MAX_SEGMENTS = 26;
+  var TRAIL_STRIDE = 2;
   var GHOSTS_MAX = 3;
   function trailIntensity() {
-    const cruise = currentCruiseSpeed();
-    return Math.min(1, Math.max(0, (player.speed - cruise * 0.88) / 165));
+    const base = baseCruiseSpeed();
+    const span = PLAYER_MAX_SPEED * tuning.player - base;
+    if (span <= 0) return 0;
+    return Math.min(1, Math.max(0, (player.speed - base) / span));
   }
   function drawAfterimage() {
     const trail = player.trail;
     if (trail.length < 4 || player.state === "CRASHED") return;
     const intensity2 = trailIntensity();
     if (intensity2 <= 0.04) return;
-    const stride = Math.max(1, Math.round(1 + intensity2 * 2));
+    const stride = TRAIL_STRIDE;
+    const segments = Math.round(
+      TRAIL_MIN_SEGMENTS + intensity2 * (TRAIL_MAX_SEGMENTS - TRAIL_MIN_SEGMENTS)
+    );
     const points = [];
-    for (let i = 0; i < TRAIL_SEGMENTS2; i++) {
+    for (let i = 0; i < segments; i++) {
       const index = trail.length - 1 - i * stride;
       if (index < 0) break;
       const sample = trail[index];
@@ -5098,7 +5280,7 @@ var HarborLoop = (() => {
   // src/scoring.ts
   var WRECK_SECONDS = 0.9;
   var CLOSE_CALL_LANE_DISTANCE = 1.25;
-  var CLOSE_CALL_PATH_DISTANCE = 34;
+  var CLOSE_CALL_PATH_DISTANCE = 42;
   var CLOSE_CALL_BOOST = 0.55;
   function destroyCar(car) {
     var _a, _b;
@@ -5153,8 +5335,6 @@ var HarborLoop = (() => {
       streak: true
     });
     audio.playCloseCall();
-    run.banner = "CLOSE!";
-    run.bannerTimer = 0.55;
     (_b = (_a = activeMode).onCloseCall) == null ? void 0 : _b.call(_a, run);
   }
   function detectCollisions() {
@@ -5203,11 +5383,10 @@ var HarborLoop = (() => {
         const passPlane = sampleAtDistance(player.distance, player.visualLane);
         const passPoint = project(passPlane.x, passPlane.y);
         floatText(passPoint.x, passPoint.y - 14 * passPoint.scale, `${player.combo}`, "#C5FFF7", 26 * passPoint.scale);
-        if (newTier > previousTier) {
-          player.tierBoostElapsed = PLAYER_TIER_BOOST_DURATION;
-          audio.playSpeedTierUp(newTier);
-        }
-        if (newTier > previousTier) {
+        const kicked = Math.floor(player.combo / OVERTAKE_KICK_EVERY) > Math.floor(previousCombo / OVERTAKE_KICK_EVERY);
+        if (kicked) player.tierBoostElapsed = PLAYER_TIER_BOOST_DURATION;
+        if (newTier > previousTier) audio.playSpeedTierUp(newTier);
+        if (kicked) {
           const point = sampleAtDistance(player.distance, player.visualLane);
           burst(point.x, point.y, {
             count: 18,
@@ -5218,7 +5397,7 @@ var HarborLoop = (() => {
             streak: true
           });
         }
-        vibrate(newTier > previousTier ? "medium" : "light");
+        vibrate(kicked ? "medium" : "light");
         (_b = (_a = activeMode).onOvertake) == null ? void 0 : _b.call(_a, overtakes, run);
         const laneGap = Math.abs(player.visualLane - car.visualLane);
         const pathGap = circularDistance(player.distance, car.distance);
@@ -5282,6 +5461,8 @@ var HarborLoop = (() => {
       if (app.screen === "MENU") {
         updateMenu(dt);
         drawMenu();
+      } else if (app.screen === "TRACKS") {
+        drawTrackSelect();
       } else {
         drawResult();
       }
@@ -5289,6 +5470,7 @@ var HarborLoop = (() => {
     }
     if (app.screen === "PLAYING" && runIsOver()) {
       releaseAllPointers();
+      audio.stopTransients();
       enterResultScreen();
       finishRun();
     }

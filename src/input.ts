@@ -5,7 +5,7 @@
  * while another taps a lane button.
  */
 
-import { app, openMenu, retryRun } from './app';
+import { app, goBack, retryRun } from './app';
 import { audio } from './audio';
 import { controlAtDesignPoint, flashLaneButton } from './controls';
 import { canvas, DESIGN_W, screenToDesignX, screenToDesignY, VIEW_H, VIEW_W } from './platform';
@@ -13,6 +13,7 @@ import { requestLaneChange, setThrottle } from './player';
 import { BACK_BUTTON } from './render/hud';
 import { handleMenuTap } from './screens/menu';
 import { handleResultTap } from './screens/result';
+import { handleTrackSelectTap } from './screens/trackSelect';
 import type { Control, KeyboardEventLike, PointerEventLike } from './types';
 
 /** pointer id -> what it is currently driving. */
@@ -46,6 +47,10 @@ export function pointerDown(pointerId: number, screenX: number, screenY: number)
     handleMenuTap(x, y);
     return;
   }
+  if (app.screen === 'TRACKS') {
+    handleTrackSelectTap(x, y);
+    return;
+  }
   if (app.screen === 'RESULT') {
     handleResultTap(x, y);
     return;
@@ -54,7 +59,7 @@ export function pointerDown(pointerId: number, screenX: number, screenY: number)
   if (x >= BACK_BUTTON.x && x <= BACK_BUTTON.x + BACK_BUTTON.w &&
       y >= BACK_BUTTON.y && y <= BACK_BUTTON.y + BACK_BUTTON.h) {
     releaseAllPointers();
-    openMenu();
+    goBack();
     return;
   }
 
@@ -133,7 +138,7 @@ function handleKeyboardInput(event: KeyboardEventLike): void {
     handled = true;
   } else if (key === 'escape' || code === 'Escape' || keyCode === 27) {
     releaseAllPointers();
-    openMenu();
+    goBack();
     handled = true;
   }
 

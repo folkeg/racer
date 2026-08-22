@@ -30,15 +30,6 @@ check('Time Attack is excluded from the pool',
     return true;
   }));
 
-// --- stage targets ----------------------------------------------------------
-const stage1 = game.dailyStage(a, 1);
-const stage2 = game.dailyStage(a, 2);
-// Both stages race the same Master field now, so the whole step between them is
-// the target score.
-check('stage one runs on Master', stage1.difficulty === 'master');
-check('stage two runs on Master', stage2.difficulty === 'master');
-check('stage two demands far more', stage2.target > stage1.target * 3,
-  `${stage1.target} -> ${stage2.target}`);
 
 // --- seeded randomness is reproducible -------------------------------------
 game.setSeed(12345);
@@ -88,32 +79,37 @@ game.clearCountdown();
 check('an ordinary run is not seeded', game.isSeeded() === false);
 
 // --- the daily flow ---------------------------------------------------------
+// One level now, same rules as an ordinary run — no stage ladder, no target.
 game.startDaily();
 game.clearCountdown();
-check('the daily run starts at stage one', game.run.stage === 1, `stage=${game.run.stage}`);
 check('the daily run is flagged as daily', game.run.daily === true);
-check('the daily run carries a stage target', game.run.stageTarget > 0, `${game.run.stageTarget}`);
 check('the daily run bypasses the unlock ladder', game.app.screen === 'PLAYING');
 
-// Clearing stage one must drop straight into stage two, with no result screen.
-// The mode rewrites run.score every frame, so lower the bar instead of raising
-// the score: this is testing the transition, not the scoring.
-game.run.stageTarget = 0;
-step(0.05);
-check('clearing stage one starts stage two immediately',
-  game.run.stage === 2 && game.app.screen === 'PLAYING',
-  `stage=${game.run.stage} screen=${game.app.screen}`);
-check('stage two runs the Master field', game.run.difficulty === 'master', game.run.difficulty);
-
-// Failing stage two shows the result, and it must not overwrite mode bests.
+// Ending it reaches the result screen directly, and must not overwrite the
+// mode's ordinary-play best.
 const beforeBest = game.bestScore(game.run.modeId, 'master');
 game.run.outcome = 'timeout';
 step(0.05);
-check('failing stage two reaches the result screen', game.app.screen === 'RESULT', game.app.screen);
-check('the result knows which stage it was', game.app.result.stage === 2, `${game.app.result.stage}`);
+check('a daily run reaches the result screen', game.app.screen === 'RESULT', game.app.screen);
+check('the result is flagged as daily', game.app.result.daily === true);
 check('a daily run does not overwrite the mode best',
   game.bestScore(game.run.modeId, 'master') === beforeBest,
   `${beforeBest} -> ${game.bestScore(game.run.modeId, 'master')}`);
+
+// Retrying a daily result goes straight back into a fresh daily run.
+game.retryRun();
+check('retrying a daily result restarts the daily challenge',
+  game.run.daily === true && game.app.screen === 'PLAYING');
+
+// --- daily best combo, kept separate from the mode's own best --------------
+const dailyModeId = game.run.modeId;
+const startingDailyBest = game.dailyBestScore(dailyModeId);
+check('a score at or below the stored best is not recorded',
+  startingDailyBest === null || game.submitDailyBest(dailyModeId, startingDailyBest) === false);
+const improvedDaily = (startingDailyBest ?? 0) + 25;
+check('a higher score becomes the new daily best', game.submitDailyBest(dailyModeId, improvedDaily) === true);
+check('the new daily best reads back', game.dailyBestScore(dailyModeId) === improvedDaily,
+  `${game.dailyBestScore(dailyModeId)}`);
 
 // --- revive -----------------------------------------------------------------
 // Crashing out must offer exactly one second chance, and taking it must put the

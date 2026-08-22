@@ -1,5 +1,5 @@
 /**
- * Harbor Loop — WeChat Mini Game.
+ * 心跳加速-冲刺 — WeChat Mini Game.
  *
  * Entry point: owns the frame loop and switches between the three screens.
  * Everything it calls lives in its own module, so this stays a table of contents.
@@ -36,6 +36,7 @@ import { drawCars } from './render/vehicles';
 import { runIsOver, updateRun } from './run';
 import { drawMenu, updateMenu } from './screens/menu';
 import { drawResult, enterResultScreen } from './screens/result';
+import { drawTrackSelect } from './screens/trackSelect';
 import { detectCollisions, detectOvertakes } from './scoring';
 import { installShareMenu } from './share';
 import { aiCars, engineSnapshot, inputState, player } from './state';
@@ -111,6 +112,8 @@ function frame(nowValue?: number): void {
     if (app.screen === 'MENU') {
       updateMenu(dt);
       drawMenu();
+    } else if (app.screen === 'TRACKS') {
+      drawTrackSelect();
     } else {
       drawResult();
     }
@@ -120,6 +123,10 @@ function frame(nowValue?: number): void {
   // Transition after drawing, so the last frame of the run is shown once.
   if (app.screen === 'PLAYING' && runIsOver()) {
     releaseAllPointers();
+    // A crash on the very last frame leaves its noise burst mid-decay; nothing
+    // ticks it down once the race stops updating, so cut it here rather than
+    // let it ring on into the result screen.
+    audio.stopTransients();
     enterResultScreen();
     finishRun();
   }
@@ -146,7 +153,7 @@ scheduleFrame(frame);
  * poking at state from the WeChat devtools console.
  */
 export { player, aiCars, inputState };
-export { app, startMode, openMenu, retryRun, startDaily, shareForRevive, canRevive } from './app';
+export { app, startMode, openMenu, openTrackPicker, goBack, retryRun, startDaily, shareForRevive, canRevive } from './app';
 export { run } from './run';
 export { trackLength, trackScreenBounds } from './track';
 export { currentCruiseSpeed, cruiseSpeedForCombo } from './state';
@@ -155,7 +162,7 @@ export { laneButtonFlash } from './controls';
 export { debugPointerCount } from './input';
 export { feelState } from './feel';
 export { activeParticles } from './render/particles';
-export { dailyPlan, dailyStage, todayKey } from './daily';
+export { dailyPlan, todayKey } from './daily';
 export { renderShareCard } from './shareCard';
 export { audio } from './audio';
 export { loadMuted, saveMuted } from './storage';
@@ -163,6 +170,7 @@ export { onboardingActive, resetOnboarding } from './onboarding';
 export { currentStreak, touchStreak } from './streak';
 export { countdownActive, countdownRemaining, clearCountdown } from './countdown';
 export { setSeed, clearSeed, random, isSeeded } from './rng';
-export { bestScore, careerPoints } from './storage';
+export { bestScore, careerPoints, dailyBestScore, submitDailyBest } from './storage';
 export { TRACKS } from './tracks';
 export { totalStars, starsFor, modeUnlocked, modeUnlockCost, setUnlockOverride } from './progress';
+export { LANE_COUNT, LANE_GAP, ROAD_HALF_WIDTH, KERB_WIDTH } from './config';

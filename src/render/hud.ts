@@ -11,7 +11,7 @@ import { onboardingActive, onboardingState } from '../onboarding';
 import { COLORS } from '../theme';
 import { roundRect } from './primitives';
 
-export const BACK_BUTTON = { x: DESIGN_W - 52, y: 12, w: 40, h: 40 };
+export const BACK_BUTTON = { x: DESIGN_W - 46, y: 9, w: 34, h: 34 };
 
 /**
  * The HUD carries the best streak only. The running count pops on the car
@@ -19,24 +19,24 @@ export const BACK_BUTTON = { x: DESIGN_W - 52, y: 12, w: 40, h: 40 };
  */
 function drawComboPill(): void {
   ctx.fillStyle = 'rgba(8,17,25,0.66)';
-  roundRect(ctx, 12, 12, 78, 44, 13);
+  roundRect(ctx, 12, 9, 66, 34, 11);
   ctx.fill();
 
   ctx.fillStyle = 'rgba(247,244,234,0.5)';
-  ctx.font = '700 7.5px sans-serif';
+  ctx.font = '700 6.5px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('BEST', 51, 24);
+  ctx.fillText('BEST', 45, 19);
 
   ctx.fillStyle = player.bestCombo > 0 ? COLORS.accentLight : COLORS.text;
   const tierPulse = player.tierBoostElapsed > 0
     ? 1 + Math.sin((PLAYER_TIER_BOOST_DURATION - player.tierBoostElapsed) * Math.PI * 8) * 0.08
     : 1;
   ctx.save();
-  ctx.translate(51, 42);
+  ctx.translate(45, 33);
   ctx.scale(tierPulse, tierPulse);
-  ctx.font = '900 23px monospace';
+  ctx.font = '900 18px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(`x${player.bestCombo}`, 0, 4);
+  ctx.fillText(`x${player.bestCombo}`, 0, 3);
   ctx.restore();
 }
 
@@ -66,21 +66,21 @@ function drawClockAndScore(): void {
   if (Number.isFinite(run.timeRemaining)) {
     const urgent = run.timeRemaining <= 10;
     ctx.fillStyle = 'rgba(8,17,25,0.66)';
-    roundRect(ctx, 88, 12, 74, 42, 13);
+    roundRect(ctx, 84, 9, 62, 34, 11);
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = urgent ? '#FF7A6B' : COLORS.text;
-    ctx.font = '900 22px monospace';
-    ctx.fillText(run.timeRemaining.toFixed(1), 125, 41);
+    ctx.font = '900 18px monospace';
+    ctx.fillText(run.timeRemaining.toFixed(1), 115, 32);
   }
 
   ctx.textAlign = 'right';
   ctx.fillStyle = COLORS.accentLight;
-  ctx.font = '900 20px monospace';
-  ctx.fillText(String(run.score), DESIGN_W - 60, 34);
+  ctx.font = '900 17px monospace';
+  ctx.fillText(String(run.score), DESIGN_W - 54, 27);
   ctx.fillStyle = COLORS.muted;
-  ctx.font = '700 8px sans-serif';
-  ctx.fillText(mode.scoreUnit, DESIGN_W - 60, 46);
+  ctx.font = '700 7px sans-serif';
+  ctx.fillText(mode.scoreUnit, DESIGN_W - 54, 38);
   ctx.textAlign = 'center';
 }
 
@@ -94,8 +94,8 @@ function drawBackButton(): void {
 
   // Two bars: a pause glyph, which reads as "stop this run" without any text.
   ctx.fillStyle = COLORS.text;
-  ctx.fillRect(BACK_BUTTON.x + 14, BACK_BUTTON.y + 12, 4, 16);
-  ctx.fillRect(BACK_BUTTON.x + 22, BACK_BUTTON.y + 12, 4, 16);
+  ctx.fillRect(BACK_BUTTON.x + 11, BACK_BUTTON.y + 10, 4, 14);
+  ctx.fillRect(BACK_BUTTON.x + 19, BACK_BUTTON.y + 10, 4, 14);
 }
 
 function drawObjectiveBar(): void {
@@ -166,9 +166,10 @@ function drawOnboarding(): void {
     ctx.fillText(text, cx, cy + size * 0.36);
   };
 
-  if (hints.lane) hint('点这里换车道', 96, 716, 11, COLORS.accentLight);
-  if (hints.throttle) hint('按住加速', 303, 716, 11, COLORS.accentLight);
-  if (hints.lane || hints.throttle) hint('超车加 Combo · 撞车清零', DESIGN_W / 2, 684, 10, COLORS.text);
+  // Kept hugging the control bar, which moved down when the buttons shrank.
+  if (hints.lane) hint('点这里换车道', 96, 738, 11, COLORS.accentLight);
+  if (hints.throttle) hint('按住加速', 307, 738, 11, COLORS.accentLight);
+  if (hints.lane || hints.throttle) hint('超车加 Combo · 撞车清零', DESIGN_W / 2, 708, 10, COLORS.text);
 
   ctx.restore();
 }
