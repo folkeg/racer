@@ -3492,7 +3492,8 @@ var HarborLoop = (() => {
       boundary: "quay",
       props: [],
       propDensity: 0,
-      structures: []
+      structures: [],
+      outfield: []
     },
     beach: {
       // Wind ripples fall out of the same wave field as water with different
@@ -3532,7 +3533,8 @@ var HarborLoop = (() => {
       boundary: "dune",
       props: ["rock", "tuft", "parasol"],
       propDensity: 1,
-      structures: ["lagoon", "pavilion", "dome"]
+      structures: ["lagoon", "pavilion", "dome"],
+      outfield: ["pavilion", "dome"]
     },
     city: {
       // Night-ish tarmac yard. The ground is the same asphalt as the road, one
@@ -3572,7 +3574,8 @@ var HarborLoop = (() => {
       boundary: "stand",
       props: ["barrier", "lamp", "cone"],
       propDensity: 1.1,
-      structures: ["lawn", "hall", "dome"]
+      structures: ["lawn", "hall", "dome"],
+      outfield: ["hall", "lawn"]
     },
     industrial: {
       // A works yard: stained concrete, rust, and nothing growing.
@@ -3608,7 +3611,8 @@ var HarborLoop = (() => {
       boundary: "shed",
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
-      structures: ["containers", "hall", "tank"]
+      structures: ["containers", "hall", "tank"],
+      outfield: ["tank", "containers"]
     },
     meadow: {
       tile: "grass",
@@ -3643,7 +3647,8 @@ var HarborLoop = (() => {
       boundary: "stand",
       props: ["tree", "bush", "rock"],
       propDensity: 1,
-      structures: ["lagoon", "pavilion"]
+      structures: ["lagoon", "pavilion"],
+      outfield: ["pavilion"]
     }
   };
   var TRACK_SURFACE = {
@@ -3875,6 +3880,7 @@ var HarborLoop = (() => {
   var MIN_ROOM = 10;
   var cachedTrack2 = null;
   var cached2 = [];
+  var cachedOutfield = [];
   function inside(x, y, path) {
     let hit = false;
     for (let i = 0, j = path.length - 1; i < path.length; j = i++) {
@@ -3884,38 +3890,53 @@ var HarborLoop = (() => {
     }
     return hit;
   }
-  function buildInfield(track) {
+  function buildStructures(wantInside, kinds, minReach, limit) {
     const path = pathAtOffset(0);
-    const room = freeGround().filter((spot) => inside(spot.x, spot.y, path));
+    const room = freeGround().filter((spot) => inside(spot.x, spot.y, path) === wantInside);
     if (room.length < MIN_ROOM) return [];
-    const kinds = surfaceFor(track).structures;
     if (kinds.length === 0) return [];
     const ranked = [...room].sort((a, b) => b.clearance - a.clearance);
     const placed = [];
     for (const spot of ranked) {
-      if (placed.length >= 3) break;
-      if (spot.clearance < MIN_REACH) break;
+      if (placed.length >= limit) break;
+      if (spot.clearance < minReach) break;
       const clash = placed.some((other) => {
         const dx = other.x - spot.x;
         const dy = other.y - spot.y;
         return Math.hypot(dx, dy) < other.reach + spot.clearance * 0.9 + 18;
       });
       if (clash) continue;
+      const edgeRoom = Math.min(
+        spot.x,
+        DESIGN_W - spot.x,
+        spot.y - BOARD_TOP,
+        BOARD_BOTTOM - spot.y
+      );
+      const reach = Math.min(spot.clearance * 0.72, edgeRoom * 0.78, 46);
+      if (reach < minReach * 0.62) continue;
       placed.push({
         x: spot.x,
         y: spot.y,
         kind: kinds[placed.length % kinds.length],
-        reach: Math.min(spot.clearance * 0.72, 46)
+        reach
       });
     }
     return placed;
   }
+  function ensure() {
+    if (cachedTrack2 === activeTrackId) return;
+    const surface = surfaceFor(activeTrackId);
+    cached2 = buildStructures(true, surface.structures, MIN_REACH, 3);
+    cachedOutfield = buildStructures(false, surface.outfield, 21, 2);
+    cachedTrack2 = activeTrackId;
+  }
   function structures() {
-    if (cachedTrack2 !== activeTrackId) {
-      cached2 = buildInfield(activeTrackId);
-      cachedTrack2 = activeTrackId;
-    }
+    ensure();
     return cached2;
+  }
+  function outfieldStructures() {
+    ensure();
+    return cachedOutfield;
   }
   function drawServiceRoad(placed) {
     if (placed.length < 2) return;
@@ -4085,14 +4106,25 @@ var HarborLoop = (() => {
         break;
       }
       case "lawn": {
+        const lawn = (scale2) => {
+          ctx.beginPath();
+          ctx.ellipse(x, y, r * 1.25 * scale2, r * 0.88 * scale2, -0.15, 0, Math.PI * 2);
+        };
+        ctx.fillStyle = "#4E6B2C";
+        lawn(1);
+        ctx.fill();
         ctx.fillStyle = "#7FB23F";
-        ctx.beginPath();
-        ctx.ellipse(x, y, r * 1.25, r * 0.88, -0.15, 0, Math.PI * 2);
+        lawn(0.93);
         ctx.fill();
-        ctx.fillStyle = "rgba(160,206,92,0.5)";
-        ctx.beginPath();
-        ctx.ellipse(x - r * 0.2, y - r * 0.2, r * 0.7, r * 0.46, -0.15, 0, Math.PI * 2);
-        ctx.fill();
+        const blades = groundTexture(ctx, "grass");
+        if (blades) {
+          ctx.save();
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = blades;
+          lawn(0.93);
+          ctx.fill();
+          ctx.restore();
+        }
         break;
       }
       case "containers": {
@@ -4144,9 +4176,12 @@ var HarborLoop = (() => {
   }
   function drawInfield() {
     const placed = structures();
-    if (placed.length === 0) return;
-    drawServiceRoad(placed);
-    for (const structure of [...placed].sort((a, b) => a.y - b.y)) drawStructure(structure);
+    if (placed.length > 0) {
+      drawServiceRoad(placed);
+      for (const structure of [...placed].sort((a, b) => a.y - b.y)) drawStructure(structure);
+    }
+    const outside = outfieldStructures();
+    for (const structure of [...outside].sort((a, b) => a.y - b.y)) drawStructure(structure);
   }
 
   // src/render/primitives.ts

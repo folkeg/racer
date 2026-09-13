@@ -138,6 +138,16 @@ export interface Surface {
    * interior is a set of narrow slots rather than one room.
    */
   structures: import('./infield').StructureKind[];
+  /**
+   * Large structures outside the circuit.
+   *
+   * The board had nothing bigger than a car anywhere except the infield, which
+   * is why the outer half kept reading as empty ground with litter on it. These
+   * are the landmarks that half needs — and they go in the open ground the
+   * search finds, not in a belt around the frame, which is the mistake that
+   * produced a picture frame twice.
+   */
+  outfield: import('./infield').StructureKind[];
 }
 
 export const SURFACES: Record<string, Surface> = {
@@ -174,7 +184,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'quay',
     props: [],
     propDensity: 0,
-    structures: []
+    structures: [],
+    outfield: []
   },
 
   beach: {
@@ -215,7 +226,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'dune',
     props: ['rock', 'tuft', 'parasol'],
     propDensity: 1,
-    structures: ['lagoon', 'pavilion', 'dome']
+    structures: ['lagoon', 'pavilion', 'dome'],
+    outfield: ['pavilion', 'dome']
   },
 
   city: {
@@ -256,7 +268,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'stand',
     props: ['barrier', 'lamp', 'cone'],
     propDensity: 1.1,
-    structures: ['lawn', 'hall', 'dome']
+    structures: ['lawn', 'hall', 'dome'],
+    outfield: ['hall', 'lawn']
   },
 
   industrial: {
@@ -293,7 +306,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'shed',
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
-    structures: ['containers', 'hall', 'tank']
+    structures: ['containers', 'hall', 'tank'],
+    outfield: ['tank', 'containers']
   },
 
   meadow: {
@@ -329,7 +343,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'stand',
     props: ['tree', 'bush', 'rock'],
     propDensity: 1,
-    structures: ['lagoon', 'pavilion']
+    structures: ['lagoon', 'pavilion'],
+    outfield: ['pavilion']
   }
 };
 

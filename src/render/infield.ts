@@ -19,12 +19,13 @@
  * right answer for them.
  */
 
-import { ctx } from '../platform';
+import { ctx, DESIGN_W } from '../platform';
 import { activeTrackId, pathAtOffset } from '../track';
 import type { TrackId } from '../tracks';
 import { lateralUnit, project } from './camera';
 import { SHADOW_X, SHADOW_Y } from './light';
 import { freeGround } from './props';
+import { BOARD_BOTTOM, BOARD_TOP } from './scenery';
 import { groundTexture } from './sprites';
 import { surfaceFor } from './surface';
 
@@ -51,6 +52,7 @@ const MIN_ROOM = 10;
 
 let cachedTrack: TrackId | null = null;
 let cached: Structure[] = [];
+let cachedOutfield: Structure[] = [];
 
 /** Ray cast against the centre line. */
 function inside(x: number, y: number, path: ReturnType<typeof pathAtOffset>): boolean {
@@ -63,12 +65,23 @@ function inside(x: number, y: number, path: ReturnType<typeof pathAtOffset>): bo
   return hit;
 }
 
-function buildInfield(track: TrackId): Structure[] {
+/**
+ * Places large structures in whichever half of the board is asked for.
+ *
+ * The same search serves inside and outside the circuit. Outside is thinner —
+ * the fit leaves 26 units to the frame — so it gets a lower bar for what counts
+ * as room and a shorter list, but the failure mode is the same and correct: a
+ * side with nowhere to stand yields nothing rather than something jammed in.
+ */
+function buildStructures(
+  wantInside: boolean,
+  kinds: StructureKind[],
+  minReach: number,
+  limit: number
+): Structure[] {
   const path = pathAtOffset(0);
-  const room = freeGround().filter((spot) => inside(spot.x, spot.y, path));
+  const room = freeGround().filter((spot) => inside(spot.x, spot.y, path) === wantInside);
   if (room.length < MIN_ROOM) return [];
-
-  const kinds = surfaceFor(track).structures;
   if (kinds.length === 0) return [];
 
   // Deepest ground first: a big thing belongs where there is room for it.
@@ -76,8 +89,8 @@ function buildInfield(track: TrackId): Structure[] {
   const placed: Structure[] = [];
 
   for (const spot of ranked) {
-    if (placed.length >= 3) break;
-    if (spot.clearance < MIN_REACH) break;
+    if (placed.length >= limit) break;
+    if (spot.clearance < minReach) break;
     // Keep them apart, or the complex becomes one blob.
     const clash = placed.some((other) => {
       const dx = other.x - spot.x;
@@ -85,22 +98,49 @@ function buildInfield(track: TrackId): Structure[] {
       return Math.hypot(dx, dy) < other.reach + spot.clearance * 0.9 + 18;
     });
     if (clash) continue;
+
+    // Room to the frame counts as much as room to the track.
+    //
+    // Sizing on clearance alone put a dome and a lawn half off the board: the
+    // deepest open ground outside a circuit is usually in the corners of the
+    // frame, where there is plenty of distance to the tarmac and almost none to
+    // the edge. A structure that is cut in half by the screen is worse than no
+    // structure.
+    const edgeRoom = Math.min(
+      spot.x,
+      DESIGN_W - spot.x,
+      spot.y - BOARD_TOP,
+      BOARD_BOTTOM - spot.y
+    );
+    const reach = Math.min(spot.clearance * 0.72, edgeRoom * 0.78, 46);
+    if (reach < minReach * 0.62) continue;
+
     placed.push({
       x: spot.x,
       y: spot.y,
       kind: kinds[placed.length % kinds.length],
-      reach: Math.min(spot.clearance * 0.72, 46)
+      reach
     });
   }
   return placed;
 }
 
+function ensure(): void {
+  if (cachedTrack === activeTrackId) return;
+  const surface = surfaceFor(activeTrackId);
+  cached = buildStructures(true, surface.structures, MIN_REACH, 3);
+  cachedOutfield = buildStructures(false, surface.outfield, 21, 2);
+  cachedTrack = activeTrackId;
+}
+
 function structures(): Structure[] {
-  if (cachedTrack !== activeTrackId) {
-    cached = buildInfield(activeTrackId);
-    cachedTrack = activeTrackId;
-  }
+  ensure();
   return cached;
+}
+
+function outfieldStructures(): Structure[] {
+  ensure();
+  return cachedOutfield;
 }
 
 /** Where the service road runs, and the pads the buildings stand on. */
@@ -317,14 +357,30 @@ function drawStructure(structure: Structure): void {
       break;
     }
     case 'lawn': {
+      // Rim, fill, grain — the same three steps every other piece of ground on
+      // this board gets. It went in as a flat green ellipse and read as a blob
+      // of paint, which is the third time a plain fill has been laid between two
+      // textured surfaces and failed the same way. Any piece of ground needs an
+      // edge and a material; there is no exception for a small one.
+      const lawn = (scale: number): void => {
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * 1.25 * scale, r * 0.88 * scale, -0.15, 0, Math.PI * 2);
+      };
+      ctx.fillStyle = '#4E6B2C';
+      lawn(1);
+      ctx.fill();
       ctx.fillStyle = '#7FB23F';
-      ctx.beginPath();
-      ctx.ellipse(x, y, r * 1.25, r * 0.88, -0.15, 0, Math.PI * 2);
+      lawn(0.93);
       ctx.fill();
-      ctx.fillStyle = 'rgba(160,206,92,0.5)';
-      ctx.beginPath();
-      ctx.ellipse(x - r * 0.2, y - r * 0.2, r * 0.7, r * 0.46, -0.15, 0, Math.PI * 2);
-      ctx.fill();
+      const blades = groundTexture(ctx, 'grass');
+      if (blades) {
+        ctx.save();
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = blades;
+        lawn(0.93);
+        ctx.fill();
+        ctx.restore();
+      }
       break;
     }
     case 'containers': {
@@ -380,7 +436,14 @@ function drawStructure(structure: Structure): void {
 
 export function drawInfield(): void {
   const placed = structures();
-  if (placed.length === 0) return;
-  drawServiceRoad(placed);
-  for (const structure of [...placed].sort((a, b) => a.y - b.y)) drawStructure(structure);
+  if (placed.length > 0) {
+    drawServiceRoad(placed);
+    for (const structure of [...placed].sort((a, b) => a.y - b.y)) drawStructure(structure);
+  }
+
+  // And whatever stands outside the circuit. No service road out here: these are
+  // across the track from the facility, not part of it, and a road that ran to
+  // them would have to cross the racing line.
+  const outside = outfieldStructures();
+  for (const structure of [...outside].sort((a, b) => a.y - b.y)) drawStructure(structure);
 }
