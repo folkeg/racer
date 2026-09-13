@@ -106,6 +106,17 @@ const CORNER_PERCENTILE = 0.72;
 const CORNER_FLOOR = 0.0025;
 /** Blocks per run, in path samples. */
 const KERB_BLOCK = 7;
+/**
+ * How far the blocks reach *outward*, past the edge of the racing surface.
+ *
+ * The kerb band on the road is 3.2 units wide and cannot grow, because the
+ * outermost lane starts at 31 and the road ends at 34.2 — widening it would
+ * take tarmac away from the racing. In the reference the corner kerbs are far
+ * bolder than 3 units, and the reason they can be is that they extend the other
+ * way, out into the run-off, which is exactly what a real kerb does. So these
+ * reach into the apron instead, and the racing surface is untouched.
+ */
+const KERB_REACH = 6.5;
 
 function centreCurvature(): number[] {
   const path = pathAtOffset(0);
@@ -131,13 +142,11 @@ function centreCurvature(): number[] {
 }
 
 function drawCornerKerbs(
-  outerKerb: ReturnType<typeof edge>,
   outerRoad: ReturnType<typeof edge>,
-  innerRoad: ReturnType<typeof edge>,
-  innerKerb: ReturnType<typeof edge>
+  innerRoad: ReturnType<typeof edge>
 ): void {
   const curvature = centreCurvature();
-  const count = Math.min(outerKerb.length, curvature.length);
+  const count = Math.min(outerRoad.length, curvature.length);
 
   const ranked = [...curvature].sort((a, b) => a - b);
   const threshold = Math.max(
@@ -151,13 +160,15 @@ function drawCornerKerbs(
     if (turning && start === null) start = i;
     if (!turning && start !== null) {
       // Blocks alternate along the run, and both sides of the road get them.
+      const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH);
+      const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH);
       for (let b = start; b < i; b += KERB_BLOCK) {
         const end = Math.min(b + KERB_BLOCK + 1, i);
         if (end - b < 2) continue;
         const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
         const colour = red ? '#B8453A' : '#EDE7DA';
-        fillRibbon(outerKerb.slice(b, end), outerRoad.slice(b, end), colour);
-        fillRibbon(innerRoad.slice(b, end), innerKerb.slice(b, end), colour);
+        fillRibbon(outerReach.slice(b, end), outerRoad.slice(b, end), colour);
+        fillRibbon(innerRoad.slice(b, end), innerReach.slice(b, end), colour);
       }
       start = null;
     }
@@ -226,7 +237,7 @@ export function drawTrack(): void {
   // race kerb, which this harbour road is not.
   fillRibbon(outerKerb, outerRoad, paint.kerb);
   fillRibbon(innerRoad, innerKerb, paint.kerb);
-  drawCornerKerbs(outerKerb, outerRoad, innerRoad, innerKerb);
+  drawCornerKerbs(outerRoad, innerRoad);
 
   // Lanes are shaded alternately rather than separated by dashed lines. Solid
   // bands read as five distinct channels at a glance, where dashes read as

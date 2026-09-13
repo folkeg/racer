@@ -3489,6 +3489,7 @@ var HarborLoop = (() => {
         shelf: "#9C8F62",
         planted: true
       },
+      boundary: "quay",
       props: [],
       propDensity: 0,
       structures: []
@@ -3528,6 +3529,7 @@ var HarborLoop = (() => {
         shelf: "#D8C79A",
         planted: true
       },
+      boundary: "dune",
       props: ["rock", "tuft", "parasol"],
       propDensity: 1,
       structures: ["pavilion", "dome"]
@@ -3564,6 +3566,7 @@ var HarborLoop = (() => {
         shelf: "#5E666E",
         planted: false
       },
+      boundary: "stand",
       props: ["barrier", "lamp", "cone"],
       propDensity: 1.1,
       structures: ["hall", "dome", "hall"]
@@ -3599,6 +3602,7 @@ var HarborLoop = (() => {
         shelf: "#7A7264",
         planted: false
       },
+      boundary: "shed",
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
       structures: ["hall", "tank", "tank"]
@@ -3633,6 +3637,7 @@ var HarborLoop = (() => {
         shelf: "#A29A72",
         planted: true
       },
+      boundary: "stand",
       props: ["tree", "bush", "rock"],
       propDensity: 1,
       structures: ["pavilion"]
@@ -4030,6 +4035,68 @@ var HarborLoop = (() => {
     for (const structure of [...placed].sort((a, b) => a.y - b.y)) drawStructure(structure);
   }
 
+  // src/render/boundary.ts
+  var DEPTH = 23;
+  var PITCH2 = 32;
+  var PALETTES = {
+    stand: { base: "#2A3038", roof: "#D8DCE0", lit: "rgba(255,255,255,0.16)", dark: "rgba(8,12,16,0.45)" },
+    shed: { base: "#4A463E", roof: "#8E8778", lit: "rgba(255,250,236,0.14)", dark: "rgba(10,12,14,0.45)" },
+    quay: { base: "#3E4A52", roof: "#8E9AA0", lit: "rgba(230,242,248,0.16)", dark: "rgba(6,14,20,0.45)" },
+    dune: { base: "#B9A275", roof: "#D8C79A", lit: "rgba(255,246,222,0.2)", dark: "rgba(90,70,40,0.32)" }
+  };
+  function unit(x, y, along, depth, horizontal, palette, kind) {
+    const w = horizontal ? along : depth;
+    const h = horizontal ? depth : along;
+    if (kind === "dune") {
+      ctx.fillStyle = palette.base;
+      ctx.beginPath();
+      ctx.ellipse(x + w / 2, y + h / 2, w * 0.62, h * 0.58, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = palette.lit;
+      ctx.beginPath();
+      ctx.ellipse(x + w * 0.42, y + h * 0.4, w * 0.36, h * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    ctx.fillStyle = palette.base;
+    ctx.fillRect(x, y, w, h);
+    const roofDepth = depth * 0.62;
+    if (horizontal) {
+      const top = y < BOARD_TOP + depth ? y : y + h - roofDepth;
+      ctx.fillStyle = palette.roof;
+      ctx.fillRect(x + 1, top, w - 2, roofDepth);
+      ctx.fillStyle = palette.lit;
+      ctx.fillRect(x + 1, top, w - 2, 2);
+    } else {
+      const left = x < DESIGN_W / 2 ? x : x + w - roofDepth;
+      ctx.fillStyle = palette.roof;
+      ctx.fillRect(left, y + 1, roofDepth, h - 2);
+      ctx.fillStyle = palette.lit;
+      ctx.fillRect(left, y + 1, 2, h - 2);
+    }
+    ctx.fillStyle = palette.dark;
+    if (horizontal) ctx.fillRect(x, y, 1.4, h);
+    else ctx.fillRect(x, y, w, 1.4);
+  }
+  function drawBoundary() {
+    const kind = surfaceFor(activeTrackId).boundary;
+    if (kind === "none") return;
+    const palette = PALETTES[kind];
+    if (!palette) return;
+    const top = BOARD_TOP;
+    const bottom = BOARD_BOTTOM;
+    for (let x = 0; x < DESIGN_W; x += PITCH2) {
+      const w = Math.min(PITCH2, DESIGN_W - x);
+      unit(x, top, w, DEPTH * 0.8, true, palette, kind);
+      unit(x, bottom - DEPTH * 0.8, w, DEPTH * 0.8, true, palette, kind);
+    }
+    for (let y = top; y < bottom; y += PITCH2) {
+      const h = Math.min(PITCH2, bottom - y);
+      unit(0, y, h, DEPTH, false, palette, kind);
+      unit(DESIGN_W - DEPTH, y, h, DEPTH, false, palette, kind);
+    }
+  }
+
   // src/render/primitives.ts
   function roundRect(context3, x, y, w, h, r) {
     const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
@@ -4081,10 +4148,10 @@ var HarborLoop = (() => {
         flush();
         continue;
       }
-      const unit = facing * edge2[i].scale;
+      const unit2 = facing * edge2[i].scale;
       run2.push({
-        top: { x: edge2[i].x, y: edge2[i].y + from * unit },
-        base: { x: edge2[i].x, y: edge2[i].y + height * unit }
+        top: { x: edge2[i].x, y: edge2[i].y + from * unit2 },
+        base: { x: edge2[i].x, y: edge2[i].y + height * unit2 }
       });
     }
     flush();
@@ -4453,6 +4520,7 @@ var HarborLoop = (() => {
     ctx.restore();
   }
   function drawBackground() {
+    drawBoundary();
     const decor = trackById(activeTrackId).decor;
     decor.medians.forEach(([x, y, w, h], i) => drawIsland(x, y, w, h, i));
     for (const [x, y, size] of decor.trees) {
@@ -6053,6 +6121,7 @@ var HarborLoop = (() => {
   var CORNER_PERCENTILE = 0.72;
   var CORNER_FLOOR = 25e-4;
   var KERB_BLOCK = 7;
+  var KERB_REACH = 6.5;
   function centreCurvature() {
     const path = pathAtOffset(0);
     const out = new Array(path.length).fill(0);
@@ -6074,10 +6143,10 @@ var HarborLoop = (() => {
       return sum / 13;
     });
   }
-  function drawCornerKerbs(outerKerb, outerRoad, innerRoad, innerKerb) {
+  function drawCornerKerbs(outerRoad, innerRoad) {
     var _a;
     const curvature = centreCurvature();
-    const count = Math.min(outerKerb.length, curvature.length);
+    const count = Math.min(outerRoad.length, curvature.length);
     const ranked = [...curvature].sort((a, b) => a - b);
     const threshold = Math.max(
       CORNER_FLOOR,
@@ -6088,13 +6157,15 @@ var HarborLoop = (() => {
       const turning = i < count && curvature[i] > threshold;
       if (turning && start === null) start = i;
       if (!turning && start !== null) {
+        const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH);
+        const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH);
         for (let b = start; b < i; b += KERB_BLOCK) {
           const end = Math.min(b + KERB_BLOCK + 1, i);
           if (end - b < 2) continue;
           const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
           const colour = red ? "#B8453A" : "#EDE7DA";
-          fillRibbon(outerKerb.slice(b, end), outerRoad.slice(b, end), colour);
-          fillRibbon(innerRoad.slice(b, end), innerKerb.slice(b, end), colour);
+          fillRibbon(outerReach.slice(b, end), outerRoad.slice(b, end), colour);
+          fillRibbon(innerRoad.slice(b, end), innerReach.slice(b, end), colour);
         }
         start = null;
       }
@@ -6138,7 +6209,7 @@ var HarborLoop = (() => {
     const innerKerb = edge(-ROAD_HALF_WIDTH);
     fillRibbon(outerKerb, outerRoad, paint.kerb);
     fillRibbon(innerRoad, innerKerb, paint.kerb);
-    drawCornerKerbs(outerKerb, outerRoad, innerRoad, innerKerb);
+    drawCornerKerbs(outerRoad, innerRoad);
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const laneOuter = projectPath(pathForLane(lane - 0.5));
       const laneInner = projectPath(pathForLane(lane + 0.5));

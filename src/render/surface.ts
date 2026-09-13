@@ -112,6 +112,8 @@ export interface Surface {
     /** Whether anything grows on it. A yard island is not a park. */
     planted: boolean;
   };
+  /** The ring of structure around the frame. 'none' leaves the edge open. */
+  boundary: import('./boundary').BoundaryKind;
   /** What stands about on the open ground, and how densely. */
   props: PropKind[];
   propDensity: number;
@@ -155,6 +157,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#9C8F62',
       planted: true
     },
+    boundary: 'quay',
     props: [],
     propDensity: 0,
     structures: []
@@ -195,6 +198,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#D8C79A',
       planted: true
     },
+    boundary: 'dune',
     props: ['rock', 'tuft', 'parasol'],
     propDensity: 1,
     structures: ['pavilion', 'dome']
@@ -232,6 +236,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#5E666E',
       planted: false
     },
+    boundary: 'stand',
     props: ['barrier', 'lamp', 'cone'],
     propDensity: 1.1,
     structures: ['hall', 'dome', 'hall']
@@ -268,6 +273,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#7A7264',
       planted: false
     },
+    boundary: 'shed',
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
     structures: ['hall', 'tank', 'tank']
@@ -303,6 +309,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#A29A72',
       planted: true
     },
+    boundary: 'stand',
     props: ['tree', 'bush', 'rock'],
     propDensity: 1,
     structures: ['pavilion']
