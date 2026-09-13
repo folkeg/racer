@@ -34,8 +34,18 @@ interface WxCanvas {
   focus?(options?: { preventScroll?: boolean }): void;
 }
 
+interface WxImage {
+  src: string;
+  width: number;
+  height: number;
+  onload: (() => void) | null;
+  onerror: (() => void) | null;
+}
+
 interface WxApi {
   createCanvas(): WxCanvas;
+  /** WeChat's Image stand-in. Absent on platforms that cannot load art. */
+  createImage?(): WxImage;
   getWindowInfo?(): WxWindowInfo;
   getSystemInfoSync?(): WxWindowInfo;
   createWebAudioContext?(): AudioContext;

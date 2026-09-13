@@ -31,6 +31,7 @@ import { drawControls, drawHud } from './render/hud';
 import { drawBlackout, drawHazardLane } from './render/overlays';
 import { drawFloaters, drawParticles, updateFloaters, updateParticles } from './render/particles';
 import { drawSpeedLines } from './render/speedLines';
+import { loadArt } from './assets';
 import { drawLivingWater, drawSeaLayer, updateLivingWater } from './render/livingWater';
 import { drawSceneLight } from './render/scenery';
 import { drawStaticScene } from './render/staticLayer';
@@ -165,6 +166,9 @@ function frame(nowValue?: number): void {
 }
 
 audio.setMuted(loadMuted());
+// Art loads in the background; the scene renders from the moment it opens and
+// picks the tile up whenever it arrives.
+loadArt();
 installInput();
 installShareMenu();
 

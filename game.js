@@ -3150,6 +3150,25 @@ var HarborLoop = (() => {
     return { hitStop: state4.hitStop, shake: state4.shake };
   }
 
+  // src/assets.ts
+  var ART_PATH = "assets/water-tile.png";
+  var water = null;
+  function loadArt() {
+    var _a;
+    const image = (_a = wx.createImage) == null ? void 0 : _a.call(wx);
+    if (!image) return;
+    image.onload = () => {
+      if (image.width > 0 && image.height > 0) water = image;
+    };
+    image.onerror = () => {
+      water = null;
+    };
+    image.src = ART_PATH;
+  }
+  function waterArt() {
+    return water;
+  }
+
   // src/render/sprites.ts
   var CAR_LENGTH = 20.5;
   var CAR_WIDTH = 10.8;
@@ -3318,9 +3337,21 @@ var HarborLoop = (() => {
     return asphaltPattern;
   }
   var WATER_TILE = 128;
+  var artPattern = null;
   var waterPattern = null;
   var waterTried = false;
   function waterTexture(target) {
+    const art = waterArt();
+    if (art) {
+      if (!artPattern) {
+        try {
+          artPattern = target.createPattern(art, "repeat");
+        } catch (error) {
+          artPattern = null;
+        }
+      }
+      if (artPattern) return artPattern;
+    }
     if (waterTried) return waterPattern;
     waterTried = true;
     const canvas2 = createOffscreenCanvas(WATER_TILE, WATER_TILE);
@@ -3653,6 +3684,7 @@ var HarborLoop = (() => {
       }
     }
   }
+  var WATER_ART_DESIGN = 256;
   function drawWaterSurface(elapsed2) {
     const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
     gradient.addColorStop(0, COLORS.waterDeep);
@@ -3669,19 +3701,22 @@ var HarborLoop = (() => {
     }
     const ripple = waterTexture(ctx);
     if (!ripple) return;
+    const art = waterArt();
+    const tile = art ? WATER_ART_DESIGN : WATER_TILE;
+    const zoom = art ? WATER_ART_DESIGN / art.width : 1;
     const drift = (speedX, speedY, alpha) => {
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.translate(
-        elapsed2 * speedX % WATER_TILE - WATER_TILE,
-        elapsed2 * speedY % WATER_TILE - WATER_TILE
-      );
+      ctx.translate(elapsed2 * speedX % tile - tile, elapsed2 * speedY % tile - tile);
+      ctx.scale(zoom, zoom);
       ctx.fillStyle = ripple;
-      ctx.fillRect(0, 0, DESIGN_W + WATER_TILE * 2, DESIGN_H + WATER_TILE * 2);
+      ctx.fillRect(0, 0, (DESIGN_W + tile * 2) / zoom, (DESIGN_H + tile * 2) / zoom);
       ctx.restore();
     };
-    drift(4.2, 2.2, 0.85);
-    drift(-2.6, 3.6, 0.55);
+    const strong = art ? 0.34 : 0.85;
+    const weak = art ? 0.18 : 0.55;
+    drift(4.2, 2.2, strong);
+    drift(-2.6, 3.6, weak);
   }
   var WATER_PATCHES = [
     [40, 120, 190, "16,42,66", 0.3],
@@ -5934,6 +5969,7 @@ var HarborLoop = (() => {
     scheduleFrame(frame);
   }
   audio.setMuted(loadMuted());
+  loadArt();
   installInput();
   installShareMenu();
   if (typeof wx.onHide === "function") {

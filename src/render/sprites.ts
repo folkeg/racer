@@ -14,6 +14,7 @@
 
 import { createOffscreenCanvas } from '../platform';
 import type { VehicleStyle } from '../types';
+import { waterArt } from '../assets';
 
 /**
  * Design-space footprint of a car. Sprites are drawn to this shape.
@@ -266,6 +267,9 @@ export function asphaltTexture(target: CanvasRenderingContext2D): CanvasPattern 
 
 export const WATER_TILE = 128;
 
+/** Pattern built from the painted tile, once it has loaded. */
+let artPattern: CanvasPattern | null = null;
+
 let waterPattern: CanvasPattern | null = null;
 let waterTried = false;
 
@@ -278,6 +282,20 @@ let waterTried = false;
  * frequencies and offsets, wrapped so the tile is seamless.
  */
 export function waterTexture(target: CanvasRenderingContext2D): CanvasPattern | null {
+  // Painted tile if it has arrived, generated one otherwise. The art loads
+  // asynchronously, so this has to keep asking rather than deciding once.
+  const art = waterArt();
+  if (art) {
+    if (!artPattern) {
+      try {
+        artPattern = target.createPattern(art as unknown as CanvasImageSource, 'repeat');
+      } catch (error) {
+        artPattern = null;
+      }
+    }
+    if (artPattern) return artPattern;
+  }
+
   if (waterTried) return waterPattern;
   waterTried = true;
 

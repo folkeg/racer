@@ -13,6 +13,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#101b24}canvas{display
 window.wx={
   // First call is the display canvas; later calls are offscreen, matching WeChat.
   createCanvas(){const c=document.createElement('canvas');if(!window.__mainCanvas){window.__mainCanvas=c;document.body.appendChild(c);}return c;},
+  createImage(){return new Image();},
   getWindowInfo(){return {windowWidth:Math.min(innerWidth,462),windowHeight:innerHeight,pixelRatio:devicePixelRatio||1};},
   getSystemInfoSync(){return this.getWindowInfo();},
   vibrateShort(){},
