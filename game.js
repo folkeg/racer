@@ -3667,24 +3667,21 @@ var HarborLoop = (() => {
       ctx.fillStyle = patch;
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     }
-    drawSwell(elapsed2);
     const ripple = waterTexture(ctx);
-    if (ripple) {
-      const drift = (speedX, speedY, alpha) => {
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.translate(
-          elapsed2 * speedX % WATER_TILE - WATER_TILE,
-          elapsed2 * speedY % WATER_TILE - WATER_TILE
-        );
-        ctx.fillStyle = ripple;
-        ctx.fillRect(0, 0, DESIGN_W + WATER_TILE * 2, DESIGN_H + WATER_TILE * 2);
-        ctx.restore();
-      };
-      drift(5.4, 2.8, 1);
-      drift(-3.2, 4.6, 0.7);
-    }
-    drawGlints(elapsed2);
+    if (!ripple) return;
+    const drift = (speedX, speedY, alpha) => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(
+        elapsed2 * speedX % WATER_TILE - WATER_TILE,
+        elapsed2 * speedY % WATER_TILE - WATER_TILE
+      );
+      ctx.fillStyle = ripple;
+      ctx.fillRect(0, 0, DESIGN_W + WATER_TILE * 2, DESIGN_H + WATER_TILE * 2);
+      ctx.restore();
+    };
+    drift(4.2, 2.2, 0.85);
+    drift(-2.6, 3.6, 0.55);
   }
   var WATER_PATCHES = [
     [40, 120, 190, "16,42,66", 0.3],
@@ -3694,56 +3691,6 @@ var HarborLoop = (() => {
     [196, 812, 240, "150,186,198", 0.18],
     [200, 30, 260, "10,30,52", 0.26]
   ];
-  var SWELL_SPACING = 54;
-  var SWELL_SPEED = 11;
-  function drawSwell(elapsed2) {
-    const offset = elapsed2 * SWELL_SPEED % SWELL_SPACING;
-    ctx.lineCap = "round";
-    for (let i = -1; i * SWELL_SPACING < DESIGN_H + SWELL_SPACING; i++) {
-      const baseY = i * SWELL_SPACING + offset;
-      const sway = Math.sin(elapsed2 * 0.5 + i * 1.7);
-      for (const [dy, colour, width] of SWELL_STROKES) {
-        ctx.beginPath();
-        for (let x = 0; x <= DESIGN_W; x += 18) {
-          const y = baseY + dy + Math.sin(x / 74 + elapsed2 * 0.55 + i) * 4.4 + Math.sin(x / 31 - elapsed2 * 0.9) * 1.6 + sway;
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.strokeStyle = colour;
-        ctx.lineWidth = width;
-        ctx.stroke();
-      }
-    }
-  }
-  var SWELL_STROKES = [
-    [0, "rgba(255,255,255,0.17)", 2.6],
-    [3.6, "rgba(18,44,66,0.13)", 3.4]
-  ];
-  var GLINT_COUNT = 78;
-  function drawGlints(elapsed2) {
-    ctx.lineCap = "round";
-    for (let i = 0; i < GLINT_COUNT; i++) {
-      const hx = Math.sin(i * 12.9898) * 43758.5453;
-      const hy = Math.sin(i * 78.233) * 12345.6789;
-      const hp = Math.sin(i * 39.425) * 9876.5432;
-      const x = (hx - Math.floor(hx)) * DESIGN_W;
-      const y = (hy - Math.floor(hy)) * DESIGN_H;
-      const phase2 = (hp - Math.floor(hp)) * Math.PI * 2;
-      const rate = 0.9 + (hp - Math.floor(hp)) * 1.5;
-      const pulse = Math.sin(elapsed2 * rate + phase2);
-      if (pulse <= 0) continue;
-      const flare = Math.pow(pulse, 7);
-      if (flare < 0.02) continue;
-      const drift = elapsed2 * 3.2 % DESIGN_H;
-      const yy = (y + drift) % DESIGN_H;
-      ctx.strokeStyle = `rgba(255,255,255,${(0.78 * flare).toFixed(3)})`;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(x - 3.5 - flare * 2, yy);
-      ctx.lineTo(x + 3.5 + flare * 2, yy);
-      ctx.stroke();
-    }
-  }
   function seededRandom(seed) {
     let state5 = seed * 2654435761 >>> 0;
     return () => {

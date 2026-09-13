@@ -259,9 +259,8 @@ export function drawWaterSurface(elapsed: number): void {
   ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
 
   // Depth mottling. A pure vertical ramp is the flattest thing a screen can
-  // show, and it was reading as a blue backdrop rather than as water. These are
-  // broad, soft and fixed — shallows and deeps do not wander — and they give the
-  // moving layers above something uneven to move across.
+  // show; these are broad, soft and fixed, and they are what keeps the open
+  // water on a circuit like Half Moon from being one field of flat blue.
   for (const [cx, cy, r, tint, alpha] of WATER_PATCHES) {
     const patch = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
     patch.addColorStop(0, `rgba(${tint},${alpha})`);
@@ -270,28 +269,33 @@ export function drawWaterSurface(elapsed: number): void {
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 
-  drawSwell(elapsed);
-
   const ripple = waterTexture(ctx);
-  if (ripple) {
-    // Offsets wrap on the tile, so the scroll never accumulates into a big
-    // translate and the seams stay where the tile put them.
-    const drift = (speedX: number, speedY: number, alpha: number): void => {
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(
-        ((elapsed * speedX) % WATER_TILE) - WATER_TILE,
-        ((elapsed * speedY) % WATER_TILE) - WATER_TILE
-      );
-      ctx.fillStyle = ripple;
-      ctx.fillRect(0, 0, DESIGN_W + WATER_TILE * 2, DESIGN_H + WATER_TILE * 2);
-      ctx.restore();
-    };
-    drift(5.4, 2.8, 1);
-    drift(-3.2, 4.6, 0.7);
-  }
+  if (!ripple) return;
 
-  drawGlints(elapsed);
+  // Two copies of the tile crossing at different speeds. Offsets wrap on the
+  // tile, so the scroll never accumulates into a big translate and the seams
+  // stay where the tile put them.
+  //
+  // This is all the motion the water gets now. It briefly had travelling swell
+  // crests and flaring sun glints on top, which did make the movement obvious —
+  // measured, they doubled how much of the surface changed per second. They also
+  // looked like scribble: white sine curves drawn over flat blue read as pencil
+  // marks on paper, not as a sea, and the more of the frame the water filled the
+  // worse it got. Subtle and honest beats obvious and fake. Real waves want a
+  // painted tile or a shader, not more strokes.
+  const drift = (speedX: number, speedY: number, alpha: number): void => {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(
+      ((elapsed * speedX) % WATER_TILE) - WATER_TILE,
+      ((elapsed * speedY) % WATER_TILE) - WATER_TILE
+    );
+    ctx.fillStyle = ripple;
+    ctx.fillRect(0, 0, DESIGN_W + WATER_TILE * 2, DESIGN_H + WATER_TILE * 2);
+    ctx.restore();
+  };
+  drift(4.2, 2.2, 0.85);
+  drift(-2.6, 3.6, 0.55);
 }
 
 /** Fixed shallows and deeps: [x, y, radius, "r,g,b", alpha]. */
@@ -303,87 +307,6 @@ const WATER_PATCHES: Array<[number, number, number, string, number]> = [
   [196, 812, 240, '150,186,198', 0.18],
   [200, 30, 260, '10,30,52', 0.26]
 ];
-
-/**
- * Travelling swell.
- *
- * The two drifting ripple tiles are the surface texture, and on their own they
- * are not enough: measured over a second on the open water at the left of Long
- * Bay, they changed 27% of the pixels by a mean of 5 out of 765 — real motion,
- * and completely invisible. The eye does not pick up a texture sliding under
- * itself at low contrast. It does pick up a line that crosses the frame.
- *
- * So this draws the long-period part of the sea separately: crests a couple of
- * hundred units apart, warped along their length, marching slowly down the
- * screen with a dark trough behind each one. Twenty paths a frame.
- */
-const SWELL_SPACING = 54;
-const SWELL_SPEED = 11;
-
-function drawSwell(elapsed: number): void {
-  const offset = (elapsed * SWELL_SPEED) % SWELL_SPACING;
-  ctx.lineCap = 'round';
-  for (let i = -1; i * SWELL_SPACING < DESIGN_H + SWELL_SPACING; i++) {
-    const baseY = i * SWELL_SPACING + offset;
-    const sway = Math.sin(elapsed * 0.5 + i * 1.7);
-    for (const [dy, colour, width] of SWELL_STROKES) {
-      ctx.beginPath();
-      for (let x = 0; x <= DESIGN_W; x += 18) {
-        const y =
-          baseY + dy + Math.sin(x / 74 + elapsed * 0.55 + i) * 4.4 + Math.sin(x / 31 - elapsed * 0.9) * 1.6 + sway;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.strokeStyle = colour;
-      ctx.lineWidth = width;
-      ctx.stroke();
-    }
-  }
-}
-
-/** Crest, then the shadow that sits in front of it. */
-const SWELL_STROKES: Array<[number, string, number]> = [
-  [0, 'rgba(255,255,255,0.17)', 2.6],
-  [3.6, 'rgba(18,44,66,0.13)', 3.4]
-];
-
-/**
- * Sun glints: short bright dashes that flare and die on their own phase.
- *
- * This is the layer that actually says "moving water" at a glance, because
- * something appearing where there was nothing is the one kind of change that
- * catches an eye which is busy watching traffic. Positions are hashed from the
- * index so they never wander, and the flare is a high power of a sine so each
- * one is dark most of the time and briefly very bright.
- */
-const GLINT_COUNT = 78;
-
-function drawGlints(elapsed: number): void {
-  ctx.lineCap = 'round';
-  for (let i = 0; i < GLINT_COUNT; i++) {
-    const hx = Math.sin(i * 12.9898) * 43758.5453;
-    const hy = Math.sin(i * 78.233) * 12345.6789;
-    const hp = Math.sin(i * 39.425) * 9876.5432;
-    const x = (hx - Math.floor(hx)) * DESIGN_W;
-    const y = (hy - Math.floor(hy)) * DESIGN_H;
-    const phase = (hp - Math.floor(hp)) * Math.PI * 2;
-    const rate = 0.9 + (hp - Math.floor(hp)) * 1.5;
-
-    const pulse = Math.sin(elapsed * rate + phase);
-    if (pulse <= 0) continue;
-    const flare = Math.pow(pulse, 7);
-    if (flare < 0.02) continue;
-
-    const drift = ((elapsed * 3.2) % DESIGN_H);
-    const yy = (y + drift) % DESIGN_H;
-    ctx.strokeStyle = `rgba(255,255,255,${(0.78 * flare).toFixed(3)})`;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(x - 3.5 - flare * 2, yy);
-    ctx.lineTo(x + 3.5 + flare * 2, yy);
-    ctx.stroke();
-  }
-}
 
 /**
  * Deterministic per-island randomness.
