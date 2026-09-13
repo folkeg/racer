@@ -112,7 +112,21 @@ export interface Surface {
     /** Whether anything grows on it. A yard island is not a park. */
     planted: boolean;
   };
-  /** The ring of structure around the frame. 'none' leaves the edge open. */
+  /**
+   * The ring of structure around the frame.
+   *
+   * Nothing uses this. Two attempts have now been made at walling the board in
+   * and both failed the same way, which is worth recording rather than trying a
+   * third time blind: the circuit is fitted to within 26 units of the frame, so
+   * anything drawn outside it is forced to be a thin belt, and a thin repetitive
+   * belt at the exact edge of a rectangle reads as decorative trim — scalloped
+   * edging on the beach, tiling in the works yard — not as architecture. The
+   * reference's grandstands work because they are deep, and because they ring
+   * the *circuit*, curving with it, rather than lining the frame.
+   *
+   * There is no room for that here without making the track smaller. That is a
+   * trade, not a bug, and not one to make silently.
+   */
   boundary: import('./boundary').BoundaryKind;
   /** What stands about on the open ground, and how densely. */
   props: PropKind[];
