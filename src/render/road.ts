@@ -14,8 +14,8 @@ import { KERB_WIDTH, LANE_COUNT, ROAD_HALF_WIDTH } from '../config';
 import { ctx } from '../platform';
 import { COLORS } from '../theme';
 import { pathAtOffset, pathForLane, sampleAtDistance } from '../track';
-import { ROAD_DEPTH, SHADOW_X, SHADOW_Y } from './light';
-import { fillRibbon, offsetPath } from './primitives';
+import { ROAD_DEPTH, ROAD_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
+import { fillNearFaces, fillRibbon, offsetPath } from './primitives';
 import { project, projectPath, projectedHeading } from './camera';
 import { asphaltTexture } from './sprites';
 
@@ -33,14 +33,23 @@ export function drawTrack(): void {
   );
   fillRibbon(outerShadow, innerShadow, 'rgba(4,12,18,0.55)');
 
-  // Deck side wall: the same band nudged down-light, which reads as thickness.
-  const outerWall = projectPath(
-    offsetPath(pathAtOffset(ROAD_HALF_WIDTH + 5), SHADOW_X * ROAD_DEPTH * 0.5, SHADOW_Y * ROAD_DEPTH * 0.5)
-  );
-  const innerWall = projectPath(
-    offsetPath(pathAtOffset(-ROAD_HALF_WIDTH - 5), SHADOW_X * ROAD_DEPTH * 0.5, SHADOW_Y * ROAD_DEPTH * 0.5)
-  );
-  fillRibbon(outerWall, innerWall, '#121A20');
+  // Deck side walls. This used to be the whole road band nudged down-light,
+  // which only ever showed on one side of the circuit and read as a second
+  // shadow. The causeway now has two real edges, and each one shows its wall
+  // wherever it turns towards the camera — so every fold of the S has a lip on
+  // its near side and none on its far side, which is what a raised deck does.
+  const outerLip = edge(ROAD_HALF_WIDTH + 4);
+  const outerLipIn = edge(ROAD_HALF_WIDTH + 1);
+  const innerLip = edge(-ROAD_HALF_WIDTH - 4);
+  const innerLipIn = edge(-ROAD_HALF_WIDTH - 1);
+  fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, '#161F28');
+  fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, '#161F28');
+  // The wet course at the bottom of the wall, and the foam where it meets the
+  // water. The foam is the line that actually sells the deck as standing in the
+  // sea rather than being painted on it.
+  const WET = ROAD_WALL_HEIGHT * 0.68;
+  fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, '#2B3A44', 'rgba(232,244,248,0.8)', WET);
+  fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, '#2B3A44', 'rgba(232,244,248,0.8)', WET);
 
   const outerEdge = edge(ROAD_HALF_WIDTH + 4);
   const innerEdge = edge(-ROAD_HALF_WIDTH - 4);

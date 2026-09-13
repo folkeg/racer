@@ -332,6 +332,8 @@ var HarborLoop = (() => {
   var CAR_BODY_DEPTH = 1.5;
   var ISLAND_DEPTH = 3.4;
   var ROAD_DEPTH = 5;
+  var ROAD_WALL_HEIGHT = 7;
+  var ISLAND_WALL_HEIGHT = 7.5;
   function localLight(angle, distance) {
     const local = LIGHT_ANGLE - angle;
     return { x: Math.cos(local) * distance, y: Math.sin(local) * distance };
@@ -3416,6 +3418,41 @@ var HarborLoop = (() => {
     ctx.fillStyle = fill;
     ctx.fill();
   }
+  function fillNearFaces(edge2, inward, height, fill, waterline, from = 0) {
+    const count = Math.min(edge2.length, inward.length);
+    let run2 = [];
+    const flush = () => {
+      if (run2.length >= 2) {
+        fillRibbon(run2.map((p) => p.top), run2.map((p) => p.base), fill);
+        if (waterline) {
+          ctx.beginPath();
+          ctx.moveTo(run2[0].base.x, run2[0].base.y);
+          for (let i = 1; i < run2.length; i++) ctx.lineTo(run2[i].base.x, run2[i].base.y);
+          ctx.strokeStyle = waterline;
+          ctx.lineWidth = 1.3;
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
+      }
+      run2 = [];
+    };
+    for (let i = 0; i < count; i++) {
+      const dx = edge2[i].x - inward[i].x;
+      const dy = edge2[i].y - inward[i].y;
+      const length = Math.hypot(dx, dy);
+      const facing = length > 0 ? dy / length : 0;
+      if (facing <= 0.03) {
+        flush();
+        continue;
+      }
+      const unit = facing * edge2[i].scale;
+      run2.push({
+        top: { x: edge2[i].x, y: edge2[i].y + from * unit },
+        base: { x: edge2[i].x, y: edge2[i].y + height * unit }
+      });
+    }
+    flush();
+  }
 
   // src/render/scenery.ts
   function drawTree(x, y, size = 1) {
@@ -3757,6 +3794,20 @@ var HarborLoop = (() => {
     const beach = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.1);
     const soil = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.16);
     fillPlanePolygon(soil, "rgba(4,12,18,0.34)", SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
+    const projected = soil.map((point) => project(point.x, point.y));
+    const inward = soil.map((point) => project(
+      x + w / 2 + (point.x - x - w / 2) * 0.94,
+      y + h / 2 + (point.y - y - h / 2) * 0.94
+    ));
+    fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, "#333B2C");
+    fillNearFaces(
+      projected,
+      inward,
+      ISLAND_WALL_HEIGHT,
+      "#9C8F62",
+      "rgba(232,244,248,0.75)",
+      ISLAND_WALL_HEIGHT * 0.55
+    );
     fillPlanePolygon(soil, COLORS.landDark);
     fillPlanePolygon(beach, "#C6B993");
     fillPlanePolygon(outline, ISLAND_GREENS[index % ISLAND_GREENS.length]);
@@ -3831,6 +3882,33 @@ var HarborLoop = (() => {
     gradient.addColorStop(0.55, "rgba(0,0,0,0)");
     gradient.addColorStop(1, "rgba(40,60,72,0.32)");
     ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+  }
+  function drawSceneLight() {
+    const sun = ctx.createRadialGradient(
+      DESIGN_W * 0.26,
+      DESIGN_H * 0.2,
+      0,
+      DESIGN_W * 0.26,
+      DESIGN_H * 0.2,
+      DESIGN_H * 0.72
+    );
+    sun.addColorStop(0, "rgba(255,241,209,0.15)");
+    sun.addColorStop(0.55, "rgba(255,240,205,0.05)");
+    sun.addColorStop(1, "rgba(255,240,205,0)");
+    ctx.fillStyle = sun;
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+    const vignette = ctx.createRadialGradient(
+      DESIGN_W * 0.5,
+      DESIGN_H * 0.46,
+      DESIGN_H * 0.3,
+      DESIGN_W * 0.5,
+      DESIGN_H * 0.46,
+      DESIGN_H * 0.78
+    );
+    vignette.addColorStop(0, "rgba(6,16,26,0)");
+    vignette.addColorStop(1, "rgba(6,16,26,0.34)");
+    ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
   }
 
@@ -5261,13 +5339,15 @@ var HarborLoop = (() => {
       offsetPath(pathAtOffset(-ROAD_HALF_WIDTH - 7), SHADOW_X * ROAD_DEPTH, SHADOW_Y * ROAD_DEPTH)
     );
     fillRibbon(outerShadow, innerShadow, "rgba(4,12,18,0.55)");
-    const outerWall = projectPath(
-      offsetPath(pathAtOffset(ROAD_HALF_WIDTH + 5), SHADOW_X * ROAD_DEPTH * 0.5, SHADOW_Y * ROAD_DEPTH * 0.5)
-    );
-    const innerWall = projectPath(
-      offsetPath(pathAtOffset(-ROAD_HALF_WIDTH - 5), SHADOW_X * ROAD_DEPTH * 0.5, SHADOW_Y * ROAD_DEPTH * 0.5)
-    );
-    fillRibbon(outerWall, innerWall, "#121A20");
+    const outerLip = edge(ROAD_HALF_WIDTH + 4);
+    const outerLipIn = edge(ROAD_HALF_WIDTH + 1);
+    const innerLip = edge(-ROAD_HALF_WIDTH - 4);
+    const innerLipIn = edge(-ROAD_HALF_WIDTH - 1);
+    fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, "#161F28");
+    fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, "#161F28");
+    const WET = ROAD_WALL_HEIGHT * 0.68;
+    fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, "#2B3A44", "rgba(232,244,248,0.8)", WET);
+    fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, "#2B3A44", "rgba(232,244,248,0.8)", WET);
     const outerEdge = edge(ROAD_HALF_WIDTH + 4);
     const innerEdge = edge(-ROAD_HALF_WIDTH - 4);
     fillRibbon(outerEdge, innerEdge, COLORS.roadEdge);
@@ -5868,6 +5948,7 @@ var HarborLoop = (() => {
     drawCars();
     drawParticles();
     drawFloaters();
+    drawSceneLight();
     ctx.restore();
     ctx.save();
     ctx.translate(offsetX, offsetY);

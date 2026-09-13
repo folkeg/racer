@@ -26,6 +26,27 @@ export const ISLAND_DEPTH = 3.4;
 export const ROAD_DEPTH = 5.0;
 
 /**
+ * Side faces extrude towards the camera, not along the light.
+ *
+ * These are two different things and the scene had been treating them as one.
+ * A cast shadow falls along the light. A *side face* — the wall of a raised
+ * deck, the cliff under an island — is visible because the camera is looking at
+ * it, so it appears on whichever edges face the bottom of the frame, and it
+ * appears there whatever the light is doing. Offsetting it down-light instead
+ * gives every solid a matching pair of drop shadows and no thickness at all,
+ * which is most of why the board read as printed.
+ *
+ * The light still decides what the face looks like: it points up and left, so
+ * every face turned towards the camera is turned away from the light, and they
+ * are all dark.
+ *
+ * Heights are screen units at unit scale; a face is scaled by the perspective
+ * at its own point, so near walls stand taller than far ones.
+ */
+export const ROAD_WALL_HEIGHT = 7.0;
+export const ISLAND_WALL_HEIGHT = 7.5;
+
+/**
  * The light direction expressed inside a shape rotated by `angle`, so an
  * extruded side face leans the right way whichever direction the car faces.
  */

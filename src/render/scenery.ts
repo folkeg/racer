@@ -6,8 +6,8 @@ import { activeTrackId } from '../track';
 import { WATER_TILE, grassTexture, waterTexture } from './sprites';
 import { trackById } from '../tracks';
 import { project } from './camera';
-import { ISLAND_DEPTH, SHADOW_X, SHADOW_Y } from './light';
-import { fillRibbon } from './primitives';
+import { ISLAND_DEPTH, ISLAND_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
+import { fillNearFaces, fillRibbon } from './primitives';
 import type { Vec2 } from '../types';
 
 function drawTree(x: number, y: number, size = 1): void {
@@ -484,6 +484,19 @@ function drawIsland(x: number, y: number, w: number, h: number, index: number): 
   const soil = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.16);
 
   fillPlanePolygon(soil, 'rgba(4,12,18,0.34)', SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
+
+  // The cliff under the island, on whichever side of it faces the camera. The
+  // rim polygon a hair inside it is only there to tell each point which way it
+  // is pointing.
+  const projected = soil.map((point) => project(point.x, point.y));
+  const inward = soil.map((point) => project(x + w / 2 + (point.x - x - w / 2) * 0.94,
+                                             y + h / 2 + (point.y - y - h / 2) * 0.94));
+  // Two courses: rock under a sandy shelf, because a single flat band reads as
+  // an outline rather than as the side of something.
+  fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, '#333B2C');
+  fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, '#9C8F62', 'rgba(232,244,248,0.75)',
+    ISLAND_WALL_HEIGHT * 0.55);
+
   fillPlanePolygon(soil, COLORS.landDark);
   fillPlanePolygon(beach, '#C6B993');
   fillPlanePolygon(outline, ISLAND_GREENS[index % ISLAND_GREENS.length]);
@@ -575,5 +588,44 @@ function drawVignette(): void {
   gradient.addColorStop(0.55, 'rgba(0,0,0,0)');
   gradient.addColorStop(1, 'rgba(40,60,72,0.32)');
   ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+}
+
+
+/**
+ * The light on the scene as a whole.
+ *
+ * Everything up to here is lit object by object — a car knows where its own
+ * shadow falls, an island knows which of its faces the camera can see — and the
+ * board still came out looking evenly bright from corner to corner, because
+ * nothing was lighting the *scene*. A real photograph of this harbour would be
+ * brighter where the sun is and would fall off towards the edges of the frame,
+ * and that fall-off is what the eye reads as a lit volume rather than as a
+ * printed page.
+ *
+ * Two gradients over the finished world, under the HUD: a warm pool up and to
+ * the left, matching the direction every shadow already agrees on, and a cool
+ * vignette pulling the corners down. They cost two fills a frame and they are
+ * deliberately weak — at these alphas neither is visible as an effect, only as
+ * the scene no longer being flat.
+ */
+export function drawSceneLight(): void {
+  const sun = ctx.createRadialGradient(
+    DESIGN_W * 0.26, DESIGN_H * 0.20, 0,
+    DESIGN_W * 0.26, DESIGN_H * 0.20, DESIGN_H * 0.72
+  );
+  sun.addColorStop(0, 'rgba(255,241,209,0.15)');
+  sun.addColorStop(0.55, 'rgba(255,240,205,0.05)');
+  sun.addColorStop(1, 'rgba(255,240,205,0)');
+  ctx.fillStyle = sun;
+  ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+
+  const vignette = ctx.createRadialGradient(
+    DESIGN_W * 0.5, DESIGN_H * 0.46, DESIGN_H * 0.30,
+    DESIGN_W * 0.5, DESIGN_H * 0.46, DESIGN_H * 0.78
+  );
+  vignette.addColorStop(0, 'rgba(6,16,26,0)');
+  vignette.addColorStop(1, 'rgba(6,16,26,0.34)');
+  ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
 }

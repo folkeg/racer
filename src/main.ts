@@ -32,6 +32,7 @@ import { drawBlackout, drawHazardLane } from './render/overlays';
 import { drawFloaters, drawParticles, updateFloaters, updateParticles } from './render/particles';
 import { drawSpeedLines } from './render/speedLines';
 import { drawLivingWater, drawSea, updateLivingWater } from './render/livingWater';
+import { drawSceneLight } from './render/scenery';
 import { drawStaticScene } from './render/staticLayer';
 import { drawCars } from './render/vehicles';
 import { runIsOver, updateRun } from './run';
@@ -108,6 +109,9 @@ function drawRace(): void {
   drawCars();
   drawParticles();
   drawFloaters();
+  // Over the world, under the interface: the HUD is a screen, not something in
+  // the harbour, so it must not be dimmed by the harbour's vignette.
+  drawSceneLight();
   ctx.restore();
 
   ctx.save();
