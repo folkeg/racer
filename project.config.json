@@ -37,6 +37,10 @@
       {
         "value": "cloudfunctions",
         "type": "folder"
+      },
+      {
+        "value": "tools",
+        "type": "folder"
       }
     ],
     "include": []
