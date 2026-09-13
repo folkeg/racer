@@ -7,6 +7,7 @@ import { activeTrackId } from '../track';
 import { grassTexture, groundTexture, groundTileSize } from './sprites';
 import { surfaceFor } from './surface';
 import { drawProps } from './props';
+import { drawInfield } from './infield';
 import { activeTrackId as currentTrack } from '../track';
 import { trackById } from '../tracks';
 import { project } from './camera';
@@ -531,7 +532,8 @@ export function drawBackground(): void {
   for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
   for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
 
-  // Whatever stands about on this world's open ground.
+  // The complex inside the circuit, then whatever stands about outside it.
+  drawInfield();
   drawProps();
   for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
   // Boats and buoys are deliberately absent here. They are the only decor that

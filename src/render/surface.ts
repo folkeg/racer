@@ -98,6 +98,13 @@ export interface Surface {
   /** What stands about on the open ground, and how densely. */
   props: PropKind[];
   propDensity: number;
+  /**
+   * The large structures inside the circuit.
+   *
+   * Empty for a world that should stay bare, and ignored by any circuit whose
+   * interior is a set of narrow slots rather than one room.
+   */
+  structures: import('./infield').StructureKind[];
 }
 
 export const SURFACES: Record<string, Surface> = {
@@ -124,7 +131,8 @@ export const SURFACES: Record<string, Surface> = {
       seams: true
     },
     props: [],
-    propDensity: 0
+    propDensity: 0,
+    structures: []
   },
 
   beach: {
@@ -155,7 +163,8 @@ export const SURFACES: Record<string, Surface> = {
       seams: true
     },
     props: ['rock', 'tuft', 'parasol'],
-    propDensity: 1
+    propDensity: 1,
+    structures: ['pavilion', 'dome']
   },
 
   city: {
@@ -183,7 +192,8 @@ export const SURFACES: Record<string, Surface> = {
       seams: false
     },
     props: ['barrier', 'lamp', 'cone'],
-    propDensity: 1.1
+    propDensity: 1.1,
+    structures: ['hall', 'dome', 'hall']
   },
 
   industrial: {
@@ -210,7 +220,8 @@ export const SURFACES: Record<string, Surface> = {
       seams: false
     },
     props: ['drum', 'tyres', 'cone', 'chimney'],
-    propDensity: 1.3
+    propDensity: 1.3,
+    structures: ['hall', 'tank', 'tank']
   },
 
   meadow: {
@@ -236,7 +247,8 @@ export const SURFACES: Record<string, Surface> = {
       seams: true
     },
     props: ['tree', 'bush', 'rock'],
-    propDensity: 1
+    propDensity: 1,
+    structures: ['pavilion']
   }
 };
 

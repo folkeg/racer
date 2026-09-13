@@ -2245,8 +2245,8 @@ var HarborLoop = (() => {
     update(dt, run2) {
       const target = paceTarget(run2.elapsed);
       const delta = Math.abs(player.speed - target);
-      const inside = delta <= BAND_HALF_WIDTH && player.state !== "CRASHED";
-      if (inside) inBandSeconds += dt;
+      const inside2 = delta <= BAND_HALF_WIDTH && player.state !== "CRASHED";
+      if (inside2) inBandSeconds += dt;
       run2.score = Math.floor(inBandSeconds * 100);
       run2.progress = Math.max(0, 1 - delta / (BAND_HALF_WIDTH * 3));
     }
@@ -2834,8 +2834,8 @@ var HarborLoop = (() => {
   }
   function globalBoard(modeId, difficulty, day = "") {
     const key2 = boardKey(modeId, difficulty, day);
-    const cached2 = boards.get(key2);
-    if (cached2) return cached2;
+    const cached3 = boards.get(key2);
+    if (cached3) return cached3;
     const board = {
       rows: [],
       selfRank: null,
@@ -3332,8 +3332,8 @@ var HarborLoop = (() => {
   }
   var cache2 = /* @__PURE__ */ new Map();
   function vehicleSprite(key2, style) {
-    const cached2 = cache2.get(key2);
-    if (cached2 !== void 0) return cached2;
+    const cached3 = cache2.get(key2);
+    if (cached3 !== void 0) return cached3;
     const image = build((ctx2) => paintCar(ctx2, style));
     const shadow2 = build(paintShadow);
     const sprite = image && shadow2 ? { image, shadow: shadow2 } : null;
@@ -3480,7 +3480,8 @@ var HarborLoop = (() => {
         seams: true
       },
       props: [],
-      propDensity: 0
+      propDensity: 0,
+      structures: []
     },
     beach: {
       // Wind ripples fall out of the same wave field as water with different
@@ -3510,7 +3511,8 @@ var HarborLoop = (() => {
         seams: true
       },
       props: ["rock", "tuft", "parasol"],
-      propDensity: 1
+      propDensity: 1,
+      structures: ["pavilion", "dome"]
     },
     city: {
       // Night-ish tarmac yard. The ground is the same asphalt as the road, one
@@ -3537,7 +3539,8 @@ var HarborLoop = (() => {
         seams: false
       },
       props: ["barrier", "lamp", "cone"],
-      propDensity: 1.1
+      propDensity: 1.1,
+      structures: ["hall", "dome", "hall"]
     },
     industrial: {
       // A works yard: stained concrete, rust, and nothing growing.
@@ -3563,7 +3566,8 @@ var HarborLoop = (() => {
         seams: false
       },
       props: ["drum", "tyres", "cone", "chimney"],
-      propDensity: 1.3
+      propDensity: 1.3,
+      structures: ["hall", "tank", "tank"]
     },
     meadow: {
       tile: "grass",
@@ -3588,7 +3592,8 @@ var HarborLoop = (() => {
         seams: true
       },
       props: ["tree", "bush", "rock"],
-      propDensity: 1
+      propDensity: 1,
+      structures: ["pavilion"]
     }
   };
   var TRACK_SURFACE = {
@@ -3812,6 +3817,175 @@ var HarborLoop = (() => {
   }
   function drawProps() {
     for (const prop of propsForTrack()) drawProp(prop);
+  }
+
+  // src/render/infield.ts
+  var MIN_REACH = 26;
+  var MIN_ROOM = 10;
+  var cachedTrack2 = null;
+  var cached2 = [];
+  function inside(x, y, path) {
+    let hit = false;
+    for (let i = 0, j = path.length - 1; i < path.length; j = i++) {
+      const a = path[i];
+      const b = path[j];
+      if (a.y > y !== b.y > y && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) hit = !hit;
+    }
+    return hit;
+  }
+  function buildInfield(track) {
+    const path = pathAtOffset(0);
+    const room = freeGround().filter((spot) => inside(spot.x, spot.y, path));
+    if (room.length < MIN_ROOM) return [];
+    const kinds = surfaceFor(track).structures;
+    if (kinds.length === 0) return [];
+    const ranked = [...room].sort((a, b) => b.clearance - a.clearance);
+    const placed = [];
+    for (const spot of ranked) {
+      if (placed.length >= 3) break;
+      if (spot.clearance < MIN_REACH) break;
+      const clash = placed.some((other) => {
+        const dx = other.x - spot.x;
+        const dy = other.y - spot.y;
+        return Math.hypot(dx, dy) < other.reach + spot.clearance * 0.9 + 18;
+      });
+      if (clash) continue;
+      placed.push({
+        x: spot.x,
+        y: spot.y,
+        kind: kinds[placed.length % kinds.length],
+        reach: Math.min(spot.clearance * 0.72, 46)
+      });
+    }
+    return placed;
+  }
+  function structures() {
+    if (cachedTrack2 !== activeTrackId) {
+      cached2 = buildInfield(activeTrackId);
+      cachedTrack2 = activeTrackId;
+    }
+    return cached2;
+  }
+  function drawServiceRoad(placed) {
+    if (placed.length < 2) return;
+    const paint = surfaceFor(activeTrackId).road;
+    const order = [...placed].sort((a, b) => a.y - b.y);
+    const stroke = (width, colour) => {
+      ctx.save();
+      ctx.beginPath();
+      const first = project(order[0].x, order[0].y);
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < order.length; i++) {
+        const p = project(order[i].x, order[i].y);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width * lateralUnit();
+      ctx.stroke();
+      ctx.restore();
+    };
+    stroke(19, "rgba(8,14,20,0.16)");
+    stroke(16, paint.apronEdge);
+    stroke(13, paint.apron);
+  }
+  function shade(x, y, w, h, alpha) {
+    ctx.fillStyle = `rgba(10,16,22,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(x + SHADOW_X * w * 0.42, y + SHADOW_Y * w * 0.42, w, h, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function drawStructure(structure) {
+    const p = project(structure.x, structure.y);
+    const r = structure.reach * lateralUnit();
+    const x = p.x;
+    const y = p.y;
+    switch (structure.kind) {
+      case "dome": {
+        shade(x, y, r * 1.05, r * 0.62, 0.34);
+        const sphere = ctx.createRadialGradient(x - r * 0.34, y - r * 0.34, r * 0.1, x, y, r);
+        sphere.addColorStop(0, "#F4F1E8");
+        sphere.addColorStop(0.65, "#CFCCC2");
+        sphere.addColorStop(1, "#96948C");
+        ctx.fillStyle = sphere;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(58,72,86,0.55)";
+        ctx.lineWidth = r * 0.13;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.06, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case "hall": {
+        const w = r * 1.85;
+        const h = r * 1.05;
+        shade(x, y + h * 0.2, w * 0.6, h * 0.5, 0.32);
+        ctx.fillStyle = "#4E5660";
+        ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        for (let i = 0; i < 3; i++) {
+          const bay = h / 3;
+          ctx.fillStyle = i % 2 === 0 ? "#5E6872" : "#545E68";
+          ctx.fillRect(x - w / 2, y - h / 2 + i * bay, w, bay);
+          ctx.fillStyle = "rgba(238,244,250,0.16)";
+          ctx.fillRect(x - w / 2, y - h / 2 + i * bay, w, bay * 0.22);
+        }
+        ctx.strokeStyle = "rgba(14,20,26,0.5)";
+        ctx.lineWidth = 1.4;
+        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+        break;
+      }
+      case "tank": {
+        shade(x, y, r * 0.9, r * 0.5, 0.34);
+        const barrel = ctx.createLinearGradient(x - r * 0.7, y, x + r * 0.7, y);
+        barrel.addColorStop(0, "#6E6A5E");
+        barrel.addColorStop(0.35, "#A8A296");
+        barrel.addColorStop(1, "#5E5A50");
+        ctx.fillStyle = barrel;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(220,214,200,0.5)";
+        ctx.lineWidth = r * 0.06;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.44, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case "pavilion": {
+        const tents = 5;
+        for (let i = 0; i < tents; i++) {
+          const angle = i / tents * Math.PI * 2 + 0.6;
+          const tx = x + Math.cos(angle) * r * 0.62;
+          const ty = y + Math.sin(angle) * r * 0.38;
+          const size = r * 0.36;
+          shade(tx, ty + size * 0.4, size * 0.7, size * 0.34, 0.28);
+          ctx.fillStyle = "#E8E4DA";
+          ctx.beginPath();
+          ctx.moveTo(tx, ty - size);
+          ctx.lineTo(tx + size * 0.8, ty + size * 0.5);
+          ctx.lineTo(tx - size * 0.8, ty + size * 0.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(120,126,132,0.45)";
+          ctx.beginPath();
+          ctx.moveTo(tx, ty - size);
+          ctx.lineTo(tx + size * 0.8, ty + size * 0.5);
+          ctx.lineTo(tx, ty + size * 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+      }
+    }
+  }
+  function drawInfield() {
+    const placed = structures();
+    if (placed.length === 0) return;
+    drawServiceRoad(placed);
+    for (const structure of [...placed].sort((a, b) => a.y - b.y)) drawStructure(structure);
   }
 
   // src/render/primitives.ts
@@ -4247,6 +4421,7 @@ var HarborLoop = (() => {
     for (const [x, y, w, h, seed] of decor.rocks) drawRocks(x, y, w, h, seed);
     for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
     for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
+    drawInfield();
     drawProps();
     for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
     drawVignette();
@@ -5471,8 +5646,8 @@ var HarborLoop = (() => {
   var BACK = { x: MARGIN3, y: DESIGN_H - 84, w: DESIGN_W - MARGIN3 * 2, h: 54 };
   var boundsCache = /* @__PURE__ */ new Map();
   function trackBounds(trackId) {
-    const cached2 = boundsCache.get(trackId);
-    if (cached2) return cached2;
+    const cached3 = boundsCache.get(trackId);
+    if (cached3) return cached3;
     const points = TRACKS.find((track) => track.id === trackId).build();
     let minX = Infinity;
     let minY = Infinity;
@@ -5936,8 +6111,8 @@ var HarborLoop = (() => {
     const count = Math.min(outer.length, inner.length);
     for (let i = 0; i < count - SEAM_SPACING; i += SEAM_SPACING) {
       const panel2 = Math.floor(i / SEAM_SPACING);
-      const shade = Math.sin(panel2 * 12.9898) * 43758.5453;
-      const tone = shade - Math.floor(shade);
+      const shade2 = Math.sin(panel2 * 12.9898) * 43758.5453;
+      const tone = shade2 - Math.floor(shade2);
       if (tone > 0.62) continue;
       const end = Math.min(count - 1, i + SEAM_SPACING);
       const top = outer.slice(i, end + 1);
