@@ -33,7 +33,14 @@ import { groundTexture } from './sprites';
  * steps read as a falloff, which is what light actually does at the foot of a
  * raised thing — and it costs three strokes in a layer that is drawn once.
  */
-const APRON_WIDTH = 30;
+/**
+ * 30 was far too wide. The road's own half-width is 34, so an apron of 30 on
+ * each side nearly doubled the circuit's footprint and turned it into a fat
+ * double ring that dominated the board — the opposite of the reference, where
+ * the run-off is plainly subordinate to the track it serves. A shoulder should
+ * read as the edge of the made ground, not as a second road.
+ */
+const APRON_WIDTH = 12;
 
 function strokeAlongCentre(halfWidth: number, colour: string): void {
   const path = projectPath(pathAtOffset(0));
@@ -66,6 +73,95 @@ function drawApron(): void {
   strokeAlongCentre(ROAD_HALF_WIDTH + 13, 'rgba(6,14,20,0.13)');
   strokeAlongCentre(ROAD_HALF_WIDTH + 8, 'rgba(6,14,20,0.16)');
   strokeAlongCentre(ROAD_HALF_WIDTH + 4.5, 'rgba(6,14,20,0.20)');
+}
+
+/**
+ * Red and white blocks, at the corners only.
+ *
+ * The strongest single mark a circuit can carry: nothing else in the visual
+ * language of racing is that unambiguous. The point is that it appears *only*
+ * where the track turns — a stripe running the whole way round is decoration,
+ * and was exactly the mistake the gold outline made, but a stripe that starts
+ * where the corner starts and stops where it stops is information. It tells you
+ * a corner is coming before you can see how tight it is.
+ *
+ * Curvature is measured off the centre line: the heading change between one
+ * sample and the next over the distance covered, which is the reciprocal of the
+ * corner radius.
+ *
+ * The threshold is a percentile of each circuit's own curvature, not a fixed
+ * number. A fixed one was tried first, reasoned from Long Bay's radius-45 folds,
+ * and measurement killed it: the smoothing spreads the peak, so the real maximum
+ * on Long Bay is 0.0111 and on the other three it is 0.0060, 0.0071 and 0.0083 —
+ * every one of them below the 0.009 that had been picked, so three of the four
+ * circuits got no kerbs whatsoever.
+ *
+ * Relative is the better idea regardless. A corner is where *this* circuit turns
+ * most, and that is true of a stadium whose only corners are two big sweepers
+ * just as much as of a circuit with hairpins. It also cannot go wrong on a track
+ * that does not exist yet.
+ */
+const CORNER_PERCENTILE = 0.72;
+/** Below this nothing counts as a corner, however flat the rest of the lap. */
+const CORNER_FLOOR = 0.0025;
+/** Blocks per run, in path samples. */
+const KERB_BLOCK = 7;
+
+function centreCurvature(): number[] {
+  const path = pathAtOffset(0);
+  const out = new Array<number>(path.length).fill(0);
+  for (let i = 0; i < path.length; i++) {
+    const a = path[(i - 2 + path.length) % path.length];
+    const b = path[i];
+    const c = path[(i + 2) % path.length];
+    const h1 = Math.atan2(b.y - a.y, b.x - a.x);
+    const h2 = Math.atan2(c.y - b.y, c.x - b.x);
+    let delta = h2 - h1;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    const span = Math.hypot(c.x - a.x, c.y - a.y) || 1;
+    out[i] = Math.abs(delta) / span;
+  }
+  // Smoothed, or the blocks flicker in and out along a corner's entry.
+  return out.map((_, i) => {
+    let sum = 0;
+    for (let k = -6; k <= 6; k++) sum += out[(i + k + out.length) % out.length];
+    return sum / 13;
+  });
+}
+
+function drawCornerKerbs(
+  outerKerb: ReturnType<typeof edge>,
+  outerRoad: ReturnType<typeof edge>,
+  innerRoad: ReturnType<typeof edge>,
+  innerKerb: ReturnType<typeof edge>
+): void {
+  const curvature = centreCurvature();
+  const count = Math.min(outerKerb.length, curvature.length);
+
+  const ranked = [...curvature].sort((a, b) => a - b);
+  const threshold = Math.max(
+    CORNER_FLOOR,
+    ranked[Math.floor(ranked.length * CORNER_PERCENTILE)] ?? CORNER_FLOOR
+  );
+
+  let start: number | null = null;
+  for (let i = 0; i <= count; i++) {
+    const turning = i < count && curvature[i] > threshold;
+    if (turning && start === null) start = i;
+    if (!turning && start !== null) {
+      // Blocks alternate along the run, and both sides of the road get them.
+      for (let b = start; b < i; b += KERB_BLOCK) {
+        const end = Math.min(b + KERB_BLOCK + 1, i);
+        if (end - b < 2) continue;
+        const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
+        const colour = red ? '#B8453A' : '#EDE7DA';
+        fillRibbon(outerKerb.slice(b, end), outerRoad.slice(b, end), colour);
+        fillRibbon(innerRoad.slice(b, end), innerKerb.slice(b, end), colour);
+      }
+      start = null;
+    }
+  }
 }
 
 /** Offsets a plane path sideways, then projects it. */
@@ -130,6 +226,7 @@ export function drawTrack(): void {
   // race kerb, which this harbour road is not.
   fillRibbon(outerKerb, outerRoad, paint.kerb);
   fillRibbon(innerRoad, innerKerb, paint.kerb);
+  drawCornerKerbs(outerKerb, outerRoad, innerRoad, innerKerb);
 
   // Lanes are shaded alternately rather than separated by dashed lines. Solid
   // bands read as five distinct channels at a glance, where dashes read as

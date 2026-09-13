@@ -5806,7 +5806,7 @@ var HarborLoop = (() => {
   }
 
   // src/render/road.ts
-  var APRON_WIDTH = 30;
+  var APRON_WIDTH = 12;
   function strokeAlongCentre(halfWidth, colour) {
     const path = projectPath(pathAtOffset(0));
     ctx.save();
@@ -5829,6 +5829,56 @@ var HarborLoop = (() => {
     strokeAlongCentre(ROAD_HALF_WIDTH + 13, "rgba(6,14,20,0.13)");
     strokeAlongCentre(ROAD_HALF_WIDTH + 8, "rgba(6,14,20,0.16)");
     strokeAlongCentre(ROAD_HALF_WIDTH + 4.5, "rgba(6,14,20,0.20)");
+  }
+  var CORNER_PERCENTILE = 0.72;
+  var CORNER_FLOOR = 25e-4;
+  var KERB_BLOCK = 7;
+  function centreCurvature() {
+    const path = pathAtOffset(0);
+    const out = new Array(path.length).fill(0);
+    for (let i = 0; i < path.length; i++) {
+      const a = path[(i - 2 + path.length) % path.length];
+      const b = path[i];
+      const c = path[(i + 2) % path.length];
+      const h1 = Math.atan2(b.y - a.y, b.x - a.x);
+      const h2 = Math.atan2(c.y - b.y, c.x - b.x);
+      let delta = h2 - h1;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      const span = Math.hypot(c.x - a.x, c.y - a.y) || 1;
+      out[i] = Math.abs(delta) / span;
+    }
+    return out.map((_, i) => {
+      let sum = 0;
+      for (let k = -6; k <= 6; k++) sum += out[(i + k + out.length) % out.length];
+      return sum / 13;
+    });
+  }
+  function drawCornerKerbs(outerKerb, outerRoad, innerRoad, innerKerb) {
+    var _a;
+    const curvature = centreCurvature();
+    const count = Math.min(outerKerb.length, curvature.length);
+    const ranked = [...curvature].sort((a, b) => a - b);
+    const threshold = Math.max(
+      CORNER_FLOOR,
+      (_a = ranked[Math.floor(ranked.length * CORNER_PERCENTILE)]) != null ? _a : CORNER_FLOOR
+    );
+    let start = null;
+    for (let i = 0; i <= count; i++) {
+      const turning = i < count && curvature[i] > threshold;
+      if (turning && start === null) start = i;
+      if (!turning && start !== null) {
+        for (let b = start; b < i; b += KERB_BLOCK) {
+          const end = Math.min(b + KERB_BLOCK + 1, i);
+          if (end - b < 2) continue;
+          const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
+          const colour = red ? "#B8453A" : "#EDE7DA";
+          fillRibbon(outerKerb.slice(b, end), outerRoad.slice(b, end), colour);
+          fillRibbon(innerRoad.slice(b, end), innerKerb.slice(b, end), colour);
+        }
+        start = null;
+      }
+    }
   }
   function edge(offset) {
     return projectPath(pathAtOffset(offset));
@@ -5868,6 +5918,7 @@ var HarborLoop = (() => {
     const innerKerb = edge(-ROAD_HALF_WIDTH);
     fillRibbon(outerKerb, outerRoad, paint.kerb);
     fillRibbon(innerRoad, innerKerb, paint.kerb);
+    drawCornerKerbs(outerKerb, outerRoad, innerRoad, innerKerb);
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const laneOuter = projectPath(pathForLane(lane - 0.5));
       const laneInner = projectPath(pathForLane(lane + 0.5));
