@@ -3538,17 +3538,20 @@ var HarborLoop = (() => {
       // Night-ish tarmac yard. The ground is the same asphalt as the road, one
       // shade darker, which is what a road running across a car park looks like.
       tile: "asphalt",
-      far: "#1B2026",
-      mid: "#2C333A",
-      near: "#3A424A",
+      // Lifted from 1B/2C/3A. The vignette takes another quarter out of the
+      // corners, and on top of a ground that dark the whole board went muddy —
+      // the props and the traffic were all reading against near-black.
+      far: "#2A3138",
+      mid: "#3C444C",
+      near: "#4C555E",
       mottle: 0.7,
       drift: [],
       afloat: false,
       life: "none",
       road: {
         tile: "asphalt",
-        surface: "#4A525A",
-        alt: "#414951",
+        surface: "#5A636C",
+        alt: "#505962",
         kerb: "#C8C2B2",
         kerbFace: "#6E6A5E",
         edge: "#2A3138",
@@ -6046,11 +6049,32 @@ var HarborLoop = (() => {
     ctx.stroke();
     ctx.restore();
   }
+  var APRON_CORNER_EXTRA = 34;
   function drawApron() {
     const paint = surfaceFor(activeTrackId).road;
-    strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH + 8, "rgba(6,14,20,0.10)");
-    strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH, paint.apronEdge);
-    strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH - 3, paint.apron);
+    const signed = signedCurvature();
+    const peak = signed.reduce((most, value) => Math.max(most, Math.abs(value)), 0) || 1;
+    const right = signed.map((k) => ROAD_HALF_WIDTH + APRON_WIDTH + Math.max(0, -k) / peak * APRON_CORNER_EXTRA);
+    const left = signed.map((k) => -(ROAD_HALF_WIDTH + APRON_WIDTH + Math.max(0, k) / peak * APRON_CORNER_EXTRA));
+    const roadRight = edge(ROAD_HALF_WIDTH);
+    const roadLeft = edge(-ROAD_HALF_WIDTH);
+    const band = (offsets, road, inset, fill) => {
+      fillRibbon(variableOffsetPath(offsets.map((v) => v + Math.sign(v) * inset)), road, fill);
+    };
+    band(right, roadRight, 8, "rgba(6,14,20,0.10)");
+    band(left, roadLeft, 8, "rgba(6,14,20,0.10)");
+    band(right, roadRight, 0, paint.apronEdge);
+    band(left, roadLeft, 0, paint.apronEdge);
+    band(right, roadRight, -3, paint.apron);
+    band(left, roadLeft, -3, paint.apron);
+    const grain = groundTexture(ctx, paint.tile);
+    if (grain) {
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      band(right, roadRight, -3, grain);
+      band(left, roadLeft, -3, grain);
+      ctx.restore();
+    }
     strokeAlongCentre(ROAD_HALF_WIDTH + 13, "rgba(6,14,20,0.13)");
     strokeAlongCentre(ROAD_HALF_WIDTH + 8, "rgba(6,14,20,0.16)");
     strokeAlongCentre(ROAD_HALF_WIDTH + 4.5, "rgba(6,14,20,0.20)");
@@ -6059,6 +6083,39 @@ var HarborLoop = (() => {
   var CORNER_FLOOR = 25e-4;
   var KERB_BLOCK = 7;
   var KERB_REACH = 6.5;
+  function signedCurvature() {
+    const path = pathAtOffset(0);
+    const out = new Array(path.length).fill(0);
+    for (let i = 0; i < path.length; i++) {
+      const a = path[(i - 2 + path.length) % path.length];
+      const b = path[i];
+      const c = path[(i + 2) % path.length];
+      const h1 = Math.atan2(b.y - a.y, b.x - a.x);
+      const h2 = Math.atan2(c.y - b.y, c.x - b.x);
+      let delta = h2 - h1;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      out[i] = delta / (Math.hypot(c.x - a.x, c.y - a.y) || 1);
+    }
+    return out.map((_, i) => {
+      let sum = 0;
+      for (let k = -6; k <= 6; k++) sum += out[(i + k + out.length) % out.length];
+      return sum / 13;
+    });
+  }
+  function variableOffsetPath(offsets) {
+    const path = pathAtOffset(0);
+    const points = path.map((point, i) => {
+      const a = path[(i - 1 + path.length) % path.length];
+      const b = path[(i + 1) % path.length];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const offset = offsets[i % offsets.length];
+      return { x: point.x + -dy / length * offset, y: point.y + dx / length * offset };
+    });
+    return projectPath(points);
+  }
   function centreCurvature() {
     const path = pathAtOffset(0);
     const out = new Array(path.length).fill(0);

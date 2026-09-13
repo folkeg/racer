@@ -57,17 +57,70 @@ function strokeAlongCentre(halfWidth: number, colour: string): void {
   ctx.restore();
 }
 
+/**
+ * How much wider the run-off gets on the outside of a corner.
+ *
+ * A constant-width shoulder all the way round is a kerb detail, not a circuit.
+ * Run-off exists because a car that loses the corner leaves on the outside, so
+ * that is where the ground is made wide — and the reference's aprons balloon at
+ * corner exits and all but vanish on the straights.
+ *
+ * Widening only outwards is also what keeps the geometry safe. A path offset
+ * further than the corner's radius turns inside out, and the inside of a corner
+ * is precisely where that happens; the outside has the larger radius and cannot
+ * fail. So the inner side stays at the base width and only the outer grows.
+ */
+const APRON_CORNER_EXTRA = 34;
+
 function drawApron(): void {
   const paint = surfaceFor(activeTrackId).road;
+  const signed = signedCurvature();
+  const peak = signed.reduce((most, value) => Math.max(most, Math.abs(value)), 0) || 1;
+
+  // Positive curvature turns towards the car's left, so the outside of such a
+  // corner is its right — the +offset side.
+  const right = signed.map((k) => ROAD_HALF_WIDTH + APRON_WIDTH
+    + Math.max(0, -k) / peak * APRON_CORNER_EXTRA);
+  const left = signed.map((k) => -(ROAD_HALF_WIDTH + APRON_WIDTH
+    + Math.max(0, k) / peak * APRON_CORNER_EXTRA));
+
+  const roadRight = edge(ROAD_HALF_WIDTH);
+  const roadLeft = edge(-ROAD_HALF_WIDTH);
+
+  const band = (
+    offsets: number[],
+    road: ReturnType<typeof edge>,
+    inset: number,
+    fill: string | CanvasPattern
+  ): void => {
+    fillRibbon(variableOffsetPath(offsets.map((v) => v + Math.sign(v) * inset)), road, fill);
+  };
 
   // One faint step of ground shadow outside the apron, and no more. Two wider
   // ones were tried and they darkened most of the board: on a circuit with a
   // narrow infield the bands from both sides meet in the middle, so a shadow
   // "around the track" becomes a shadow over everything.
-  strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH + 8, 'rgba(6,14,20,0.10)');
+  band(right, roadRight, 8, 'rgba(6,14,20,0.10)');
+  band(left, roadLeft, 8, 'rgba(6,14,20,0.10)');
+  band(right, roadRight, 0, paint.apronEdge);
+  band(left, roadLeft, 0, paint.apronEdge);
+  band(right, roadRight, -3, paint.apron);
+  band(left, roadLeft, -3, paint.apron);
 
-  strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH, paint.apronEdge);
-  strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH - 3, paint.apron);
+  // Material, or it is the one flat thing in the frame.
+  //
+  // Once the run-off is wide enough to matter, a plain fill beside a textured
+  // ground and a textured road stops reading as a surface at all — it reads as
+  // a gap where something is missing. It is made ground, so it gets the paving's
+  // own grain, laid on lightly enough that it is still plainly not the road.
+  const grain = groundTexture(ctx, paint.tile);
+  if (grain) {
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    band(right, roadRight, -3, grain);
+    band(left, roadLeft, -3, grain);
+    ctx.restore();
+  }
 
   // And the contact shadow, hugging the deck.
   strokeAlongCentre(ROAD_HALF_WIDTH + 13, 'rgba(6,14,20,0.13)');
@@ -117,6 +170,49 @@ const KERB_BLOCK = 7;
  * reach into the apron instead, and the racing surface is untouched.
  */
 const KERB_REACH = 6.5;
+
+/**
+ * Curvature with its sign kept: positive where the circuit turns one way,
+ * negative the other. The unsigned version answers "is this a corner"; this one
+ * also answers "which side is the outside of it", which is the side run-off
+ * belongs on.
+ */
+function signedCurvature(): number[] {
+  const path = pathAtOffset(0);
+  const out = new Array<number>(path.length).fill(0);
+  for (let i = 0; i < path.length; i++) {
+    const a = path[(i - 2 + path.length) % path.length];
+    const b = path[i];
+    const c = path[(i + 2) % path.length];
+    const h1 = Math.atan2(b.y - a.y, b.x - a.x);
+    const h2 = Math.atan2(c.y - b.y, c.x - b.x);
+    let delta = h2 - h1;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    out[i] = delta / (Math.hypot(c.x - a.x, c.y - a.y) || 1);
+  }
+  return out.map((_, i) => {
+    let sum = 0;
+    for (let k = -6; k <= 6; k++) sum += out[(i + k + out.length) % out.length];
+    return sum / 13;
+  });
+}
+
+/** A path whose sideways offset varies along its length. */
+function variableOffsetPath(offsets: number[]): ReturnType<typeof projectPath> {
+  const path = pathAtOffset(0);
+  const points = path.map((point, i) => {
+    const a = path[(i - 1 + path.length) % path.length];
+    const b = path[(i + 1) % path.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy) || 1;
+    // (-dy, dx) is the car's right, with screen y running downwards.
+    const offset = offsets[i % offsets.length];
+    return { x: point.x + (-dy / length) * offset, y: point.y + (dx / length) * offset };
+  });
+  return projectPath(points);
+}
 
 function centreCurvature(): number[] {
   const path = pathAtOffset(0);

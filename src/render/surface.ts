@@ -222,17 +222,20 @@ export const SURFACES: Record<string, Surface> = {
     // Night-ish tarmac yard. The ground is the same asphalt as the road, one
     // shade darker, which is what a road running across a car park looks like.
     tile: 'asphalt',
-    far: '#1B2026',
-    mid: '#2C333A',
-    near: '#3A424A',
+    // Lifted from 1B/2C/3A. The vignette takes another quarter out of the
+    // corners, and on top of a ground that dark the whole board went muddy —
+    // the props and the traffic were all reading against near-black.
+    far: '#2A3138',
+    mid: '#3C444C',
+    near: '#4C555E',
     mottle: 0.7,
     drift: [],
     afloat: false,
     life: 'none',
     road: {
       tile: 'asphalt',
-      surface: '#4A525A',
-      alt: '#414951',
+      surface: '#5A636C',
+      alt: '#505962',
       kerb: '#C8C2B2',
       kerbFace: '#6E6A5E',
       edge: '#2A3138',
