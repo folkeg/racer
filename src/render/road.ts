@@ -17,7 +17,7 @@ import { surfaceFor } from './surface';
 import { ROAD_DEPTH, ROAD_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
 import { fillNearFaces, fillRibbon, offsetPath } from './primitives';
 import { project, projectPath, projectedHeading } from './camera';
-import { asphaltTexture } from './sprites';
+import { groundTexture } from './sprites';
 
 /** Offsets a plane path sideways, then projects it. */
 function edge(offset: number): ReturnType<typeof projectPath> {
@@ -90,11 +90,18 @@ export function drawTrack(): void {
     fillRibbon(laneOuter, laneInner, lane % 2 === 0 ? paint.surface : paint.alt);
   }
 
-  const grain = asphaltTexture(ctx);
+  // The paving's own grain, which is a different material from world to world:
+  // fine aggregate in a smooth matrix for concrete, coarse stone and patches for
+  // asphalt. Recolouring one tile gets a road that is a different colour;
+  // changing the tile gets a road that is a different thing.
+  const grain = groundTexture(ctx, paint.tile);
   if (grain) fillRibbon(outerRoad, innerRoad, grain);
 
   drawSlabVariation(outerRoad, innerRoad);
-  drawSlabSeams(outerRoad, innerRoad);
+  // Concrete is cast in slabs and has joints across it; asphalt is laid as a
+  // continuous mat and has none. Drawing them anyway was what kept a recoloured
+  // road reading as the same road.
+  if (paint.seams) drawSlabSeams(outerRoad, innerRoad);
   drawEdgeGrime();
   drawStartLine();
 }

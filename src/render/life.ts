@@ -1,5 +1,5 @@
 /**
- * The parts of the harbour that move.
+ * The parts of a world that move.
  *
  * Everything else in the scene — water, road, kerbs, islands — is rendered once
  * per circuit into the cached layer and blitted unchanged every frame. That is
@@ -24,6 +24,7 @@ import { trackById } from '../tracks';
 import { project } from './camera';
 import { clipToBoard, drawBoardGround, drawBoat, drawGroundSurface } from './scenery';
 import { surfaceFor } from './surface';
+import { chimneys } from './props';
 
 /** Seconds since the circuit loaded. Drives every phase below. */
 let elapsed = 0;
@@ -191,10 +192,118 @@ export function drawGroundLayer(): void {
 }
 
 /** What flies over the top of the scene rather than floating in it. */
+/**
+ * Crabs.
+ *
+ * The sand looked right and looked dead, and a ground with nothing alive on it
+ * reads as a diagram whatever material is on it. A crab is the cheapest possible
+ * answer: four pixels of body, a scuttle that stops and starts, and the sudden
+ * dart is the whole trick — the eye catches a thing that was still and then was
+ * not far better than it catches anything moving steadily.
+ *
+ * They run in bursts on their own clocks, between two points they keep coming
+ * back to, so no crab ever wanders off the board or needs to be put back.
+ */
+const CRABS = 9;
+
+function drawCrabs(): void {
+  for (let i = 0; i < CRABS; i++) {
+    const p = phase(i * 3 + 5);
+    const q = phase(i * 7 + 11);
+    // A home patch, well clear of the middle where the circuit usually is.
+    const homeX = 18 + ((p / (Math.PI * 2)) * 354);
+    const homeY = 90 + ((q / (Math.PI * 2)) * 560);
+
+    // Bursts: mostly still, then a quick dash and a stop.
+    const period = 5.5 + (i % 4) * 1.7;
+    const t = ((elapsed + i * 2.3) % period) / period;
+    const dash = t < 0.22 ? Math.sin((t / 0.22) * Math.PI) : 0;
+    const heading = p + Math.floor((elapsed + i * 2.3) / period) * 2.4;
+    const reach = 26;
+
+    const x = homeX + Math.cos(heading) * reach * dash;
+    const y = homeY + Math.sin(heading) * reach * dash * 0.6;
+    const point = project(x, y);
+    const size = 1.15 * point.scale;
+    // Legs scrabble only while it is moving.
+    const scrabble = dash > 0.02 ? Math.sin(elapsed * 34 + i) * 1.1 : 0;
+
+    ctx.save();
+    ctx.translate(point.x, point.y);
+    ctx.fillStyle = 'rgba(70,50,28,0.34)';
+    ctx.beginPath();
+    ctx.ellipse(1.2, 1.6, 3.4 * size, 2 * size, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#8A4A2E';
+    ctx.lineWidth = 0.9 * size;
+    ctx.lineCap = 'round';
+    for (const side of [-1, 1]) {
+      for (let leg = -1; leg <= 1; leg++) {
+        ctx.beginPath();
+        ctx.moveTo(0, leg * 1.1 * size);
+        ctx.lineTo(side * (3.4 + scrabble) * size, leg * 2.4 * size + scrabble * 0.4);
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = '#B4593A';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 3 * size, 2.2 * size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#D4785A';
+    ctx.beginPath();
+    ctx.ellipse(-0.6 * size, -0.6 * size, 1.6 * size, 1 * size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+/**
+ * Smoke.
+ *
+ * Plumes rise from whatever chimneys the prop scatter put down, lean with an
+ * imagined wind, spread and fade. Each puff is one circle; the plume is a dozen
+ * of them at staggered ages, which is enough because smoke has no edges to get
+ * wrong.
+ */
+const PUFFS = 11;
+
+function drawSmoke(): void {
+  for (const [index, stack] of chimneys().entries()) {
+    // The lip of the stack, in the same units the prop was drawn at.
+    const base = project(stack.x, stack.y);
+    const lip = { x: base.x + 4.2 * stack.size * base.scale, y: base.y - 21 * stack.size * base.scale };
+    const seed = phase(index * 13 + 3);
+
+    for (let i = 0; i < PUFFS; i++) {
+      const age = ((elapsed * 0.34 + i / PUFFS + seed) % 1);
+      const rise = age * 46 * stack.size * base.scale;
+      const lean = age * age * 26 * stack.size * base.scale;
+      const radius = (2.4 + age * 9) * stack.size * base.scale;
+      const alpha = 0.30 * (1 - age) * Math.min(1, age * 6);
+      if (alpha <= 0.004) continue;
+      ctx.fillStyle = `rgba(206,201,192,${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(
+        lip.x + lean + Math.sin(age * 7 + seed) * 2.4 * base.scale,
+        lip.y - rise,
+        radius,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    }
+  }
+}
+
+/** What moves above the ground rather than on it. */
 export function drawLivingWater(): void {
-  if (!surfaceFor(activeTrackId).afloat) return;
+  const life = surfaceFor(activeTrackId).life;
+  if (life === 'none') return;
   ctx.save();
   clipToBoard();
-  drawGulls();
+  if (life === 'harbour') drawGulls();
+  else if (life === 'crabs') drawCrabs();
+  else if (life === 'smoke') drawSmoke();
   ctx.restore();
 }

@@ -20,7 +20,12 @@
 
 import type { TrackId } from '../tracks';
 
-export type GroundTile = 'water' | 'sand' | 'concrete';
+export type GroundTile = 'water' | 'sand' | 'concrete' | 'asphalt' | 'grass';
+
+/** What kind of thing stands about on this world's open ground. */
+export type PropKind =
+  | 'rock' | 'tuft' | 'parasol' | 'cone' | 'tyres' | 'drum'
+  | 'barrier' | 'lamp' | 'tree' | 'bush' | 'chimney';
 
 export interface Surface {
   /** The baked tile covering the ground the circuit stands on. */
@@ -40,8 +45,19 @@ export interface Surface {
   drift: Array<[number, number, number]>;
   /** Whether boats, buoys and gulls belong here. Only a sea has them. */
   afloat: boolean;
+  /**
+   * What moves about on this world besides the traffic.
+   *
+   * Every world needs something alive in it or it reads as a diagram, and what
+   * that something is says more about the place than any amount of texture: the
+   * harbour has boats and gulls, the beach has crabs bolting across the sand,
+   * the works yard has chimneys going. Same job, different animal.
+   */
+  life: 'harbour' | 'crabs' | 'smoke' | 'none';
   /** The paving. */
   road: {
+    /** Which baked tile the surface grain comes from. */
+    tile: GroundTile;
     surface: string;
     /** Every other lane, so five lanes read as five. */
     alt: string;
@@ -51,7 +67,18 @@ export interface Surface {
     /** The deck's side wall and the line where it meets the ground. */
     wall: string;
     waterline: string;
+    /**
+     * Transverse joints across the paving.
+     *
+     * Concrete is cast in slabs and has them; asphalt is laid in a continuous
+     * mat and does not. Drawing them on asphalt was the thing that made a
+     * recoloured road still read as the same road.
+     */
+    seams: boolean;
   };
+  /** What stands about on the open ground, and how densely. */
+  props: PropKind[];
+  propDensity: number;
 }
 
 export const SURFACES: Record<string, Surface> = {
@@ -63,15 +90,20 @@ export const SURFACES: Record<string, Surface> = {
     mottle: 1,
     drift: [[4.2, 2.2, 0.34], [-2.6, 3.6, 0.18]],
     afloat: true,
+    life: 'harbour',
     road: {
+      tile: 'concrete',
       surface: '#D9D9D2',
       alt: '#C4C4BC',
       kerb: '#CFCABC',
       kerbFace: '#8A8478',
       edge: '#B9B9B1',
       wall: '#161F28',
-      waterline: 'rgba(232,244,248,0.8)'
-    }
+      waterline: 'rgba(232,244,248,0.8)',
+      seams: true
+    },
+    props: [],
+    propDensity: 0
   },
 
   beach: {
@@ -85,25 +117,105 @@ export const SURFACES: Record<string, Surface> = {
     mottle: 0.55,
     drift: [[0, 0, 0.42]],
     afloat: false,
+    life: 'crabs',
     road: {
       // Sun-bleached concrete, warmer than the harbour's and lighter against
       // the sand it sits on.
+      tile: 'concrete',
       surface: '#EFE7D2',
       alt: '#DED4BC',
       kerb: '#E7DCC2',
       kerbFace: '#A3957A',
       edge: '#CFC3A6',
       wall: '#3A3226',
-      waterline: 'rgba(255,248,228,0.7)'
-    }
+      waterline: 'rgba(255,248,228,0.7)',
+      seams: true
+    },
+    props: ['rock', 'tuft', 'parasol'],
+    propDensity: 1
+  },
+
+  city: {
+    // Night-ish tarmac yard. The ground is the same asphalt as the road, one
+    // shade darker, which is what a road running across a car park looks like.
+    tile: 'asphalt',
+    far: '#1B2026',
+    mid: '#2C333A',
+    near: '#3A424A',
+    mottle: 0.7,
+    drift: [],
+    afloat: false,
+    life: 'none',
+    road: {
+      tile: 'asphalt',
+      surface: '#4A525A',
+      alt: '#414951',
+      kerb: '#C8C2B2',
+      kerbFace: '#6E6A5E',
+      edge: '#2A3138',
+      wall: '#10151A',
+      waterline: 'rgba(150,170,186,0.35)',
+      seams: false
+    },
+    props: ['barrier', 'lamp', 'cone'],
+    propDensity: 1.1
+  },
+
+  industrial: {
+    // A works yard: stained concrete, rust, and nothing growing.
+    tile: 'concrete',
+    far: '#3E3B36',
+    mid: '#5E5A51',
+    near: '#767162',
+    mottle: 1.2,
+    drift: [],
+    afloat: false,
+    life: 'smoke',
+    road: {
+      tile: 'asphalt',
+      surface: '#6B6459',
+      alt: '#5F5950',
+      kerb: '#C2B58E',
+      kerbFace: '#7A6A4C',
+      edge: '#4A453D',
+      wall: '#221F1A',
+      waterline: 'rgba(196,186,160,0.4)',
+      seams: false
+    },
+    props: ['drum', 'tyres', 'cone', 'chimney'],
+    propDensity: 1.3
+  },
+
+  meadow: {
+    tile: 'grass',
+    far: '#3E5A33',
+    mid: '#5E7F45',
+    near: '#79995A',
+    mottle: 0.8,
+    drift: [],
+    afloat: false,
+    life: 'none',
+    road: {
+      tile: 'concrete',
+      surface: '#CFCBBE',
+      alt: '#BCB8AB',
+      kerb: '#D6D2C4',
+      kerbFace: '#83806F',
+      edge: '#9E9B8C',
+      wall: '#22281C',
+      waterline: 'rgba(214,226,196,0.4)',
+      seams: true
+    },
+    props: ['tree', 'bush', 'rock'],
+    propDensity: 1
   }
 };
 
 /** Which world each circuit is laid in. */
 const TRACK_SURFACE: Record<TrackId, string> = {
   'long-bay': 'harbour',
-  'grand-oval': 'harbour',
-  'tide-drop': 'harbour',
+  'grand-oval': 'city',
+  'tide-drop': 'industrial',
   'half-moon': 'beach'
 };
 

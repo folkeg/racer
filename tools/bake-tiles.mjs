@@ -185,6 +185,29 @@ function sand(size) {
   });
 }
 
+/**
+ * Asphalt: coarse, and not concrete.
+ *
+ * Recolouring the concrete tile dark gets most of the way to a city road, but
+ * not all of it — poured concrete is fine aggregate in a smooth matrix, and
+ * asphalt is coarse stone in bitumen with patches where it has been cut and
+ * filled. The difference is in the size of the grain and in the low-frequency
+ * blotching, and both are cheap to ask for.
+ */
+function asphalt(size) {
+  const patch = noise(size, 6, 6, 29);
+  const coarse = noise(size, 64, 64, 67);
+  const stone = noise(size, 160, 160, 109);
+  const fine = noise(size, 256, 256, 151);
+  const h = new Float32Array(size * size);
+  for (let i = 0; i < h.length; i++) {
+    h[i] = 0.22 * patch[i] + 0.34 * coarse[i] + 0.30 * stone[i] + 0.14 * fine[i];
+  }
+  return shade(size, h, {
+    gain: 34, hi: [255, 250, 238], lo: [16, 14, 12], hiAlpha: 78, loAlpha: 92, hiPower: 1.2, loPower: 1.2
+  });
+}
+
 // --- PNG ------------------------------------------------------------------
 const CRC = (() => {
   const t = new Int32Array(256);
@@ -227,7 +250,7 @@ function writePng(path, size, rgba) {
 const out = process.argv[2] || 'assets';
 // Water is seen largest, so it is worth the most pixels; the other two are
 // never seen at anything like this scale.
-for (const [name, size, make] of [['water', 512, water], ['sand', 512, sand], ['concrete', 256, concrete], ['grass', 256, grass]]) {
+for (const [name, size, make] of [['water', 512, water], ['sand', 512, sand], ['concrete', 256, concrete], ['asphalt', 256, asphalt], ['grass', 256, grass]]) {
   const path = `${out}/${name}-tile.png`;
   const bytes = writePng(path, size, make(size));
   console.log(`${path}  ${size}x${size}  ${(bytes / 1024).toFixed(0)}KB`);

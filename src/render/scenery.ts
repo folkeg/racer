@@ -6,6 +6,7 @@ import { COLORS } from '../theme';
 import { activeTrackId } from '../track';
 import { grassTexture, groundTexture, groundTileSize } from './sprites';
 import { surfaceFor } from './surface';
+import { drawProps } from './props';
 import { activeTrackId as currentTrack } from '../track';
 import { trackById } from '../tracks';
 import { project } from './camera';
@@ -13,7 +14,7 @@ import { ISLAND_DEPTH, ISLAND_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
 import { fillNearFaces, fillRibbon } from './primitives';
 import type { Vec2 } from '../types';
 
-function drawTree(x: number, y: number, size = 1): void {
+export function drawTree(x: number, y: number, size = 1): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = 'rgba(13,35,30,0.22)';
@@ -74,7 +75,7 @@ export function drawBoat(x: number, y: number, size: number, angle: number): voi
   ctx.restore();
 }
 
-function drawUmbrella(x: number, y: number, size = 1): void {
+export function drawUmbrella(x: number, y: number, size = 1): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = 'rgba(7,21,28,0.20)';
@@ -493,7 +494,7 @@ function drawIsland(x: number, y: number, w: number, h: number, index: number): 
 }
 
 /** A low shrub. Cheaper than a tree and breaks up a field of them. */
-function drawBush(x: number, y: number, size = 1): void {
+export function drawBush(x: number, y: number, size = 1): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = 'rgba(13,35,30,0.20)';
@@ -529,9 +530,12 @@ export function drawBackground(): void {
   for (const [x, y, w, h, seed] of decor.rocks) drawRocks(x, y, w, h, seed);
   for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
   for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
+
+  // Whatever stands about on this world's open ground.
+  drawProps();
   for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
   // Boats and buoys are deliberately absent here. They are the only decor that
-  // ought to move, so they are drawn per frame by livingWater.ts instead of
+  // ought to move, so they are drawn per frame by life.ts instead of
   // being baked into a layer that is rendered once and never touched again.
 
   drawVignette();

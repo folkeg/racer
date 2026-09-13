@@ -282,7 +282,9 @@ export const WATER_TILE = 128;
  * a whole so its waves want to be large, while the deck and the grass are only
  * ever seen in strips a few tens of units across and want fine detail.
  */
-const ART_TILE_SIZE: Record<string, number> = { water: 256, sand: 232, concrete: 128, grass: 96 };
+const ART_TILE_SIZE: Record<string, number> = {
+  water: 256, sand: 232, concrete: 128, asphalt: 128, grass: 96
+};
 const artPatterns: Record<string, CanvasPattern | null> = {};
 
 function paintedPattern(

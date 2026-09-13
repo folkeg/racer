@@ -690,12 +690,12 @@ var HarborLoop = (() => {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   }
   function hashSeed(text) {
-    let hash = 2166136261;
+    let hash2 = 2166136261;
     for (let i = 0; i < text.length; i++) {
-      hash ^= text.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
+      hash2 ^= text.charCodeAt(i);
+      hash2 = Math.imul(hash2, 16777619);
     }
-    return hash >>> 0;
+    return hash2 >>> 0;
   }
 
   // src/state.ts
@@ -2829,8 +2829,8 @@ var HarborLoop = (() => {
   }
   function globalBoard(modeId, difficulty, day = "") {
     const key2 = boardKey(modeId, difficulty, day);
-    const cached = boards.get(key2);
-    if (cached) return cached;
+    const cached2 = boards.get(key2);
+    if (cached2) return cached2;
     const board = {
       rows: [],
       selfRank: null,
@@ -3194,9 +3194,6 @@ var HarborLoop = (() => {
   function waterArt() {
     return loaded.water;
   }
-  function concreteArt() {
-    return loaded.concrete;
-  }
   function grassArt() {
     return loaded.grass;
   }
@@ -3330,48 +3327,22 @@ var HarborLoop = (() => {
   }
   var cache2 = /* @__PURE__ */ new Map();
   function vehicleSprite(key2, style) {
-    const cached = cache2.get(key2);
-    if (cached !== void 0) return cached;
+    const cached2 = cache2.get(key2);
+    if (cached2 !== void 0) return cached2;
     const image = build((ctx2) => paintCar(ctx2, style));
-    const shadow = build(paintShadow);
-    const sprite = image && shadow ? { image, shadow } : null;
+    const shadow2 = build(paintShadow);
+    const sprite = image && shadow2 ? { image, shadow: shadow2 } : null;
     cache2.set(key2, sprite);
     return sprite;
   }
-  var ASPHALT_TILE = 96;
-  var asphaltPattern = null;
-  var asphaltTried = false;
-  function asphaltTexture(target) {
-    const painted = paintedPattern(target, "concrete", concreteArt());
-    if (painted) return painted;
-    if (asphaltTried) return asphaltPattern;
-    asphaltTried = true;
-    const canvas2 = createOffscreenCanvas(ASPHALT_TILE, ASPHALT_TILE);
-    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
-    if (!canvas2 || !ctx2) return null;
-    ctx2.clearRect(0, 0, ASPHALT_TILE, ASPHALT_TILE);
-    for (let i = 0; i < 1400; i++) {
-      const x = Math.random() * ASPHALT_TILE;
-      const y = Math.random() * ASPHALT_TILE;
-      const light = Math.random() < 0.5;
-      ctx2.fillStyle = light ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.06)";
-      ctx2.fillRect(x, y, 1, 1);
-    }
-    for (let i = 0; i < 180; i++) {
-      const x = Math.random() * ASPHALT_TILE;
-      const y = Math.random() * ASPHALT_TILE;
-      ctx2.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.07)";
-      ctx2.fillRect(x, y, 2, 2);
-    }
-    try {
-      asphaltPattern = target.createPattern(canvas2, "repeat");
-    } catch (error) {
-      asphaltPattern = null;
-    }
-    return asphaltPattern;
-  }
   var WATER_TILE = 128;
-  var ART_TILE_SIZE = { water: 256, sand: 232, concrete: 128, grass: 96 };
+  var ART_TILE_SIZE = {
+    water: 256,
+    sand: 232,
+    concrete: 128,
+    asphalt: 128,
+    grass: 96
+  };
   var artPatterns = {};
   function paintedPattern(target, name, image) {
     var _a;
@@ -3489,15 +3460,20 @@ var HarborLoop = (() => {
       mottle: 1,
       drift: [[4.2, 2.2, 0.34], [-2.6, 3.6, 0.18]],
       afloat: true,
+      life: "harbour",
       road: {
+        tile: "concrete",
         surface: "#D9D9D2",
         alt: "#C4C4BC",
         kerb: "#CFCABC",
         kerbFace: "#8A8478",
         edge: "#B9B9B1",
         wall: "#161F28",
-        waterline: "rgba(232,244,248,0.8)"
-      }
+        waterline: "rgba(232,244,248,0.8)",
+        seams: true
+      },
+      props: [],
+      propDensity: 0
     },
     beach: {
       // Wind ripples fall out of the same wave field as water with different
@@ -3510,28 +3486,306 @@ var HarborLoop = (() => {
       mottle: 0.55,
       drift: [[0, 0, 0.42]],
       afloat: false,
+      life: "crabs",
       road: {
         // Sun-bleached concrete, warmer than the harbour's and lighter against
         // the sand it sits on.
+        tile: "concrete",
         surface: "#EFE7D2",
         alt: "#DED4BC",
         kerb: "#E7DCC2",
         kerbFace: "#A3957A",
         edge: "#CFC3A6",
         wall: "#3A3226",
-        waterline: "rgba(255,248,228,0.7)"
-      }
+        waterline: "rgba(255,248,228,0.7)",
+        seams: true
+      },
+      props: ["rock", "tuft", "parasol"],
+      propDensity: 1
+    },
+    city: {
+      // Night-ish tarmac yard. The ground is the same asphalt as the road, one
+      // shade darker, which is what a road running across a car park looks like.
+      tile: "asphalt",
+      far: "#1B2026",
+      mid: "#2C333A",
+      near: "#3A424A",
+      mottle: 0.7,
+      drift: [],
+      afloat: false,
+      life: "none",
+      road: {
+        tile: "asphalt",
+        surface: "#4A525A",
+        alt: "#414951",
+        kerb: "#C8C2B2",
+        kerbFace: "#6E6A5E",
+        edge: "#2A3138",
+        wall: "#10151A",
+        waterline: "rgba(150,170,186,0.35)",
+        seams: false
+      },
+      props: ["barrier", "lamp", "cone"],
+      propDensity: 1.1
+    },
+    industrial: {
+      // A works yard: stained concrete, rust, and nothing growing.
+      tile: "concrete",
+      far: "#3E3B36",
+      mid: "#5E5A51",
+      near: "#767162",
+      mottle: 1.2,
+      drift: [],
+      afloat: false,
+      life: "smoke",
+      road: {
+        tile: "asphalt",
+        surface: "#6B6459",
+        alt: "#5F5950",
+        kerb: "#C2B58E",
+        kerbFace: "#7A6A4C",
+        edge: "#4A453D",
+        wall: "#221F1A",
+        waterline: "rgba(196,186,160,0.4)",
+        seams: false
+      },
+      props: ["drum", "tyres", "cone", "chimney"],
+      propDensity: 1.3
+    },
+    meadow: {
+      tile: "grass",
+      far: "#3E5A33",
+      mid: "#5E7F45",
+      near: "#79995A",
+      mottle: 0.8,
+      drift: [],
+      afloat: false,
+      life: "none",
+      road: {
+        tile: "concrete",
+        surface: "#CFCBBE",
+        alt: "#BCB8AB",
+        kerb: "#D6D2C4",
+        kerbFace: "#83806F",
+        edge: "#9E9B8C",
+        wall: "#22281C",
+        waterline: "rgba(214,226,196,0.4)",
+        seams: true
+      },
+      props: ["tree", "bush", "rock"],
+      propDensity: 1
     }
   };
   var TRACK_SURFACE = {
     "long-bay": "harbour",
-    "grand-oval": "harbour",
-    "tide-drop": "harbour",
+    "grand-oval": "city",
+    "tide-drop": "industrial",
     "half-moon": "beach"
   };
   function surfaceFor(track) {
     var _a;
     return (_a = SURFACES[TRACK_SURFACE[track]]) != null ? _a : SURFACES.harbour;
+  }
+
+  // src/render/props.ts
+  var ROAD_CLEARANCE = ROAD_HALF_WIDTH + 16;
+  var EDGE_MARGIN = 14;
+  var SPACING = 34;
+  var cachedTrack = null;
+  var cached = [];
+  function hash(n) {
+    const raw = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return raw - Math.floor(raw);
+  }
+  function buildProps(track) {
+    const surface = surfaceFor(track);
+    if (surface.props.length === 0) return [];
+    const centre = pathAtOffset(0);
+    const medians = trackById(track).decor.medians;
+    const free = [];
+    for (let y = BOARD_TOP + EDGE_MARGIN; y < BOARD_BOTTOM - EDGE_MARGIN; y += 15) {
+      for (let x = EDGE_MARGIN; x < 390 - EDGE_MARGIN; x += 15) {
+        let ok = true;
+        for (let i = 0; i < centre.length && ok; i += 6) {
+          const dx = centre[i].x - x;
+          const dy = centre[i].y - y;
+          if (dx * dx + dy * dy < ROAD_CLEARANCE * ROAD_CLEARANCE) ok = false;
+        }
+        if (!ok) continue;
+        for (const [mx, my, mw, mh] of medians) {
+          if (x > mx - 10 && x < mx + mw + 10 && y > my - 10 && y < my + mh + 10) ok = false;
+        }
+        if (ok) free.push({ x, y });
+      }
+    }
+    if (free.length === 0) return [];
+    const wanted = Math.min(free.length, Math.round(free.length * 0.045 * surface.propDensity));
+    const props = [];
+    const taken = /* @__PURE__ */ new Set();
+    for (let n = 0; props.length < wanted && n < wanted * 40; n++) {
+      const index = Math.floor(hash(n * 3.7 + 1) * free.length);
+      if (taken.has(index)) continue;
+      taken.add(index);
+      const spot = free[index];
+      let crowded = false;
+      for (const other of props) {
+        const dx = other.x - spot.x;
+        const dy = other.y - spot.y;
+        if (dx * dx + dy * dy < SPACING * SPACING) {
+          crowded = true;
+          break;
+        }
+      }
+      if (crowded) continue;
+      const roll = hash(index * 5.3 + 2);
+      props.push({
+        // Jittered off the grid, or the scatter reads as a lattice.
+        x: spot.x + (hash(index) - 0.5) * 11,
+        y: spot.y + (hash(index * 2.1) - 0.5) * 11,
+        kind: surface.props[Math.floor(roll * surface.props.length) % surface.props.length],
+        size: 0.8 + hash(index * 7.9) * 0.5
+      });
+    }
+    props.sort((a, b) => a.y - b.y);
+    return props;
+  }
+  function propsForTrack() {
+    if (cachedTrack !== activeTrackId) {
+      cached = buildProps(activeTrackId);
+      cachedTrack = activeTrackId;
+    }
+    return cached;
+  }
+  function chimneys() {
+    return propsForTrack().filter((prop) => prop.kind === "chimney");
+  }
+  function shadow(x, y, w, h) {
+    ctx.fillStyle = "rgba(12,18,24,0.30)";
+    ctx.beginPath();
+    ctx.ellipse(x + SHADOW_X * 2.5, y + SHADOW_Y * 2.5, w, h, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function drawProp(prop) {
+    const p = project(prop.x, prop.y);
+    const s = prop.size * p.scale;
+    const x = p.x;
+    const y = p.y;
+    switch (prop.kind) {
+      case "rock": {
+        shadow(x, y + 1.5 * s, 5.5 * s, 3 * s);
+        ctx.fillStyle = "#6E6A60";
+        ctx.beginPath();
+        ctx.ellipse(x, y, 5 * s, 3.6 * s, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#918C7E";
+        ctx.beginPath();
+        ctx.ellipse(x - 1.1 * s, y - 1.1 * s, 3 * s, 2 * s, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "tuft": {
+        ctx.strokeStyle = "#9C8F63";
+        ctx.lineWidth = 1 * s;
+        ctx.lineCap = "round";
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.moveTo(x + i * 1.3 * s, y + 1.5 * s);
+          ctx.lineTo(x + i * 2.4 * s, y - 3.4 * s);
+          ctx.stroke();
+        }
+        break;
+      }
+      case "parasol":
+        drawUmbrella(x, y, 0.42 * s);
+        break;
+      case "tree":
+        drawTree(x, y, 0.42 * s);
+        break;
+      case "bush":
+        drawBush(x, y, 0.42 * s);
+        break;
+      case "cone": {
+        shadow(x, y + 1.5 * s, 3.6 * s, 1.8 * s);
+        ctx.fillStyle = "#D9622B";
+        ctx.beginPath();
+        ctx.moveTo(x, y - 6 * s);
+        ctx.lineTo(x + 3.2 * s, y + 1.6 * s);
+        ctx.lineTo(x - 3.2 * s, y + 1.6 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.fillRect(x - 2.1 * s, y - 2.4 * s, 4.2 * s, 1.5 * s);
+        break;
+      }
+      case "tyres": {
+        shadow(x, y + 1.5 * s, 4.6 * s, 2.4 * s);
+        for (let i = 2; i >= 0; i--) {
+          ctx.fillStyle = i === 0 ? "#3A3A3C" : "#2A2A2C";
+          ctx.beginPath();
+          ctx.ellipse(x, y - i * 2.2 * s, 4.2 * s, 2.6 * s, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = "#4E4E52";
+        ctx.beginPath();
+        ctx.ellipse(x, y - 4.4 * s, 1.8 * s, 1.1 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "drum": {
+        shadow(x, y + 1.5 * s, 3.4 * s, 1.8 * s);
+        ctx.fillStyle = "#7C5230";
+        ctx.fillRect(x - 3 * s, y - 6 * s, 6 * s, 7.5 * s);
+        ctx.fillStyle = "#A8703F";
+        ctx.fillRect(x - 3 * s, y - 6 * s, 2.4 * s, 7.5 * s);
+        ctx.fillStyle = "#C89A5E";
+        ctx.beginPath();
+        ctx.ellipse(x, y - 6 * s, 3 * s, 1.5 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "barrier": {
+        shadow(x, y + 1.2 * s, 6 * s, 2 * s);
+        for (let i = 0; i < 4; i++) {
+          ctx.fillStyle = i % 2 === 0 ? "#C6362E" : "#E8E4DA";
+          ctx.fillRect(x - 6 * s + i * 3 * s, y - 3.4 * s, 3 * s, 4.6 * s);
+        }
+        ctx.fillStyle = "rgba(255,252,244,0.30)";
+        ctx.fillRect(x - 6 * s, y - 3.4 * s, 12 * s, 1 * s);
+        break;
+      }
+      case "lamp": {
+        shadow(x, y + 1 * s, 2 * s, 1.2 * s);
+        ctx.fillStyle = "#3C444C";
+        ctx.fillRect(x - 0.9 * s, y - 13 * s, 1.8 * s, 14 * s);
+        ctx.fillStyle = "#5A646E";
+        ctx.fillRect(x - 3.4 * s, y - 14.4 * s, 6.8 * s, 2 * s);
+        const pool2 = ctx.createRadialGradient(x, y + 2 * s, 0, x, y + 2 * s, 15 * s);
+        pool2.addColorStop(0, "rgba(255,226,158,0.22)");
+        pool2.addColorStop(1, "rgba(255,226,158,0)");
+        ctx.fillStyle = pool2;
+        ctx.beginPath();
+        ctx.ellipse(x, y + 2 * s, 15 * s, 9 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "chimney": {
+        shadow(x, y + 2 * s, 8 * s, 3.4 * s);
+        ctx.fillStyle = "#4E4A42";
+        ctx.fillRect(x - 8 * s, y - 7 * s, 16 * s, 8.5 * s);
+        ctx.fillStyle = "#5E5A50";
+        ctx.fillRect(x - 8 * s, y - 7 * s, 16 * s, 2.4 * s);
+        ctx.fillStyle = "#6A6258";
+        ctx.fillRect(x + 2 * s, y - 21 * s, 4.4 * s, 15 * s);
+        ctx.fillStyle = "#8A8074";
+        ctx.fillRect(x + 2 * s, y - 21 * s, 1.6 * s, 15 * s);
+        ctx.fillStyle = "#B4553C";
+        ctx.fillRect(x + 2 * s, y - 21 * s, 4.4 * s, 1.8 * s);
+        break;
+      }
+    }
+  }
+  function drawProps() {
+    for (const prop of propsForTrack()) drawProp(prop);
   }
 
   // src/render/primitives.ts
@@ -3967,6 +4221,7 @@ var HarborLoop = (() => {
     for (const [x, y, w, h, seed] of decor.rocks) drawRocks(x, y, w, h, seed);
     for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
     for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
+    drawProps();
     for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
     drawVignette();
   }
@@ -4013,7 +4268,7 @@ var HarborLoop = (() => {
     ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
   }
 
-  // src/render/livingWater.ts
+  // src/render/life.ts
   var elapsed = 0;
   function phase(index) {
     const raw = Math.sin(index * 12.9898) * 43758.5453;
@@ -4111,11 +4366,85 @@ var HarborLoop = (() => {
     });
     ctx.restore();
   }
+  var CRABS = 9;
+  function drawCrabs() {
+    for (let i = 0; i < CRABS; i++) {
+      const p = phase(i * 3 + 5);
+      const q = phase(i * 7 + 11);
+      const homeX = 18 + p / (Math.PI * 2) * 354;
+      const homeY = 90 + q / (Math.PI * 2) * 560;
+      const period = 5.5 + i % 4 * 1.7;
+      const t = (elapsed + i * 2.3) % period / period;
+      const dash = t < 0.22 ? Math.sin(t / 0.22 * Math.PI) : 0;
+      const heading = p + Math.floor((elapsed + i * 2.3) / period) * 2.4;
+      const reach = 26;
+      const x = homeX + Math.cos(heading) * reach * dash;
+      const y = homeY + Math.sin(heading) * reach * dash * 0.6;
+      const point = project(x, y);
+      const size = 1.15 * point.scale;
+      const scrabble = dash > 0.02 ? Math.sin(elapsed * 34 + i) * 1.1 : 0;
+      ctx.save();
+      ctx.translate(point.x, point.y);
+      ctx.fillStyle = "rgba(70,50,28,0.34)";
+      ctx.beginPath();
+      ctx.ellipse(1.2, 1.6, 3.4 * size, 2 * size, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#8A4A2E";
+      ctx.lineWidth = 0.9 * size;
+      ctx.lineCap = "round";
+      for (const side of [-1, 1]) {
+        for (let leg = -1; leg <= 1; leg++) {
+          ctx.beginPath();
+          ctx.moveTo(0, leg * 1.1 * size);
+          ctx.lineTo(side * (3.4 + scrabble) * size, leg * 2.4 * size + scrabble * 0.4);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = "#B4593A";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 3 * size, 2.2 * size, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#D4785A";
+      ctx.beginPath();
+      ctx.ellipse(-0.6 * size, -0.6 * size, 1.6 * size, 1 * size, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  var PUFFS = 11;
+  function drawSmoke() {
+    for (const [index, stack] of chimneys().entries()) {
+      const base = project(stack.x, stack.y);
+      const lip = { x: base.x + 4.2 * stack.size * base.scale, y: base.y - 21 * stack.size * base.scale };
+      const seed = phase(index * 13 + 3);
+      for (let i = 0; i < PUFFS; i++) {
+        const age = (elapsed * 0.34 + i / PUFFS + seed) % 1;
+        const rise = age * 46 * stack.size * base.scale;
+        const lean = age * age * 26 * stack.size * base.scale;
+        const radius = (2.4 + age * 9) * stack.size * base.scale;
+        const alpha = 0.3 * (1 - age) * Math.min(1, age * 6);
+        if (alpha <= 4e-3) continue;
+        ctx.fillStyle = `rgba(206,201,192,${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(
+          lip.x + lean + Math.sin(age * 7 + seed) * 2.4 * base.scale,
+          lip.y - rise,
+          radius,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+  }
   function drawLivingWater() {
-    if (!surfaceFor(activeTrackId).afloat) return;
+    const life = surfaceFor(activeTrackId).life;
+    if (life === "none") return;
     ctx.save();
     clipToBoard();
-    drawGulls();
+    if (life === "harbour") drawGulls();
+    else if (life === "crabs") drawCrabs();
+    else if (life === "smoke") drawSmoke();
     ctx.restore();
   }
 
@@ -5113,8 +5442,8 @@ var HarborLoop = (() => {
   var BACK = { x: MARGIN3, y: DESIGN_H - 84, w: DESIGN_W - MARGIN3 * 2, h: 54 };
   var boundsCache = /* @__PURE__ */ new Map();
   function trackBounds(trackId) {
-    const cached = boundsCache.get(trackId);
-    if (cached) return cached;
+    const cached2 = boundsCache.get(trackId);
+    if (cached2) return cached2;
     const points = TRACKS.find((track) => track.id === trackId).build();
     let minX = Infinity;
     let minY = Infinity;
@@ -5490,10 +5819,10 @@ var HarborLoop = (() => {
       const laneInner = projectPath(pathForLane(lane + 0.5));
       fillRibbon(laneOuter, laneInner, lane % 2 === 0 ? paint.surface : paint.alt);
     }
-    const grain = asphaltTexture(ctx);
+    const grain = groundTexture(ctx, paint.tile);
     if (grain) fillRibbon(outerRoad, innerRoad, grain);
     drawSlabVariation(outerRoad, innerRoad);
-    drawSlabSeams(outerRoad, innerRoad);
+    if (paint.seams) drawSlabSeams(outerRoad, innerRoad);
     drawEdgeGrime();
     drawStartLine();
   }

@@ -11,7 +11,7 @@ import { beginOnboarding } from './onboarding';
 import { touchStreak } from './streak';
 import { clearFloaters, clearParticles } from './render/particles';
 import { resetFeel } from './feel';
-import { resetLivingWater } from './render/livingWater';
+import { resetLivingWater } from './render/life';
 import { aiCars, player, resetGame } from './state';
 import { setTrack } from './track';
 import type { TrackId } from './tracks';
