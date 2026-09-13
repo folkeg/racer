@@ -110,33 +110,41 @@ const cosPitch = Math.cos(PITCH);
 const sinPitch = Math.sin(PITCH);
 
 /**
- * How much of the perspective applies *sideways*.
+ * How much of the perspective applies *sideways*. None, now.
  *
- * Full perspective magnifies lateral distance with nearness, so two parallel
- * lines converge towards the vanishing point. That is correct, and on an
- * off-centre straight it is also the single thing that makes the board read as
- * tilted rather than as receding: Long Bay's west straight is exactly vertical
- * in the track's own geometry, and at full strength its two ends land 14.7px
- * apart — on a 390-wide screen, a visible lean, against a frame of HUD pills and
- * buttons that are all dead square.
+ * This is the end of a long argument with the evidence, and the evidence won.
  *
- * Lateral scale is therefore blended towards the scale at the middle of the
- * board. Measured on that straight:
+ * Full perspective magnifies lateral distance with nearness, so parallel lines
+ * converge towards the vanishing point. Correct — and on an off-centre straight
+ * it is also the single thing that makes the board read as tilted rather than as
+ * receding. Long Bay's west straight is exactly vertical in the track's own
+ * geometry, and at full strength its two ends landed 14.7px apart on a 390-wide
+ * screen, against a frame of HUD pills and buttons that are all dead square.
  *
- *   blend   lean    lateral near/far   car near/far
- *   1.00    14.7px      1.143             1.143
- *   0.60     8.8px      1.083             1.143
- *   0.35     5.1px      1.048             1.143
- *   0.00     0.0px      1.000             1.143
+ * The first fix was to blend it down to 0.35, which cut the lean to 5.1px. That
+ * bought a worse problem: sprites still scaled on true depth, so the road barely
+ * converged while the cars still shrank with distance. The road did not recede
+ * and the traffic on it did. An observer cannot say what is wrong with a picture
+ * like that, only that something is.
  *
- * The last column is the point. Sprites keep scaling on true depth, so cars at
- * the far end stay 14% smaller than cars at the near end whatever this is set
- * to — the depth cue that reads as 3D is carried by the things that move, not
- * by the convergence of the road. 0.35 keeps a third of the convergence, which
- * is enough to feel at the top of the frame, and drops the lean to a third of a
- * lane width across the longest straight in the game.
+ * So all three were built and looked at side by side — full, blended, and none —
+ * and the verdict on the whole spectrum was that the difference was not visible
+ * at all, except that the flat one looked straighter. Measured, that is not
+ * surprising: at this pitch the near-to-far size ratio is 1.143, so the largest
+ * effect the perspective was ever buying is fourteen percent on a car that is
+ * ten pixels long. It was never going to read, and it cost a lean and a
+ * contradiction to not read.
+ *
+ *   variant      lean     road near/far   car near/far
+ *   full        14.7px       1.143           1.143
+ *   blended      5.1px       1.048           1.143
+ *   flat         0.0px       1.000           1.000
+ *
+ * What is kept is the vertical compression: rows still bunch towards the top of
+ * the frame, so the plane still recedes. What is dropped is everything that was
+ * pretending a 10px car is at a different distance from another 10px car.
  */
-const LATERAL_PERSPECTIVE = 0.35;
+const LATERAL_PERSPECTIVE = 0;
 const MID_DEPTH = (NEAR + DESIGN_H / 2) * cosPitch + HEIGHT * sinPitch;
 const MID_SCALE = FOCAL / MID_DEPTH;
 
@@ -270,17 +278,14 @@ export function project(x: number, y: number): Projected {
   return {
     x: (SCREEN_CX + lateral * lateralScale * FIT_X) * fitScale + fitDx,
     y: -vertical * scale * FIT_Y * fitScaleY + fitDy,
-    // Sprite scale is the same magnification the road gets, so a car always
-    // covers the same share of its lane. It used to be `midBoardDepth / depth`,
-    // which carries no focal length and so is a purely relative number, and it
-    // only ever matched the road because at the original PITCH of 0.90 that
-    // depth works out to 1402 — a rounding error away from FOCAL's 1400. The
-    // coincidence broke as soon as the angle moved: by PITCH 1.50 it falls to
-    // 977, and every car had quietly shrunk to 70% of its proper size while the
-    // road around it kept growing.
-    // Sprites take one scale, so the geometric mean of the two fit axes keeps
-    // them from looking squashed when those axes differ.
-    scale: scale * Math.sqrt(FIT_X * FIT_Y) * Math.sqrt(fitScale * fitScaleY),
+    // Sprites take the same lateral scale the road does, which is now the same
+    // everywhere on the board: a car covers the same share of its lane wherever
+    // it is. Scaling them on true depth instead is what made the far traffic
+    // 14% smaller than the near traffic while the road under them stayed the
+    // same width — the contradiction that made the old camera feel off without
+    // being nameable. The geometric mean of the two fit axes keeps a sprite from
+    // looking squashed when those axes differ.
+    scale: lateralScale * Math.sqrt(FIT_X * FIT_Y) * Math.sqrt(fitScale * fitScaleY),
     depth
   };
 }

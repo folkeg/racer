@@ -245,7 +245,7 @@ var HarborLoop = (() => {
   var FIT_Y = 1.02;
   var cosPitch = Math.cos(PITCH);
   var sinPitch = Math.sin(PITCH);
-  var LATERAL_PERSPECTIVE = 0.35;
+  var LATERAL_PERSPECTIVE = 0;
   var MID_DEPTH = (NEAR + DESIGN_H / 2) * cosPitch + HEIGHT * sinPitch;
   var MID_SCALE = FOCAL / MID_DEPTH;
   var SAFE_MARGIN = 26;
@@ -300,17 +300,14 @@ var HarborLoop = (() => {
     return {
       x: (SCREEN_CX + lateral * lateralScale * FIT_X) * fitScale + fitDx,
       y: -vertical * scale2 * FIT_Y * fitScaleY + fitDy,
-      // Sprite scale is the same magnification the road gets, so a car always
-      // covers the same share of its lane. It used to be `midBoardDepth / depth`,
-      // which carries no focal length and so is a purely relative number, and it
-      // only ever matched the road because at the original PITCH of 0.90 that
-      // depth works out to 1402 — a rounding error away from FOCAL's 1400. The
-      // coincidence broke as soon as the angle moved: by PITCH 1.50 it falls to
-      // 977, and every car had quietly shrunk to 70% of its proper size while the
-      // road around it kept growing.
-      // Sprites take one scale, so the geometric mean of the two fit axes keeps
-      // them from looking squashed when those axes differ.
-      scale: scale2 * Math.sqrt(FIT_X * FIT_Y) * Math.sqrt(fitScale * fitScaleY),
+      // Sprites take the same lateral scale the road does, which is now the same
+      // everywhere on the board: a car covers the same share of its lane wherever
+      // it is. Scaling them on true depth instead is what made the far traffic
+      // 14% smaller than the near traffic while the road under them stayed the
+      // same width — the contradiction that made the old camera feel off without
+      // being nameable. The geometric mean of the two fit axes keeps a sprite from
+      // looking squashed when those axes differ.
+      scale: lateralScale * Math.sqrt(FIT_X * FIT_Y) * Math.sqrt(fitScale * fitScaleY),
       depth
     };
   }
