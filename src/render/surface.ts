@@ -258,11 +258,14 @@ export const SURFACES: Record<string, Surface> = {
       seams: false
     },
     island: {
-      rim: '#252B31',
-      beach: '#6E7680',
-      tops: ['#4E565E', '#565E66', '#464E56', '#5C646C', '#4A525A'],
-      cliff: '#1E242A',
-      shelf: '#5E666E',
+      rim: '#2E353C',
+      beach: '#7E868E',
+      // Lifted right up. At 4E/56/46 the long infield strip was the darkest
+      // thing on the board and read as a hole in it rather than as ground you
+      // could stand on.
+      tops: ['#767E86', '#6E767E', '#7E868E', '#6A727A', '#7A828A'],
+      cliff: '#242A30',
+      shelf: '#6E767E',
       planted: false
     },
     boundary: 'stand',

@@ -438,6 +438,51 @@ function fillPlanePolygon(points: Vec2[], fill: string | CanvasPattern, dx = 0, 
  * lands on the island rather than in the sea beside it — which is the failure
  * the old hand-placed tree coordinates had every time an island moved.
  */
+/**
+ * Bays across an island's long axis, wherever there is room for them.
+ *
+ * Drawn in plane space and projected, so they follow the ground rather than the
+ * screen. The stall depth is fixed at roughly a car and a half, which is what
+ * makes the scale of everything else legible: a viewer who knows how big a
+ * parking space is knows how big the island is.
+ */
+function drawParkingBays(x: number, y: number, w: number, h: number): void {
+  const alongX = w >= h;
+  const length = alongX ? w : h;
+  const depth = alongX ? h : w;
+  if (length < 46 || depth < 16) return;
+
+  const inset = depth * 0.18;
+  const pitch = 13;
+  const count = Math.floor((length - inset * 2) / pitch);
+  if (count < 3) return;
+
+  ctx.strokeStyle = 'rgba(236,232,220,0.30)';
+  ctx.lineWidth = 1.1;
+  for (let i = 1; i < count; i++) {
+    const t = inset + i * pitch;
+    const a = alongX
+      ? project(x + t, y + inset)
+      : project(x + inset, y + t);
+    const b = alongX
+      ? project(x + t, y + h - inset)
+      : project(x + w - inset, y + t);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  // The aisle down the middle, which is what stops it reading as a ladder.
+  const c = alongX ? project(x + inset, y + h / 2) : project(x + w / 2, y + inset);
+  const d = alongX ? project(x + w - inset, y + h / 2) : project(x + w / 2, y + h - inset);
+  ctx.strokeStyle = 'rgba(236,232,220,0.42)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(c.x, c.y);
+  ctx.lineTo(d.x, d.y);
+  ctx.stroke();
+}
+
 function drawIsland(x: number, y: number, w: number, h: number, index: number): void {
   const island = surfaceFor(currentTrack).island;
   const rand = seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y));
@@ -468,6 +513,14 @@ function drawIsland(x: number, y: number, w: number, h: number, index: number): 
   if (island.planted) {
     const grass = grassTexture(ctx);
     if (grass) fillPlanePolygon(outline, grass);
+  } else {
+    // An island in a built world is hardstanding, so it gets the paving's grain
+    // and the markings that say what it is for. A long unplanted lozenge with
+    // neither was the darkest, blankest shape on the city board — parking bays
+    // turn the same rectangle into somewhere cars are kept.
+    const paving = groundTexture(ctx, surfaceFor(currentTrack).road.tile);
+    if (paving) fillPlanePolygon(outline, paving);
+    drawParkingBays(x, y, w, h);
   }
 
   // Planting. Rejection-free: a point is drawn in the outline's own parameter

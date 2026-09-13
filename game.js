@@ -3564,11 +3564,14 @@ var HarborLoop = (() => {
         seams: false
       },
       island: {
-        rim: "#252B31",
-        beach: "#6E7680",
-        tops: ["#4E565E", "#565E66", "#464E56", "#5C646C", "#4A525A"],
-        cliff: "#1E242A",
-        shelf: "#5E666E",
+        rim: "#2E353C",
+        beach: "#7E868E",
+        // Lifted right up. At 4E/56/46 the long infield strip was the darkest
+        // thing on the board and read as a hole in it rather than as ground you
+        // could stand on.
+        tops: ["#767E86", "#6E767E", "#7E868E", "#6A727A", "#7A828A"],
+        cliff: "#242A30",
+        shelf: "#6E767E",
         planted: false
       },
       boundary: "stand",
@@ -3999,6 +4002,44 @@ var HarborLoop = (() => {
       ctx.restore();
     }
   }
+  function facetShade(nx, ny) {
+    const length = Math.hypot(nx, ny) || 1;
+    const lit = nx / length * -SHADOW_X + ny / length * -SHADOW_Y;
+    return (lit + 1) / 2;
+  }
+  function mixShade(base, shade2, spread) {
+    const k = 1 + (shade2 - 0.5) * spread;
+    const channel = (v) => Math.max(0, Math.min(255, Math.round(v * k)));
+    return `rgb(${channel(base[0])},${channel(base[1])},${channel(base[2])})`;
+  }
+  function pitchedRoof(x, y, radius, sides, rotation, base, spread) {
+    const corner = (i) => {
+      const angle = rotation + i / sides * Math.PI * 2;
+      return { x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius * 0.72 };
+    };
+    for (let i = 0; i < sides; i++) {
+      const a = corner(i);
+      const b = corner(i + 1);
+      const midX = (a.x + b.x) / 2 - x;
+      const midY = (a.y + b.y) / 2 - y;
+      ctx.fillStyle = mixShade(base, facetShade(midX, midY), spread);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(x, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(40,44,48,0.22)";
+    ctx.lineWidth = Math.max(0.5, radius * 0.04);
+    for (let i = 0; i < sides; i++) {
+      const a = corner(i);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  }
   function shade(x, y, w, h, alpha) {
     ctx.fillStyle = `rgba(10,16,22,${alpha})`;
     ctx.beginPath();
@@ -4012,28 +4053,55 @@ var HarborLoop = (() => {
     const y = p.y;
     switch (structure.kind) {
       case "dome": {
-        shade(x, y + r * 0.3, r * 1.05, r * 0.5, 0.34);
-        const sphere = ctx.createRadialGradient(x - r * 0.34, y - r * 0.34, r * 0.1, x, y, r);
-        sphere.addColorStop(0, "#F4F1E8");
-        sphere.addColorStop(0.65, "#CFCCC2");
-        sphere.addColorStop(1, "#96948C");
-        ctx.fillStyle = sphere;
+        shade(x, y + r * 0.26, r * 1.02, r * 0.5, 0.34);
+        ctx.fillStyle = "#6E747C";
         ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(58,72,86,0.55)";
-        ctx.lineWidth = r * 0.13;
+        const courses = 4;
+        for (let i = 0; i < courses; i++) {
+          const t = 1 - i / courses;
+          ctx.fillStyle = i % 2 === 0 ? "#C8C6BE" : "#B6B4AC";
+          ctx.beginPath();
+          ctx.ellipse(x, y - r * 0.05 * i, r * 0.94 * t, r * 0.84 * t, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = "rgba(70,76,84,0.34)";
+        ctx.lineWidth = Math.max(0.6, r * 0.035);
+        for (let i = 0; i < 12; i++) {
+          const angle = i / 12 * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(x + Math.cos(angle) * r * 0.18, y + Math.sin(angle) * r * 0.16);
+          ctx.lineTo(x + Math.cos(angle) * r * 0.92, y + Math.sin(angle) * r * 0.82);
+          ctx.stroke();
+        }
+        const gloss = ctx.createRadialGradient(
+          x - r * 0.38,
+          y - r * 0.42,
+          r * 0.05,
+          x - r * 0.2,
+          y - r * 0.2,
+          r * 0.95
+        );
+        gloss.addColorStop(0, "rgba(255,253,246,0.5)");
+        gloss.addColorStop(1, "rgba(255,253,246,0)");
+        ctx.fillStyle = gloss;
         ctx.beginPath();
-        ctx.arc(x, y, r * 1.06, 0, Math.PI * 2);
+        ctx.ellipse(x, y, r * 0.94, r * 0.84, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#8E9298";
+        ctx.beginPath();
+        ctx.ellipse(x, y - r * 0.2, r * 0.19, r * 0.16, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,252,244,0.7)";
+        ctx.beginPath();
+        ctx.ellipse(x - r * 0.04, y - r * 0.24, r * 0.11, r * 0.08, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(52,58,64,0.5)";
+        ctx.lineWidth = Math.max(1, r * 0.07);
+        ctx.beginPath();
+        ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = "rgba(108,114,120,0.9)";
-        ctx.beginPath();
-        ctx.moveTo(x - r * 0.94, y + r * 0.34);
-        ctx.lineTo(x - r * 0.94, y + r * 0.46);
-        ctx.arc(x, y + r * 0.46, r * 0.94, Math.PI, 0, true);
-        ctx.lineTo(x + r * 0.94, y + r * 0.34);
-        ctx.closePath();
-        ctx.fill();
         break;
       }
       case "hall": {
@@ -4086,22 +4154,35 @@ var HarborLoop = (() => {
         break;
       }
       case "lagoon": {
-        const pool2 = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * 1.15);
-        pool2.addColorStop(0, "#4FC3C8");
-        pool2.addColorStop(0.6, "#2E9AA6");
-        pool2.addColorStop(1, "#1E6E80");
+        const water = (scale2) => {
+          ctx.beginPath();
+          ctx.ellipse(x, y, r * 1.12 * scale2, r * 0.76 * scale2, 0.2, 0, Math.PI * 2);
+        };
         ctx.fillStyle = "#E6D6A8";
         ctx.beginPath();
         ctx.ellipse(x, y, r * 1.3, r * 0.92, 0.2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = pool2;
-        ctx.beginPath();
-        ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+        ctx.fillStyle = "#58C0C4";
+        water(1);
         ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.fillStyle = "#27889A";
+        water(0.82);
+        ctx.fill();
+        ctx.fillStyle = "#1C6C7E";
+        water(0.58);
+        ctx.fill();
+        const ripples = groundTexture(ctx, "water");
+        if (ripples) {
+          ctx.save();
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = ripples;
+          water(1);
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.strokeStyle = "rgba(255,255,255,0.4)";
         ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+        water(1);
         ctx.stroke();
         break;
       }
@@ -4148,27 +4229,21 @@ var HarborLoop = (() => {
         break;
       }
       case "pavilion": {
-        const tents = 5;
-        for (let i = 0; i < tents; i++) {
-          const angle = i / tents * Math.PI * 2 + 0.6;
-          const tx = x + Math.cos(angle) * r * 0.62;
-          const ty = y + Math.sin(angle) * r * 0.38;
-          const size = r * 0.36;
-          shade(tx, ty + size * 0.4, size * 0.7, size * 0.34, 0.28);
-          ctx.fillStyle = "#E8E4DA";
-          ctx.beginPath();
-          ctx.moveTo(tx, ty - size);
-          ctx.lineTo(tx + size * 0.8, ty + size * 0.5);
-          ctx.lineTo(tx - size * 0.8, ty + size * 0.5);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = "rgba(120,126,132,0.45)";
-          ctx.beginPath();
-          ctx.moveTo(tx, ty - size);
-          ctx.lineTo(tx + size * 0.8, ty + size * 0.5);
-          ctx.lineTo(tx, ty + size * 0.5);
-          ctx.closePath();
-          ctx.fill();
+        const size = r * 0.3;
+        const stepX = size * 2.5;
+        const stepY = size * 1.7;
+        const rows = [
+          [-1, -1],
+          [0, -1],
+          [1, -1],
+          [-0.5, 0.45],
+          [0.5, 0.45]
+        ];
+        for (const [cx, cy] of rows) {
+          const tx = x + cx * stepX;
+          const ty = y + cy * stepY;
+          shade(tx, ty + size * 0.42, size * 0.58, size * 0.26, 0.26);
+          pitchedRoof(tx, ty - size * 0.18, size, 4, Math.PI / 4, [236, 232, 222], 0.46);
         }
         break;
       }
@@ -4538,6 +4613,35 @@ var HarborLoop = (() => {
     ctx.fillStyle = fill;
     ctx.fill();
   }
+  function drawParkingBays(x, y, w, h) {
+    const alongX = w >= h;
+    const length = alongX ? w : h;
+    const depth = alongX ? h : w;
+    if (length < 46 || depth < 16) return;
+    const inset = depth * 0.18;
+    const pitch = 13;
+    const count = Math.floor((length - inset * 2) / pitch);
+    if (count < 3) return;
+    ctx.strokeStyle = "rgba(236,232,220,0.30)";
+    ctx.lineWidth = 1.1;
+    for (let i = 1; i < count; i++) {
+      const t = inset + i * pitch;
+      const a = alongX ? project(x + t, y + inset) : project(x + inset, y + t);
+      const b = alongX ? project(x + t, y + h - inset) : project(x + w - inset, y + t);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    const c = alongX ? project(x + inset, y + h / 2) : project(x + w / 2, y + inset);
+    const d = alongX ? project(x + w - inset, y + h / 2) : project(x + w / 2, y + h - inset);
+    ctx.strokeStyle = "rgba(236,232,220,0.42)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(d.x, d.y);
+    ctx.stroke();
+  }
   function drawIsland(x, y, w, h, index) {
     const island = surfaceFor(activeTrackId).island;
     const rand = seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y));
@@ -4565,6 +4669,10 @@ var HarborLoop = (() => {
     if (island.planted) {
       const grass = grassTexture(ctx);
       if (grass) fillPlanePolygon(outline, grass);
+    } else {
+      const paving = groundTexture(ctx, surfaceFor(activeTrackId).road.tile);
+      if (paving) fillPlanePolygon(outline, paving);
+      drawParkingBays(x, y, w, h);
     }
     if (!island.planted) return;
     const cx = x + w / 2;

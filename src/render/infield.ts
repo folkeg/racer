@@ -226,6 +226,84 @@ function drawServiceRoad(placed: Structure[]): void {
   }
 }
 
+/**
+ * How brightly a sloping facet catches the light, from the way it faces.
+ *
+ * Every pitched roof on the board is built from facets, and a facet's shade is
+ * the one thing that makes a roof read as a roof from above rather than as a
+ * flat polygon: the slope towards the sun is bright, the one away from it is
+ * dark, and the two in between sit at the ends of the range. The light points up
+ * and to the left, which is the opposite of the way every shadow here falls.
+ */
+function facetShade(nx: number, ny: number): number {
+  const length = Math.hypot(nx, ny) || 1;
+  const lit = (nx / length) * -SHADOW_X + (ny / length) * -SHADOW_Y;
+  return (lit + 1) / 2;
+}
+
+function mixShade(base: [number, number, number], shade: number, spread: number): string {
+  const k = 1 + (shade - 0.5) * spread;
+  const channel = (v: number): number => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${channel(base[0])},${channel(base[1])},${channel(base[2])})`;
+}
+
+/**
+ * A pitched roof: facets running from each edge of a footprint up to a peak.
+ *
+ * This is what a tent looks like from above. The first version drew a single
+ * triangle with a lighter half — which is a tent drawn in *side elevation*, on a
+ * board that looks straight down. It was not badly drawn, it was the wrong
+ * projection, and no amount of shading would have rescued it.
+ */
+function pitchedRoof(
+  x: number,
+  y: number,
+  radius: number,
+  sides: number,
+  rotation: number,
+  base: [number, number, number],
+  spread: number
+): void {
+  const corner = (i: number): { x: number; y: number } => {
+    const angle = rotation + (i / sides) * Math.PI * 2;
+    return { x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius * 0.72 };
+  };
+  // The peak sits over the middle of the footprint, not above it.
+  //
+  // Offsetting it upwards to suggest height was the wrong lever and it sheared
+  // every tent sideways — from directly overhead a pyramid is symmetrical, and
+  // what says it is tall is the shading of its slopes and the shadow it throws,
+  // not a displaced apex.
+  for (let i = 0; i < sides; i++) {
+    const a = corner(i);
+    const b = corner(i + 1);
+    const midX = (a.x + b.x) / 2 - x;
+    const midY = (a.y + b.y) / 2 - y;
+    ctx.fillStyle = mixShade(base, facetShade(midX, midY), spread);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(x, y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(40,44,48,0.22)';
+  ctx.lineWidth = Math.max(0.5, radius * 0.04);
+  for (let i = 0; i < sides; i++) {
+    const a = corner(i);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+}
+
+/**
+ * A cast shadow on the ground. `w` and `h` are radii, not extents — which is
+ * worth saying because treating them as extents put a shadow under each marquee
+ * as wide as the marquee itself, and a shadow that size reads as the object
+ * floating over a dark pool rather than standing on the ground.
+ */
 function shade(x: number, y: number, w: number, h: number, alpha: number): void {
   ctx.fillStyle = `rgba(10,16,22,${alpha})`;
   ctx.beginPath();
@@ -241,33 +319,66 @@ function drawStructure(structure: Structure): void {
 
   switch (structure.kind) {
     case 'dome': {
-      shade(x, y + r * 0.3, r * 1.05, r * 0.5, 0.34);
-      const sphere = ctx.createRadialGradient(x - r * 0.34, y - r * 0.34, r * 0.1, x, y, r);
-      sphere.addColorStop(0, '#F4F1E8');
-      sphere.addColorStop(0.65, '#CFCCC2');
-      sphere.addColorStop(1, '#96948C');
-      ctx.fillStyle = sphere;
+      // A rotunda from above, not a ball.
+      //
+      // It was a sphere gradient with a terminator down one side, which is what
+      // a ball looks like lit from the front — and this camera looks straight
+      // down, where a domed roof shows as concentric courses and radial ribs
+      // meeting at a lantern. The light shifts the highlight off centre; it does
+      // not cut the shape in half.
+      shade(x, y + r * 0.26, r * 1.02, r * 0.5, 0.34);
+
+      ctx.fillStyle = '#6E747C';
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
       ctx.fill();
-      // A skirt below it and a ring around it: the two things that stop a lit
-      // sphere from reading as a ball dropped on the ground.
-      ctx.strokeStyle = 'rgba(58,72,86,0.55)';
-      ctx.lineWidth = r * 0.13;
+
+      const courses = 4;
+      for (let i = 0; i < courses; i++) {
+        const t = 1 - i / courses;
+        ctx.fillStyle = i % 2 === 0 ? '#C8C6BE' : '#B6B4AC';
+        ctx.beginPath();
+        ctx.ellipse(x, y - r * 0.05 * i, r * 0.94 * t, r * 0.84 * t, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = 'rgba(70,76,84,0.34)';
+      ctx.lineWidth = Math.max(0.6, r * 0.035);
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * r * 0.18, y + Math.sin(angle) * r * 0.16);
+        ctx.lineTo(x + Math.cos(angle) * r * 0.92, y + Math.sin(angle) * r * 0.82);
+        ctx.stroke();
+      }
+
+      // Off-centre highlight, towards the light.
+      const gloss = ctx.createRadialGradient(
+        x - r * 0.38, y - r * 0.42, r * 0.05, x - r * 0.2, y - r * 0.2, r * 0.95
+      );
+      gloss.addColorStop(0, 'rgba(255,253,246,0.5)');
+      gloss.addColorStop(1, 'rgba(255,253,246,0)');
+      ctx.fillStyle = gloss;
       ctx.beginPath();
-      ctx.arc(x, y, r * 1.06, 0, Math.PI * 2);
+      ctx.ellipse(x, y, r * 0.94, r * 0.84, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // The lantern on top.
+      ctx.fillStyle = '#8E9298';
+      ctx.beginPath();
+      ctx.ellipse(x, y - r * 0.2, r * 0.19, r * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,252,244,0.7)';
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.04, y - r * 0.24, r * 0.11, r * 0.08, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // And the drum it stands on, a course you can see the top of.
+      ctx.strokeStyle = 'rgba(52,58,64,0.5)';
+      ctx.lineWidth = Math.max(1, r * 0.07);
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
       ctx.stroke();
-      // A shallow plinth, not a bowl. At 0.3 of the radius and 55% black it
-      // swallowed the bottom of the sphere and the whole thing read as a ball
-      // half sunk in mud; a building's base is a course you can see the top of.
-      ctx.fillStyle = 'rgba(108,114,120,0.9)';
-      ctx.beginPath();
-      ctx.moveTo(x - r * 0.94, y + r * 0.34);
-      ctx.lineTo(x - r * 0.94, y + r * 0.46);
-      ctx.arc(x, y + r * 0.46, r * 0.94, Math.PI, 0, true);
-      ctx.lineTo(x + r * 0.94, y + r * 0.34);
-      ctx.closePath();
-      ctx.fill();
       break;
     }
     case 'hall': {
@@ -337,22 +448,39 @@ function drawStructure(structure: Structure): void {
       // strongly coloured area does more for a picture than any amount of
       // additional grey detail, and it has to be large: a small bright thing is
       // an accent, a large one is the thing the eye hangs the scene on.
-      const pool = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * 1.15);
-      pool.addColorStop(0, '#4FC3C8');
-      pool.addColorStop(0.6, '#2E9AA6');
-      pool.addColorStop(1, '#1E6E80');
+      // Deep in the middle, shallow at the rim, and the sea's own tile over the
+      // top of it. Without that tile it was a flat turquoise disc — a plastic
+      // paddling pool, the same plain-fill failure as everything else, and the
+      // more saturated the colour the more obvious it was.
+      const water = (scale: number): void => {
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * 1.12 * scale, r * 0.76 * scale, 0.2, 0, Math.PI * 2);
+      };
       ctx.fillStyle = '#E6D6A8';
       ctx.beginPath();
       ctx.ellipse(x, y, r * 1.3, r * 0.92, 0.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = pool;
-      ctx.beginPath();
-      ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#58C0C4';
+      water(1);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillStyle = '#27889A';
+      water(0.82);
+      ctx.fill();
+      ctx.fillStyle = '#1C6C7E';
+      water(0.58);
+      ctx.fill();
+      const ripples = groundTexture(ctx, 'water');
+      if (ripples) {
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = ripples;
+        water(1);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
       ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+      water(1);
       ctx.stroke();
       break;
     }
@@ -406,28 +534,26 @@ function drawStructure(structure: Structure): void {
       break;
     }
     case 'pavilion': {
-      // A cluster, not one object: tents read as a group or not at all.
-      const tents = 5;
-      for (let i = 0; i < tents; i++) {
-        const angle = (i / tents) * Math.PI * 2 + 0.6;
-        const tx = x + Math.cos(angle) * r * 0.62;
-        const ty = y + Math.sin(angle) * r * 0.38;
-        const size = r * 0.36;
-        shade(tx, ty + size * 0.4, size * 0.7, size * 0.34, 0.28);
-        ctx.fillStyle = '#E8E4DA';
-        ctx.beginPath();
-        ctx.moveTo(tx, ty - size);
-        ctx.lineTo(tx + size * 0.8, ty + size * 0.5);
-        ctx.lineTo(tx - size * 0.8, ty + size * 0.5);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = 'rgba(120,126,132,0.45)';
-        ctx.beginPath();
-        ctx.moveTo(tx, ty - size);
-        ctx.lineTo(tx + size * 0.8, ty + size * 0.5);
-        ctx.lineTo(tx, ty + size * 0.5);
-        ctx.closePath();
-        ctx.fill();
+      // Set out in rows, and not touching.
+      //
+      // Five of them on a ring at 0.58 of the reach, each 0.42 across, overlapped
+      // into a heap of crumpled paper. Marquees at a meeting are pitched in
+      // lines with room to walk between them, and the gaps are most of what says
+      // there are several rather than one lumpy thing.
+      const size = r * 0.3;
+      const stepX = size * 2.5;
+      const stepY = size * 1.7;
+      const rows = [
+        [-1, -1], [0, -1], [1, -1],
+        [-0.5, 0.45], [0.5, 0.45]
+      ];
+      for (const [cx, cy] of rows) {
+        const tx = x + cx * stepX;
+        const ty = y + cy * stepY;
+        // Lifted off its own ground point, with the shadow left behind: the two
+        // together are what read as height.
+        shade(tx, ty + size * 0.42, size * 0.58, size * 0.26, 0.26);
+        pitchedRoof(tx, ty - size * 0.18, size, 4, Math.PI / 4, [236, 232, 222], 0.46);
       }
       break;
     }
