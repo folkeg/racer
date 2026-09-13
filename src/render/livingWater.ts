@@ -22,7 +22,7 @@ import { DESIGN_H, DESIGN_W, ctx } from '../platform';
 import { activeTrackId } from '../track';
 import { trackById } from '../tracks';
 import { project } from './camera';
-import { drawBoat, drawWaterSurface } from './scenery';
+import { clipToBoard, drawBoardGround, drawBoat, drawWaterSurface } from './scenery';
 
 /** Seconds since the circuit loaded. Drives every phase below. */
 let elapsed = 0;
@@ -137,6 +137,10 @@ function drawGulls(): void {
  * no special cases.
  */
 export function drawSeaLayer(): void {
+  drawBoardGround();
+
+  ctx.save();
+  clipToBoard();
   drawWaterSurface(elapsed);
 
   const decor = trackById(activeTrackId).decor;
@@ -172,9 +176,14 @@ export function drawSeaLayer(): void {
     ctx.fill();
     ctx.restore();
   });
+
+  ctx.restore();
 }
 
 /** What flies over the top of the scene rather than floating in it. */
 export function drawLivingWater(): void {
+  ctx.save();
+  clipToBoard();
   drawGulls();
+  ctx.restore();
 }

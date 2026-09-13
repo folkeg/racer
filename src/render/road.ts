@@ -31,7 +31,17 @@ export function drawTrack(): void {
   const innerShadow = projectPath(
     offsetPath(pathAtOffset(-ROAD_HALF_WIDTH - 7), SHADOW_X * ROAD_DEPTH, SHADOW_Y * ROAD_DEPTH)
   );
-  fillRibbon(outerShadow, innerShadow, 'rgba(4,12,18,0.55)');
+  fillRibbon(outerShadow, innerShadow, 'rgba(4,12,18,0.34)');
+
+  // A second, tighter shadow right under the deck. One flat ribbon reads as a
+  // decal; two at different offsets and strengths give the edge somewhere to sit.
+  const outerContact = projectPath(
+    offsetPath(pathAtOffset(ROAD_HALF_WIDTH + 2), SHADOW_X * ROAD_DEPTH * 0.45, SHADOW_Y * ROAD_DEPTH * 0.45)
+  );
+  const innerContact = projectPath(
+    offsetPath(pathAtOffset(-ROAD_HALF_WIDTH - 2), SHADOW_X * ROAD_DEPTH * 0.45, SHADOW_Y * ROAD_DEPTH * 0.45)
+  );
+  fillRibbon(outerContact, innerContact, 'rgba(2,8,14,0.45)');
 
   // Deck side walls. This used to be the whole road band nudged down-light,
   // which only ever showed on one side of the circuit and read as a second
@@ -60,8 +70,8 @@ export function drawTrack(): void {
   const innerRoad = edge(-ROAD_HALF_WIDTH + KERB_WIDTH);
   const innerKerb = edge(-ROAD_HALF_WIDTH);
 
-  // Continuous tan lines down both sides, as on the original circuit; the
-  // red-and-white blocks read as a race kerb, which this harbour road is not.
+  // Continuous stone kerbs down both sides; the red-and-white blocks read as a
+  // race kerb, which this harbour road is not.
   fillRibbon(outerKerb, outerRoad, COLORS.curbLight);
   fillRibbon(innerRoad, innerKerb, COLORS.curbLight);
 

@@ -92,10 +92,24 @@ function drawBackButton(): void {
   ctx.strokeStyle = COLORS.buttonEdge;
   ctx.stroke();
 
-  // Two bars: a pause glyph, which reads as "stop this run" without any text.
-  ctx.fillStyle = COLORS.text;
-  ctx.fillRect(BACK_BUTTON.x + 11, BACK_BUTTON.y + 10, 4, 14);
-  ctx.fillRect(BACK_BUTTON.x + 19, BACK_BUTTON.y + 10, 4, 14);
+  // A cross, because the button quits.
+  //
+  // It was two bars — a pause glyph — and it has never paused anything: tapping
+  // it calls goBack() and abandons the run on the spot. A control that shows one
+  // promise and keeps another is worse than an unlabelled one, and on a sixty
+  // second run the cost of finding out is the whole run.
+  const cx = BACK_BUTTON.x + BACK_BUTTON.w / 2;
+  const cy = BACK_BUTTON.y + BACK_BUTTON.h / 2;
+  const arm = 6.5;
+  ctx.strokeStyle = COLORS.text;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - arm, cy - arm);
+  ctx.lineTo(cx + arm, cy + arm);
+  ctx.moveTo(cx + arm, cy - arm);
+  ctx.lineTo(cx - arm, cy + arm);
+  ctx.stroke();
 }
 
 function drawObjectiveBar(): void {

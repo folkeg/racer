@@ -43,7 +43,7 @@ export const ROAD_DEPTH = 5.0;
  * Heights are screen units at unit scale; a face is scaled by the perspective
  * at its own point, so near walls stand taller than far ones.
  */
-export const ROAD_WALL_HEIGHT = 7.0;
+export const ROAD_WALL_HEIGHT = 9.0;
 export const ISLAND_WALL_HEIGHT = 7.5;
 
 /**

@@ -1,6 +1,7 @@
 /** Water, park medians and buoys — everything behind the road. */
 
 import { ctx, DESIGN_H, DESIGN_W } from '../platform';
+import { CONTROL_BAR_TOP } from '../controls';
 import { COLORS } from '../theme';
 import { activeTrackId } from '../track';
 import { grassTexture, waterTexture, waterTileSize } from './sprites';
@@ -250,25 +251,49 @@ function drawChequer(x: number, y: number, w: number, h: number, angle: number):
  * frame — not these, which is why the water can be peeled back out of the cache
  * while the road stays in it.
  */
-export function drawWaterSurface(elapsed: number): void {
-  // Everything here is clipped to the board.
-  //
-  // It was not, and that was one bug wearing two hats. The drifting layers are
-  // filled a whole tile past each edge so the scroll has somewhere to come from,
-  // which put ripple 256 units outside the design area on every side — over the
-  // gradient's edge, outside the vignette, on bare transparent canvas. With the
-  // faint generated tile nobody noticed. With the painted one it showed up as a
-  // second, darker sea framing the first, which is exactly the "two different
-  // things stuck together" it looked like.
-  //
-  // The same overhang was painting 3.72x the design area, twice a frame, for
-  // pixels that are off the board. Clipping fixes the look and most of the cost
-  // in one move.
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, DESIGN_W, DESIGN_H);
-  ctx.clip();
+/**
+ * The board: the part of the screen the harbour occupies.
+ *
+ * The sea used to run the full height, under the HUD pills at the top and under
+ * the joystick and buttons at the bottom. That is the more immersive layout and
+ * it is the wrong one here, for a reason that only shows up once the water has
+ * real texture on it: a control you are holding down at speed should not be
+ * sitting on a moving surface. The controls now stand on their own ground.
+ *
+ * It costs no track size at all. The circuit is fitted between SAFE_TOP and
+ * SAFE_BOTTOM either way; what the board excludes is only the ring of open water
+ * above and below it, which is also the part that was most of "one material
+ * filling the screen".
+ */
+export const BOARD_TOP = 50;
+export const BOARD_BOTTOM = CONTROL_BAR_TOP - 8;
 
+/** The ground the interface stands on, outside the board. */
+const UI_GROUND = '#0E1720';
+
+/** Confines drawing to the board. Callers must have saved the context. */
+export function clipToBoard(): void {
+  ctx.beginPath();
+  ctx.rect(0, BOARD_TOP, DESIGN_W, BOARD_BOTTOM - BOARD_TOP);
+  ctx.clip();
+}
+
+/** The interface's ground, and the two edges that define the board on it. */
+export function drawBoardGround(): void {
+  ctx.fillStyle = UI_GROUND;
+  ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(0, BOARD_TOP - 2, DESIGN_W, 2);
+  ctx.fillRect(0, BOARD_BOTTOM, DESIGN_W, 2);
+}
+
+export function drawWaterSurface(elapsed: number): void {
+  // The drifting layers are filled a whole tile past each edge so the scroll
+  // always has somewhere to come from. Nothing clipped that, and the ripple got
+  // painted 256 units outside the design area on every side — past the end of
+  // the gradient, outside the vignette, onto bare canvas — which framed the
+  // board in a second, darker sea and cost 3.72x the fill for pixels nobody can
+  // see. The caller's board clip is what keeps both in hand.
   const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
   gradient.addColorStop(0, COLORS.waterDeep);
   gradient.addColorStop(0.55, COLORS.water);
@@ -288,10 +313,7 @@ export function drawWaterSurface(elapsed: number): void {
   }
 
   const ripple = waterTexture(ctx);
-  if (!ripple) {
-    ctx.restore();
-    return;
-  }
+  if (!ripple) return;
   const tile = waterTileSize();
   const painted = tile > 128;
 
@@ -321,8 +343,6 @@ export function drawWaterSurface(elapsed: number): void {
   const weak = painted ? 0.18 : 0.55;
   drift(4.2, 2.2, strong);
   drift(-2.6, 3.6, weak);
-
-  ctx.restore();
 }
 
 /** Fixed shallows and deeps: [x, y, radius, "r,g,b", alpha]. */

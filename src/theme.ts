@@ -19,8 +19,19 @@ export const COLORS = {
   roadShadow: 'rgba(70,78,84,0.30)',
   roadEdge: '#B9B9B1',
   /** Tan lines run along both sides of the road, as on the original circuit. */
-  curbLight: '#E3C25E',
-  curbRed: '#D8B44E',
+  /**
+   * The kerb is stone, not paint.
+   *
+   * It was '#E3C25E', a saturated gold, and on a board of grey concrete and
+   * grey-blue water it was the only saturated thing in the frame — so it stopped
+   * reading as part of the deck and started reading as a highlighter line drawn
+   * around the circuit. What tells you a kerb is there should be that it stands
+   * up: it has a side face where it turns away from the camera and a bright
+   * arris where it turns into the light. Colour was doing a job that height and
+   * lighting do better.
+   */
+  curbLight: '#CFCABC',
+  curbRed: '#B9B2A0',
   road: '#D9D9D2',
   /** Every other lane, so the channels read without dashed dividers. */
   roadAlt: '#C4C4BC',

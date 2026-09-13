@@ -332,7 +332,7 @@ var HarborLoop = (() => {
   var CAR_BODY_DEPTH = 1.5;
   var ISLAND_DEPTH = 3.4;
   var ROAD_DEPTH = 5;
-  var ROAD_WALL_HEIGHT = 7;
+  var ROAD_WALL_HEIGHT = 9;
   var ISLAND_WALL_HEIGHT = 7.5;
   function localLight(angle, distance) {
     const local = LIGHT_ANGLE - angle;
@@ -2041,9 +2041,9 @@ var HarborLoop = (() => {
     while (delta < -Math.PI) delta += Math.PI * 2;
     player.previousHeading = heading;
     const rate = Math.abs(delta) / Math.max(dt, 1e-4);
-    const load = Math.min(1, rate * player.speed / 900);
-    const response = load > player.cornering ? 9 : 3.2;
-    player.cornering += (load - player.cornering) * (1 - Math.exp(-dt * response));
+    const load2 = Math.min(1, rate * player.speed / 900);
+    const response = load2 > player.cornering ? 9 : 3.2;
+    player.cornering += (load2 - player.cornering) * (1 - Math.exp(-dt * response));
   }
   var TRAIL_LENGTH = 56;
   function recordTrail() {
@@ -2519,8 +2519,19 @@ var HarborLoop = (() => {
     roadShadow: "rgba(70,78,84,0.30)",
     roadEdge: "#B9B9B1",
     /** Tan lines run along both sides of the road, as on the original circuit. */
-    curbLight: "#E3C25E",
-    curbRed: "#D8B44E",
+    /**
+     * The kerb is stone, not paint.
+     *
+     * It was '#E3C25E', a saturated gold, and on a board of grey concrete and
+     * grey-blue water it was the only saturated thing in the frame — so it stopped
+     * reading as part of the deck and started reading as a highlighter line drawn
+     * around the circuit. What tells you a kerb is there should be that it stands
+     * up: it has a side face where it turns away from the camera and a bright
+     * arris where it turns into the light. Colour was doing a job that height and
+     * lighting do better.
+     */
+    curbLight: "#CFCABC",
+    curbRed: "#B9B2A0",
     road: "#D9D9D2",
     /** Every other lane, so the channels read without dashed dividers. */
     roadAlt: "#C4C4BC",
@@ -3151,22 +3162,41 @@ var HarborLoop = (() => {
   }
 
   // src/assets.ts
-  var ART_PATH = "assets/water-tile.png";
-  var water = null;
-  function loadArt() {
+  var loaded = {
+    water: null,
+    concrete: null,
+    grass: null
+  };
+  var onLoaded = null;
+  function setArtListener(listener) {
+    onLoaded = listener;
+  }
+  function load(name) {
     var _a;
     const image = (_a = wx.createImage) == null ? void 0 : _a.call(wx);
     if (!image) return;
     image.onload = () => {
-      if (image.width > 0 && image.height > 0) water = image;
+      if (image.width > 0 && image.height > 0) {
+        loaded[name] = image;
+        onLoaded == null ? void 0 : onLoaded();
+      }
     };
     image.onerror = () => {
-      water = null;
+      loaded[name] = null;
     };
-    image.src = ART_PATH;
+    image.src = `assets/${name}-tile.png`;
+  }
+  function loadArt() {
+    for (const name of Object.keys(loaded)) load(name);
   }
   function waterArt() {
-    return water;
+    return loaded.water;
+  }
+  function concreteArt() {
+    return loaded.concrete;
+  }
+  function grassArt() {
+    return loaded.grass;
   }
 
   // src/render/sprites.ts
@@ -3310,6 +3340,8 @@ var HarborLoop = (() => {
   var asphaltPattern = null;
   var asphaltTried = false;
   function asphaltTexture(target) {
+    const painted = paintedPattern(target, "concrete", concreteArt());
+    if (painted) return painted;
     if (asphaltTried) return asphaltPattern;
     asphaltTried = true;
     const canvas2 = createOffscreenCanvas(ASPHALT_TILE, ASPHALT_TILE);
@@ -3337,36 +3369,34 @@ var HarborLoop = (() => {
     return asphaltPattern;
   }
   var WATER_TILE = 128;
-  var WATER_ART_TILE = 256;
-  var artPattern = null;
+  var ART_TILE_SIZE = { water: 256, concrete: 128, grass: 96 };
+  var artPatterns = {};
+  function paintedPattern(target, name, image) {
+    var _a;
+    if (!image) return null;
+    const existing = artPatterns[name];
+    if (existing) return existing;
+    const size = ART_TILE_SIZE[name];
+    try {
+      const scaled = createOffscreenCanvas(size, size);
+      const scaledCtx = scaled ? scaled.getContext("2d") : null;
+      if (scaled && scaledCtx) {
+        scaledCtx.drawImage(image, 0, 0, size, size);
+        artPatterns[name] = target.createPattern(scaled, "repeat");
+      }
+    } catch (error) {
+      artPatterns[name] = null;
+    }
+    return (_a = artPatterns[name]) != null ? _a : null;
+  }
   function waterTileSize() {
-    return artPattern ? WATER_ART_TILE : WATER_TILE;
+    return artPatterns.water ? ART_TILE_SIZE.water : WATER_TILE;
   }
   var waterPattern = null;
   var waterTried = false;
   function waterTexture(target) {
-    const art = waterArt();
-    if (art) {
-      if (!artPattern) {
-        try {
-          const scaled = createOffscreenCanvas(WATER_ART_TILE, WATER_ART_TILE);
-          const scaledCtx = scaled ? scaled.getContext("2d") : null;
-          if (scaled && scaledCtx) {
-            scaledCtx.drawImage(
-              art,
-              0,
-              0,
-              WATER_ART_TILE,
-              WATER_ART_TILE
-            );
-            artPattern = target.createPattern(scaled, "repeat");
-          }
-        } catch (error) {
-          artPattern = null;
-        }
-      }
-      if (artPattern) return artPattern;
-    }
+    const painted = paintedPattern(target, "water", waterArt());
+    if (painted) return painted;
     if (waterTried) return waterPattern;
     waterTried = true;
     const canvas2 = createOffscreenCanvas(WATER_TILE, WATER_TILE);
@@ -3412,6 +3442,8 @@ var HarborLoop = (() => {
   var grassPattern = null;
   var grassTried = false;
   function grassTexture(target) {
+    const painted = paintedPattern(target, "grass", grassArt());
+    if (painted) return painted;
     if (grassTried) return grassPattern;
     grassTried = true;
     const canvas2 = createOffscreenCanvas(GRASS_TILE, GRASS_TILE);
@@ -3699,11 +3731,22 @@ var HarborLoop = (() => {
       }
     }
   }
-  function drawWaterSurface(elapsed2) {
-    ctx.save();
+  var BOARD_TOP = 50;
+  var BOARD_BOTTOM = CONTROL_BAR_TOP - 8;
+  var UI_GROUND = "#0E1720";
+  function clipToBoard() {
     ctx.beginPath();
-    ctx.rect(0, 0, DESIGN_W, DESIGN_H);
+    ctx.rect(0, BOARD_TOP, DESIGN_W, BOARD_BOTTOM - BOARD_TOP);
     ctx.clip();
+  }
+  function drawBoardGround() {
+    ctx.fillStyle = UI_GROUND;
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillRect(0, BOARD_TOP - 2, DESIGN_W, 2);
+    ctx.fillRect(0, BOARD_BOTTOM, DESIGN_W, 2);
+  }
+  function drawWaterSurface(elapsed2) {
     const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
     gradient.addColorStop(0, COLORS.waterDeep);
     gradient.addColorStop(0.55, COLORS.water);
@@ -3718,10 +3761,7 @@ var HarborLoop = (() => {
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     }
     const ripple = waterTexture(ctx);
-    if (!ripple) {
-      ctx.restore();
-      return;
-    }
+    if (!ripple) return;
     const tile = waterTileSize();
     const painted = tile > 128;
     const drift = (speedX, speedY, alpha) => {
@@ -3736,7 +3776,6 @@ var HarborLoop = (() => {
     const weak = painted ? 0.18 : 0.55;
     drift(4.2, 2.2, strong);
     drift(-2.6, 3.6, weak);
-    ctx.restore();
   }
   var WATER_PATCHES = [
     [40, 120, 190, "16,42,66", 0.3],
@@ -3972,6 +4011,9 @@ var HarborLoop = (() => {
     }
   }
   function drawSeaLayer() {
+    drawBoardGround();
+    ctx.save();
+    clipToBoard();
     drawWaterSurface(elapsed);
     const decor = trackById(activeTrackId).decor;
     decor.boats.forEach(([x, y, size, angle], index) => {
@@ -4003,9 +4045,13 @@ var HarborLoop = (() => {
       ctx.fill();
       ctx.restore();
     });
+    ctx.restore();
   }
   function drawLivingWater() {
+    ctx.save();
+    clipToBoard();
     drawGulls();
+    ctx.restore();
   }
 
   // src/run.ts
@@ -4273,9 +4319,18 @@ var HarborLoop = (() => {
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = COLORS.buttonEdge;
     ctx.stroke();
-    ctx.fillStyle = COLORS.text;
-    ctx.fillRect(BACK_BUTTON.x + 11, BACK_BUTTON.y + 10, 4, 14);
-    ctx.fillRect(BACK_BUTTON.x + 19, BACK_BUTTON.y + 10, 4, 14);
+    const cx = BACK_BUTTON.x + BACK_BUTTON.w / 2;
+    const cy = BACK_BUTTON.y + BACK_BUTTON.h / 2;
+    const arm = 6.5;
+    ctx.strokeStyle = COLORS.text;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx - arm, cy - arm);
+    ctx.lineTo(cx + arm, cy + arm);
+    ctx.moveTo(cx + arm, cy - arm);
+    ctx.lineTo(cx - arm, cy + arm);
+    ctx.stroke();
   }
   function drawObjectiveBar() {
     if (run.progress < 0) return;
@@ -5338,7 +5393,14 @@ var HarborLoop = (() => {
     const innerShadow = projectPath(
       offsetPath(pathAtOffset(-ROAD_HALF_WIDTH - 7), SHADOW_X * ROAD_DEPTH, SHADOW_Y * ROAD_DEPTH)
     );
-    fillRibbon(outerShadow, innerShadow, "rgba(4,12,18,0.55)");
+    fillRibbon(outerShadow, innerShadow, "rgba(4,12,18,0.34)");
+    const outerContact = projectPath(
+      offsetPath(pathAtOffset(ROAD_HALF_WIDTH + 2), SHADOW_X * ROAD_DEPTH * 0.45, SHADOW_Y * ROAD_DEPTH * 0.45)
+    );
+    const innerContact = projectPath(
+      offsetPath(pathAtOffset(-ROAD_HALF_WIDTH - 2), SHADOW_X * ROAD_DEPTH * 0.45, SHADOW_Y * ROAD_DEPTH * 0.45)
+    );
+    fillRibbon(outerContact, innerContact, "rgba(2,8,14,0.45)");
     const outerLip = edge(ROAD_HALF_WIDTH + 4);
     const outerLipIn = edge(ROAD_HALF_WIDTH + 1);
     const innerLip = edge(-ROAD_HALF_WIDTH - 4);
@@ -5457,6 +5519,9 @@ var HarborLoop = (() => {
       drawTrack();
     });
     target.restore();
+  }
+  function invalidateStaticLayer() {
+    renderedTrack = null;
   }
   function drawStaticScene() {
     if (!ensureLayer() || !layer || !layerCtx) {
@@ -5989,6 +6054,7 @@ var HarborLoop = (() => {
     scheduleFrame(frame);
   }
   audio.setMuted(loadMuted());
+  setArtListener(invalidateStaticLayer);
   loadArt();
   installInput();
   installShareMenu();

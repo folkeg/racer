@@ -1,4 +1,5 @@
 import { ctx } from '../platform';
+import { SHADOW_X, SHADOW_Y } from './light';
 import type { Vec2 } from '../types';
 
 export function strokeClosedPath(
@@ -143,6 +144,65 @@ export function fillNearFaces(
       top: { x: edge[i].x, y: edge[i].y + from * unit },
       base: { x: edge[i].x, y: edge[i].y + height * unit }
     });
+  }
+  flush();
+}
+
+
+/**
+ * A bright rim along the edges that face the light.
+ *
+ * The counterpart to fillNearFaces, and the half that was missing. That one
+ * darkens whatever the camera can see the side of, which gives a surface a
+ * bottom; nothing was giving it a top. A solid in real light has both — a dark
+ * side away from the sun and a bright arris where the top face turns over into
+ * it — and with only the dark half, a raised deck reads as a shape with a
+ * shadow rather than as a thing with a thickness.
+ *
+ * Same construction as the faces: `edge` and the same boundary a step inside it,
+ * so each point knows which way it points. Here the test is against the light
+ * rather than the camera, and the strength tapers with how squarely the edge
+ * turns into it, so the rim fades away around a curve instead of stopping dead.
+ */
+export function strokeLitEdges(
+  edge: Array<Vec2 & { scale: number }>,
+  inward: Array<Vec2 & { scale: number }>,
+  width: number,
+  colour: [number, number, number],
+  peakAlpha: number
+): void {
+  const count = Math.min(edge.length, inward.length);
+  let run: Array<{ point: Vec2; facing: number }> = [];
+
+  const flush = (): void => {
+    if (run.length >= 2) {
+      // Stroked in short pieces so the alpha can follow the facing; one stroke
+      // for the whole run would have to pick a single brightness for it.
+      for (let i = 1; i < run.length; i++) {
+        const facing = (run[i - 1].facing + run[i].facing) / 2;
+        ctx.beginPath();
+        ctx.moveTo(run[i - 1].point.x, run[i - 1].point.y);
+        ctx.lineTo(run[i].point.x, run[i].point.y);
+        ctx.strokeStyle = `rgba(${colour[0]},${colour[1]},${colour[2]},${(facing * peakAlpha).toFixed(3)})`;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+    }
+    run = [];
+  };
+
+  for (let i = 0; i < count; i++) {
+    const dx = edge[i].x - inward[i].x;
+    const dy = edge[i].y - inward[i].y;
+    const length = Math.hypot(dx, dy);
+    // Towards the light is the opposite of the way shadows fall.
+    const facing = length > 0 ? -(dx * SHADOW_X + dy * SHADOW_Y) / length : 0;
+    if (facing <= 0.04) {
+      flush();
+      continue;
+    }
+    run.push({ point: edge[i], facing });
   }
   flush();
 }
