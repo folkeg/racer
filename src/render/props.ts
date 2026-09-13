@@ -35,47 +35,75 @@ export interface Prop {
   size: number;
 }
 
-/** How far a prop must clear the tarmac. Enough that none looks like debris. */
-const ROAD_CLEARANCE = ROAD_HALF_WIDTH + 16;
 /** And the frame, so nothing is half off the board. */
 const EDGE_MARGIN = 14;
 /** How far apart two props must stand. */
 const SPACING = 34;
 
+export interface FreeSpot {
+  x: number;
+  y: number;
+  /** Distance to the nearest tarmac. Deeper is further from the racing. */
+  clearance: number;
+}
+
 let cachedTrack: TrackId | null = null;
 let cached: Prop[] = [];
+let cachedFree: FreeSpot[] = [];
+let freeTrack: TrackId | null = null;
 
 function hash(n: number): number {
   const raw = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return raw - Math.floor(raw);
 }
 
-function buildProps(track: TrackId): Prop[] {
-  const surface = surfaceFor(track);
-  if (surface.props.length === 0) return [];
+/**
+ * Every point of open ground, with how far it is from the racing.
+ *
+ * Measured rather than declared, because every circuit leaves a different shape
+ * of ground free and hand-written coordinates have been wrong every single time
+ * the geometry moved. The clearance goes out with each point: it is what lets a
+ * big structure be put where there is actually room for one, and what keeps the
+ * crabs off the tarmac.
+ */
+export function freeGround(): FreeSpot[] {
+  if (freeTrack === activeTrackId) return cachedFree;
 
   const centre = pathAtOffset(0);
-  const medians = trackById(track).decor.medians;
-  const free: Array<{ x: number; y: number }> = [];
+  const medians = trackById(activeTrackId).decor.medians;
+  const free: FreeSpot[] = [];
 
   // A coarse grid is plenty: these are scattered objects, not a tiling.
   for (let y = BOARD_TOP + EDGE_MARGIN; y < BOARD_BOTTOM - EDGE_MARGIN; y += 15) {
     for (let x = EDGE_MARGIN; x < 390 - EDGE_MARGIN; x += 15) {
-      let ok = true;
+      let nearest = Infinity;
       // Every 6th point of the centre line is close enough for a clearance this
       // coarse, and keeps the whole scan well under a millisecond.
-      for (let i = 0; i < centre.length && ok; i += 6) {
+      for (let i = 0; i < centre.length; i += 6) {
         const dx = centre[i].x - x;
         const dy = centre[i].y - y;
-        if (dx * dx + dy * dy < ROAD_CLEARANCE * ROAD_CLEARANCE) ok = false;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < nearest) nearest = d2;
       }
-      if (!ok) continue;
+      const clearance = Math.sqrt(nearest) - ROAD_HALF_WIDTH;
+      if (clearance < 16) continue;
+      let ok = true;
       for (const [mx, my, mw, mh] of medians) {
         if (x > mx - 10 && x < mx + mw + 10 && y > my - 10 && y < my + mh + 10) ok = false;
       }
-      if (ok) free.push({ x, y });
+      if (ok) free.push({ x, y, clearance });
     }
   }
+  cachedFree = free;
+  freeTrack = activeTrackId;
+  return free;
+}
+
+function buildProps(track: TrackId): Prop[] {
+  const surface = surfaceFor(track);
+  if (surface.props.length === 0) return [];
+
+  const free = freeGround();
   if (free.length === 0) return [];
 
   // Sparse, and spaced.

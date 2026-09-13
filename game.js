@@ -3588,36 +3588,47 @@ var HarborLoop = (() => {
   }
 
   // src/render/props.ts
-  var ROAD_CLEARANCE = ROAD_HALF_WIDTH + 16;
   var EDGE_MARGIN = 14;
   var SPACING = 34;
   var cachedTrack = null;
   var cached = [];
+  var cachedFree = [];
+  var freeTrack = null;
   function hash(n) {
     const raw = Math.sin(n * 127.1 + 311.7) * 43758.5453;
     return raw - Math.floor(raw);
   }
-  function buildProps(track) {
-    const surface = surfaceFor(track);
-    if (surface.props.length === 0) return [];
+  function freeGround() {
+    if (freeTrack === activeTrackId) return cachedFree;
     const centre = pathAtOffset(0);
-    const medians = trackById(track).decor.medians;
+    const medians = trackById(activeTrackId).decor.medians;
     const free = [];
     for (let y = BOARD_TOP + EDGE_MARGIN; y < BOARD_BOTTOM - EDGE_MARGIN; y += 15) {
       for (let x = EDGE_MARGIN; x < 390 - EDGE_MARGIN; x += 15) {
-        let ok = true;
-        for (let i = 0; i < centre.length && ok; i += 6) {
+        let nearest = Infinity;
+        for (let i = 0; i < centre.length; i += 6) {
           const dx = centre[i].x - x;
           const dy = centre[i].y - y;
-          if (dx * dx + dy * dy < ROAD_CLEARANCE * ROAD_CLEARANCE) ok = false;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < nearest) nearest = d2;
         }
-        if (!ok) continue;
+        const clearance = Math.sqrt(nearest) - ROAD_HALF_WIDTH;
+        if (clearance < 16) continue;
+        let ok = true;
         for (const [mx, my, mw, mh] of medians) {
           if (x > mx - 10 && x < mx + mw + 10 && y > my - 10 && y < my + mh + 10) ok = false;
         }
-        if (ok) free.push({ x, y });
+        if (ok) free.push({ x, y, clearance });
       }
     }
+    cachedFree = free;
+    freeTrack = activeTrackId;
+    return free;
+  }
+  function buildProps(track) {
+    const surface = surfaceFor(track);
+    if (surface.props.length === 0) return [];
+    const free = freeGround();
     if (free.length === 0) return [];
     const wanted = Math.min(free.length, Math.round(free.length * 0.045 * surface.propDensity));
     const props = [];
@@ -4367,17 +4378,20 @@ var HarborLoop = (() => {
     ctx.restore();
   }
   var CRABS = 9;
+  var CRAB_DASH = 16;
   function drawCrabs() {
+    const ground = freeGround().filter((spot) => spot.clearance > CRAB_DASH + 14);
+    if (ground.length === 0) return;
     for (let i = 0; i < CRABS; i++) {
       const p = phase(i * 3 + 5);
-      const q = phase(i * 7 + 11);
-      const homeX = 18 + p / (Math.PI * 2) * 354;
-      const homeY = 90 + q / (Math.PI * 2) * 560;
+      const home = ground[Math.floor(p / (Math.PI * 2) * ground.length) % ground.length];
+      const homeX = home.x;
+      const homeY = home.y;
       const period = 5.5 + i % 4 * 1.7;
       const t = (elapsed + i * 2.3) % period / period;
       const dash = t < 0.22 ? Math.sin(t / 0.22 * Math.PI) : 0;
       const heading = p + Math.floor((elapsed + i * 2.3) / period) * 2.4;
-      const reach = 26;
+      const reach = CRAB_DASH;
       const x = homeX + Math.cos(heading) * reach * dash;
       const y = homeY + Math.sin(heading) * reach * dash * 0.6;
       const point = project(x, y);

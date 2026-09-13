@@ -24,7 +24,7 @@ import { trackById } from '../tracks';
 import { project } from './camera';
 import { clipToBoard, drawBoardGround, drawBoat, drawGroundSurface } from './scenery';
 import { surfaceFor } from './surface';
-import { chimneys } from './props';
+import { chimneys, freeGround } from './props';
 
 /** Seconds since the circuit loaded. Drives every phase below. */
 let elapsed = 0;
@@ -205,21 +205,29 @@ export function drawGroundLayer(): void {
  * back to, so no crab ever wanders off the board or needs to be put back.
  */
 const CRABS = 9;
+/** How far a crab may bolt from home. Kept short so it cannot reach the road. */
+const CRAB_DASH = 16;
 
 function drawCrabs(): void {
+  // Homes come from the measured open ground, and only from the parts of it
+  // deep enough that a full-length dash still lands clear of the tarmac. They
+  // used to be hashed straight out of the design area, which is why they were
+  // running across the racing line.
+  const ground = freeGround().filter((spot) => spot.clearance > CRAB_DASH + 14);
+  if (ground.length === 0) return;
+
   for (let i = 0; i < CRABS; i++) {
     const p = phase(i * 3 + 5);
-    const q = phase(i * 7 + 11);
-    // A home patch, well clear of the middle where the circuit usually is.
-    const homeX = 18 + ((p / (Math.PI * 2)) * 354);
-    const homeY = 90 + ((q / (Math.PI * 2)) * 560);
+    const home = ground[Math.floor((p / (Math.PI * 2)) * ground.length) % ground.length];
+    const homeX = home.x;
+    const homeY = home.y;
 
     // Bursts: mostly still, then a quick dash and a stop.
     const period = 5.5 + (i % 4) * 1.7;
     const t = ((elapsed + i * 2.3) % period) / period;
     const dash = t < 0.22 ? Math.sin((t / 0.22) * Math.PI) : 0;
     const heading = p + Math.floor((elapsed + i * 2.3) / period) * 2.4;
-    const reach = 26;
+    const reach = CRAB_DASH;
 
     const x = homeX + Math.cos(heading) * reach * dash;
     const y = homeY + Math.sin(heading) * reach * dash * 0.6;
