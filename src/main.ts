@@ -31,7 +31,7 @@ import { drawControls, drawHud } from './render/hud';
 import { drawBlackout, drawHazardLane } from './render/overlays';
 import { drawFloaters, drawParticles, updateFloaters, updateParticles } from './render/particles';
 import { drawSpeedLines } from './render/speedLines';
-import { drawLivingWater, drawSea, updateLivingWater } from './render/livingWater';
+import { drawLivingWater, drawSeaLayer, updateLivingWater } from './render/livingWater';
 import { drawSceneLight } from './render/scenery';
 import { drawStaticScene } from './render/staticLayer';
 import { drawCars } from './render/vehicles';
@@ -80,12 +80,14 @@ function stepRace(dt: number): void {
 
 /** The static scene is blitted first, then only the moving parts are drawn. */
 function drawRace(): void {
-  // The sea moves, so it cannot live in the layer that is rendered once. It is
-  // drawn first and the cached road, kerbs and islands are blitted over it.
+  // The sea moves, so it cannot live in the layer that is rendered once. It and
+  // everything afloat on it are drawn first, and the cached road, kerbs and
+  // islands are blitted over the top — which is also what hides a boat when its
+  // course takes it behind a fold of the circuit.
   ctx.save();
   ctx.translate(offsetX, offsetY);
   ctx.scale(scale, scale);
-  drawSea();
+  drawSeaLayer();
   ctx.restore();
 
   drawStaticScene();
@@ -93,7 +95,7 @@ function drawRace(): void {
   ctx.save();
   ctx.translate(offsetX, offsetY);
   ctx.scale(scale, scale);
-  // Between the blitted scene and the cars: on the water, under the traffic.
+  // Above the scene: the gulls are the only decor that is not on the water.
   drawLivingWater();
   ctx.restore();
 

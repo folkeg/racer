@@ -490,10 +490,10 @@ var HarborLoop = (() => {
     trees: [],
     umbrellas: [],
     buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
-    boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
+    boats: [[371, 165, 0.62, 1.57], [10, 335, 0.6, -1.57], [372, 455, 0.58, 1.57], [10, 585, 0.62, -1.57]],
     rocks: [],
     buildings: [],
-    bridges: [[358, 150, 388, 150, 13], [4, 320, 32, 320, 13], [358, 440, 388, 440, 13], [4, 570, 32, 570, 13]],
+    bridges: [],
     chequers: []
   };
   var GRAND_OVAL_DECOR = {
@@ -501,10 +501,10 @@ var HarborLoop = (() => {
     trees: [],
     umbrellas: [],
     buoys: [[40, 150], [352, 210], [40, 640], [352, 620]],
-    boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, 1.57], [52, 540, 0.72, 1.57]],
+    boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, -1.57], [52, 540, 0.72, 1.57]],
     rocks: [],
     buildings: [],
-    bridges: [[36, 286, 70, 286, 14], [322, 386, 356, 386, 14], [36, 526, 70, 526, 14]],
+    bridges: [],
     chequers: []
   };
   var OPEN_WATER_DECOR = {
@@ -512,10 +512,10 @@ var HarborLoop = (() => {
     trees: [],
     umbrellas: [],
     buoys: [[20, 120], [372, 200], [20, 560], [372, 660], [18, 380]],
-    boats: [[12, 250, 0.6, 1.57], [376, 340, 0.6, 1.57], [12, 620, 0.58, 1.57]],
+    boats: [[12, 250, 0.6, 1.57], [376, 340, 0.6, -1.57], [12, 620, 0.58, 1.57]],
     rocks: [],
     buildings: [],
-    bridges: [[2, 236, 30, 236, 12], [360, 326, 388, 326, 12], [2, 606, 30, 606, 12]],
+    bridges: [],
     chequers: []
   };
   var TRACKS = [
@@ -3871,13 +3871,10 @@ var HarborLoop = (() => {
   function updateLivingWater(dt) {
     elapsed += dt;
   }
-  function boatDrift(index) {
-    const p = phase(index);
-    return {
-      along: Math.sin(elapsed * 0.23 + p) * 7,
-      across: Math.sin(elapsed * 0.17 + p * 1.7) * 3.5,
-      heel: Math.sin(elapsed * 0.41 + p) * 0.045
-    };
+  var BOAT_SPEEDS = [27, 34, 22, 30, 25, 38, 20];
+  function wrap(value, span) {
+    const total = span + 120;
+    return ((value + 60) % total + total) % total - 60;
   }
   function drawWake(x, y, size, angle, speed) {
     const strength = Math.min(1, Math.abs(speed) * 1.4);
@@ -3919,20 +3916,19 @@ var HarborLoop = (() => {
       ctx.restore();
     }
   }
-  function drawSea() {
+  function drawSeaLayer() {
     drawWaterSurface(elapsed);
-  }
-  function drawLivingWater() {
     const decor = trackById(activeTrackId).decor;
     decor.boats.forEach(([x, y, size, angle], index) => {
-      const drift = boatDrift(index);
+      const travelled = elapsed * BOAT_SPEEDS[index % BOAT_SPEEDS.length];
+      const heel = Math.sin(elapsed * 0.7 + phase(index)) * 0.035;
+      const bob = Math.sin(elapsed * 1.5 + phase(index)) * 0.8;
       const point = project(
-        x + Math.cos(angle) * drift.along - Math.sin(angle) * drift.across,
-        y + Math.sin(angle) * drift.along + Math.cos(angle) * drift.across
+        wrap(x + Math.cos(angle) * travelled, DESIGN_W),
+        wrap(y + Math.sin(angle) * travelled, DESIGN_H) + bob
       );
-      const speed = Math.cos(elapsed * 0.23 + phase(index)) * 0.23 * 7;
-      drawWake(point.x, point.y, size * point.scale, angle + drift.heel, speed);
-      drawBoat(point.x, point.y, size * point.scale, angle + drift.heel);
+      drawWake(point.x, point.y, size * point.scale, angle + heel, 0.55);
+      drawBoat(point.x, point.y, size * point.scale, angle + heel);
     });
     decor.buoys.forEach(([x, y], index) => {
       const p = phase(index + 97);
@@ -3952,6 +3948,8 @@ var HarborLoop = (() => {
       ctx.fill();
       ctx.restore();
     });
+  }
+  function drawLivingWater() {
     drawGulls();
   }
 
@@ -5879,7 +5877,7 @@ var HarborLoop = (() => {
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
-    drawSea();
+    drawSeaLayer();
     ctx.restore();
     drawStaticScene();
     ctx.save();

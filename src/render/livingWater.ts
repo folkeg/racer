@@ -46,21 +46,25 @@ export function updateLivingWater(dt: number): void {
 }
 
 /**
- * How far a boat has slipped along its own heading, in design units.
+ * Boats are under way, not at anchor.
  *
- * A slow figure-of-eight rather than a straight line: a boat that tracks off in
- * one direction either leaves the frame or needs wrapping logic, and a moored
- * boat that only rocks reads as a stuck sprite. Drifting a few units each way
- * on two different periods keeps it plausibly at anchor and never repeats
- * visibly inside a single run.
+ * They used to drift on a slow figure-of-eight — a few units each way on two
+ * periods — to avoid needing any wrapping logic. That was the wrong trade. At
+ * that amplitude a boat covers less ground in ten seconds than the ripple tile
+ * under it, so what it reads as is a sprite that is stuck and twitching, and
+ * "the boats are far too slow" is exactly what it looks like.
+ *
+ * Now each one holds its heading and travels, at a speed that crosses the board
+ * in roughly half a minute — six to nine times the drift of the water, which is
+ * the ratio that makes it obvious a boat is moving through the water rather
+ * than with it. When it runs off one edge it comes back on the other.
  */
-function boatDrift(index: number): { along: number; across: number; heel: number } {
-  const p = phase(index);
-  return {
-    along: Math.sin(elapsed * 0.23 + p) * 7,
-    across: Math.sin(elapsed * 0.17 + p * 1.7) * 3.5,
-    heel: Math.sin(elapsed * 0.41 + p) * 0.045
-  };
+const BOAT_SPEEDS = [27, 34, 22, 30, 25, 38, 20];
+
+/** Back onto the board from the far side, with a margin so nothing pops. */
+function wrap(value: number, span: number): number {
+  const total = span + 120;
+  return (((value + 60) % total) + total) % total - 60;
 }
 
 /** The wake: a short tapered streak off the transom, strongest when moving. */
@@ -122,26 +126,31 @@ function drawGulls(): void {
 }
 
 /**
- * The sea, drawn under everything else. Separate from drawLivingWater because
- * it goes beneath the cached layer while the boats and gulls go on top of it.
+ * The sea and everything floating on it, drawn *under* the cached layer.
+ *
+ * The boats go under it rather than over it now that they travel. A moored boat
+ * could be parked in a gap and left there; one that crosses the whole board will
+ * sooner or later pass a fold of the circuit, and drawn on top it would slide
+ * across the tarmac with traffic on it. Underneath, the deck simply hides it and
+ * gives it back a few seconds later — which at this scale reads as a boat
+ * passing behind the causeway, and needs no routing, no per-track clearance and
+ * no special cases.
  */
-export function drawSea(): void {
+export function drawSeaLayer(): void {
   drawWaterSurface(elapsed);
-}
 
-export function drawLivingWater(): void {
   const decor = trackById(activeTrackId).decor;
 
   decor.boats.forEach(([x, y, size, angle], index) => {
-    const drift = boatDrift(index);
+    const travelled = elapsed * BOAT_SPEEDS[index % BOAT_SPEEDS.length];
+    const heel = Math.sin(elapsed * 0.7 + phase(index)) * 0.035;
+    const bob = Math.sin(elapsed * 1.5 + phase(index)) * 0.8;
     const point = project(
-      x + Math.cos(angle) * drift.along - Math.sin(angle) * drift.across,
-      y + Math.sin(angle) * drift.along + Math.cos(angle) * drift.across
+      wrap(x + Math.cos(angle) * travelled, DESIGN_W),
+      wrap(y + Math.sin(angle) * travelled, DESIGN_H) + bob
     );
-    // Rate of change of the drift is what the wake should follow, not position.
-    const speed = Math.cos(elapsed * 0.23 + phase(index)) * 0.23 * 7;
-    drawWake(point.x, point.y, size * point.scale, angle + drift.heel, speed);
-    drawBoat(point.x, point.y, size * point.scale, angle + drift.heel);
+    drawWake(point.x, point.y, size * point.scale, angle + heel, 0.55);
+    drawBoat(point.x, point.y, size * point.scale, angle + heel);
   });
 
   decor.buoys.forEach(([x, y], index) => {
@@ -163,6 +172,9 @@ export function drawLivingWater(): void {
     ctx.fill();
     ctx.restore();
   });
+}
 
+/** What flies over the top of the scene rather than floating in it. */
+export function drawLivingWater(): void {
   drawGulls();
 }

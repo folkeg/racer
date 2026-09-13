@@ -250,7 +250,15 @@ export interface TrackDecor {
   buildings: Array<[number, number, number, number, number]>;
   /** [x, y, width, height, angle] chequered ground by the pits. */
   chequers: Array<[number, number, number, number, number]>;
-  /** [x1, y1, x2, y2, width] footbridges across the water. */
+  /**
+   * [x1, y1, x2, y2, width] footbridges across the water.
+   *
+   * Every circuit leaves this empty. They ran from the edge of the frame out
+   * into open water and crossed nothing, and because each one had been placed
+   * about fifteen units from a boat, what they actually read as was a yellow
+   * box stuck behind every boat. The renderer stays for a circuit that one day
+   * has two banks to join.
+   */
   bridges: Array<[number, number, number, number, number]>;
 }
 
@@ -284,10 +292,10 @@ const LONG_BAY_DECOR: TrackDecor = {
   trees: [],
   umbrellas: [],
   buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
-  boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
+  boats: [[371, 165, 0.62, 1.57], [10, 335, 0.6, -1.57], [372, 455, 0.58, 1.57], [10, 585, 0.62, -1.57]],
   rocks: [],
   buildings: [],
-  bridges: [[358, 150, 388, 150, 13], [4, 320, 32, 320, 13], [358, 440, 388, 440, 13], [4, 570, 32, 570, 13]],
+  bridges: [],
   chequers: []
 };
 
@@ -297,10 +305,10 @@ const GRAND_OVAL_DECOR: TrackDecor = {
   trees: [],
   umbrellas: [],
   buoys: [[40, 150], [352, 210], [40, 640], [352, 620]],
-  boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, 1.57], [52, 540, 0.72, 1.57]],
+  boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, -1.57], [52, 540, 0.72, 1.57]],
   rocks: [],
   buildings: [],
-  bridges: [[36, 286, 70, 286, 14], [322, 386, 356, 386, 14], [36, 526, 70, 526, 14]],
+  bridges: [],
   chequers: []
 };
 
@@ -310,10 +318,10 @@ const OPEN_WATER_DECOR: TrackDecor = {
   trees: [],
   umbrellas: [],
   buoys: [[20, 120], [372, 200], [20, 560], [372, 660], [18, 380]],
-  boats: [[12, 250, 0.6, 1.57], [376, 340, 0.6, 1.57], [12, 620, 0.58, 1.57]],
+  boats: [[12, 250, 0.6, 1.57], [376, 340, 0.6, -1.57], [12, 620, 0.58, 1.57]],
   rocks: [],
   buildings: [],
-  bridges: [[2, 236, 30, 236, 12], [360, 326, 388, 326, 12], [2, 606, 30, 606, 12]],
+  bridges: [],
   chequers: []
 };
 
