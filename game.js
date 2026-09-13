@@ -320,6 +320,11 @@ var HarborLoop = (() => {
     const b = project(x + Math.cos(angle) * step, y + Math.sin(angle) * step);
     return Math.atan2(b.y - a.y, b.x - a.x);
   }
+  function lateralUnit() {
+    const a = project(SCREEN_CX, DESIGN_H / 2);
+    const b = project(SCREEN_CX + 100, DESIGN_H / 2);
+    return (b.x - a.x) / 100;
+  }
 
   // src/render/light.ts
   var LIGHT_ANGLE = Math.PI * 0.32;
@@ -3470,6 +3475,8 @@ var HarborLoop = (() => {
         edge: "#B9B9B1",
         wall: "#161F28",
         waterline: "rgba(232,244,248,0.8)",
+        apron: "#AFAFA2",
+        apronEdge: "#8E8E82",
         seams: true
       },
       props: [],
@@ -3498,6 +3505,8 @@ var HarborLoop = (() => {
         edge: "#CFC3A6",
         wall: "#3A3226",
         waterline: "rgba(255,248,228,0.7)",
+        apron: "#A8997C",
+        apronEdge: "#8C7F65",
         seams: true
       },
       props: ["rock", "tuft", "parasol"],
@@ -3523,6 +3532,8 @@ var HarborLoop = (() => {
         edge: "#2A3138",
         wall: "#10151A",
         waterline: "rgba(150,170,186,0.35)",
+        apron: "#59626C",
+        apronEdge: "#414A53",
         seams: false
       },
       props: ["barrier", "lamp", "cone"],
@@ -3547,6 +3558,8 @@ var HarborLoop = (() => {
         edge: "#4A453D",
         wall: "#221F1A",
         waterline: "rgba(196,186,160,0.4)",
+        apron: "#8E8472",
+        apronEdge: "#6E6657",
         seams: false
       },
       props: ["drum", "tyres", "cone", "chimney"],
@@ -3570,6 +3583,8 @@ var HarborLoop = (() => {
         edge: "#9E9B8C",
         wall: "#22281C",
         waterline: "rgba(214,226,196,0.4)",
+        apron: "#AAA184",
+        apronEdge: "#8A8268",
         seams: true
       },
       props: ["tree", "bush", "rock"],
@@ -5791,10 +5806,35 @@ var HarborLoop = (() => {
   }
 
   // src/render/road.ts
+  var APRON_WIDTH = 30;
+  function strokeAlongCentre(halfWidth, colour) {
+    const path = projectPath(pathAtOffset(0));
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+    ctx.closePath();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = halfWidth * 2 * lateralUnit();
+    ctx.stroke();
+    ctx.restore();
+  }
+  function drawApron() {
+    const paint = surfaceFor(activeTrackId).road;
+    strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH + 8, "rgba(6,14,20,0.10)");
+    strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH, paint.apronEdge);
+    strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH - 3, paint.apron);
+    strokeAlongCentre(ROAD_HALF_WIDTH + 13, "rgba(6,14,20,0.13)");
+    strokeAlongCentre(ROAD_HALF_WIDTH + 8, "rgba(6,14,20,0.16)");
+    strokeAlongCentre(ROAD_HALF_WIDTH + 4.5, "rgba(6,14,20,0.20)");
+  }
   function edge(offset) {
     return projectPath(pathAtOffset(offset));
   }
   function drawTrack() {
+    drawApron();
     const paint = surfaceFor(activeTrackId).road;
     const outerShadow = projectPath(
       offsetPath(pathAtOffset(ROAD_HALF_WIDTH + 7), SHADOW_X * ROAD_DEPTH, SHADOW_Y * ROAD_DEPTH)

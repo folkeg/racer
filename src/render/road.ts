@@ -16,8 +16,57 @@ import { activeTrackId, pathAtOffset, pathForLane, sampleAtDistance } from '../t
 import { surfaceFor } from './surface';
 import { ROAD_DEPTH, ROAD_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
 import { fillNearFaces, fillRibbon, offsetPath } from './primitives';
-import { project, projectPath, projectedHeading } from './camera';
+import { lateralUnit, project, projectPath, projectedHeading } from './camera';
 import { groundTexture } from './sprites';
+
+/**
+ * The made ground the circuit sits in, and the soft dark where the two meet.
+ *
+ * Drawn as strokes along the centre line rather than as offset paths. Offsetting
+ * a closed loop further than its tightest corner radius turns the curve inside
+ * out, and Long Bay's folds are radius 45 — anything wider than that from the
+ * centre line inverts and draws a knot. A wide round-joined stroke sweeps the
+ * same region and cannot fail that way.
+ *
+ * The contact shadow is three strokes rather than one, each wider and fainter
+ * than the last. A single band has a hard outer edge and reads as a decal; three
+ * steps read as a falloff, which is what light actually does at the foot of a
+ * raised thing — and it costs three strokes in a layer that is drawn once.
+ */
+const APRON_WIDTH = 30;
+
+function strokeAlongCentre(halfWidth: number, colour: string): void {
+  const path = projectPath(pathAtOffset(0));
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = halfWidth * 2 * lateralUnit();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawApron(): void {
+  const paint = surfaceFor(activeTrackId).road;
+
+  // One faint step of ground shadow outside the apron, and no more. Two wider
+  // ones were tried and they darkened most of the board: on a circuit with a
+  // narrow infield the bands from both sides meet in the middle, so a shadow
+  // "around the track" becomes a shadow over everything.
+  strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH + 8, 'rgba(6,14,20,0.10)');
+
+  strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH, paint.apronEdge);
+  strokeAlongCentre(ROAD_HALF_WIDTH + APRON_WIDTH - 3, paint.apron);
+
+  // And the contact shadow, hugging the deck.
+  strokeAlongCentre(ROAD_HALF_WIDTH + 13, 'rgba(6,14,20,0.13)');
+  strokeAlongCentre(ROAD_HALF_WIDTH + 8, 'rgba(6,14,20,0.16)');
+  strokeAlongCentre(ROAD_HALF_WIDTH + 4.5, 'rgba(6,14,20,0.20)');
+}
 
 /** Offsets a plane path sideways, then projects it. */
 function edge(offset: number): ReturnType<typeof projectPath> {
@@ -25,6 +74,7 @@ function edge(offset: number): ReturnType<typeof projectPath> {
 }
 
 export function drawTrack(): void {
+  drawApron();
   // The paving belongs to the world the circuit is laid in, not to the game.
   // Because the baked tile stores lighting over transparency, these colours are
   // the whole difference between a pale harbour deck and black city asphalt —

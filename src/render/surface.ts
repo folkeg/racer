@@ -68,6 +68,25 @@ export interface Surface {
     wall: string;
     waterline: string;
     /**
+     * The apron: the band of made ground the circuit sits in.
+     *
+     * It has to *contrast* with the ground, which the first attempt did not —
+     * the industrial apron was '#6A6459' against a ground of '#5E5A51', a
+     * difference of four values, and an edge nobody can see is not an edge. In
+     * the reference the run-off is plainly lighter than the concrete around it,
+     * and that visible boundary is the whole point: it is what says the ground
+     * was made for the circuit rather than the circuit dropped on the ground.
+     *
+     * The single biggest structural difference from the reference. There, every
+     * corner has a run-off area whose material boundary follows the track, so
+     * the ground reads as having been *built around* the circuit. Here the
+     * ground was one field with a road floating on it, and no amount of scatter
+     * fixes that — it is the difference between a place with a track in it and
+     * a track with things near it.
+     */
+    apron: string;
+    apronEdge: string;
+    /**
      * Transverse joints across the paving.
      *
      * Concrete is cast in slabs and has them; asphalt is laid in a continuous
@@ -100,6 +119,8 @@ export const SURFACES: Record<string, Surface> = {
       edge: '#B9B9B1',
       wall: '#161F28',
       waterline: 'rgba(232,244,248,0.8)',
+      apron: '#AFAFA2',
+      apronEdge: '#8E8E82',
       seams: true
     },
     props: [],
@@ -129,6 +150,8 @@ export const SURFACES: Record<string, Surface> = {
       edge: '#CFC3A6',
       wall: '#3A3226',
       waterline: 'rgba(255,248,228,0.7)',
+      apron: '#A8997C',
+      apronEdge: '#8C7F65',
       seams: true
     },
     props: ['rock', 'tuft', 'parasol'],
@@ -155,6 +178,8 @@ export const SURFACES: Record<string, Surface> = {
       edge: '#2A3138',
       wall: '#10151A',
       waterline: 'rgba(150,170,186,0.35)',
+      apron: '#59626C',
+      apronEdge: '#414A53',
       seams: false
     },
     props: ['barrier', 'lamp', 'cone'],
@@ -180,6 +205,8 @@ export const SURFACES: Record<string, Surface> = {
       edge: '#4A453D',
       wall: '#221F1A',
       waterline: 'rgba(196,186,160,0.4)',
+      apron: '#8E8472',
+      apronEdge: '#6E6657',
       seams: false
     },
     props: ['drum', 'tyres', 'cone', 'chimney'],
@@ -204,6 +231,8 @@ export const SURFACES: Record<string, Surface> = {
       edge: '#9E9B8C',
       wall: '#22281C',
       waterline: 'rgba(214,226,196,0.4)',
+      apron: '#AAA184',
+      apronEdge: '#8A8268',
       seams: true
     },
     props: ['tree', 'bush', 'rock'],

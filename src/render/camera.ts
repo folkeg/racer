@@ -305,3 +305,23 @@ export function projectedHeading(x: number, y: number, angle: number): number {
   const b = project(x + Math.cos(angle) * step, y + Math.sin(angle) * step);
   return Math.atan2(b.y - a.y, b.x - a.x);
 }
+
+
+/**
+ * Screen pixels per plane unit, measured sideways.
+ *
+ * Needed because some things around the circuit are better drawn as a *stroke*
+ * along the centre line than as a pair of offset paths. Offsetting a closed loop
+ * by more than its tightest corner radius turns the curve inside out — Long
+ * Bay's folds have a radius of 45, so anything wider than that from the centre
+ * line inverts — and a wide round-joined stroke sweeps the same region with no
+ * such failure. It needs to know how wide to be.
+ *
+ * Only meaningful because the lateral scale is now uniform across the board; it
+ * was not when the camera still had perspective sideways.
+ */
+export function lateralUnit(): number {
+  const a = project(SCREEN_CX, DESIGN_H / 2);
+  const b = project(SCREEN_CX + 100, DESIGN_H / 2);
+  return (b.x - a.x) / 100;
+}
