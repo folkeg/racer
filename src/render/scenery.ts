@@ -3,8 +3,7 @@
 import { ctx, DESIGN_H, DESIGN_W } from '../platform';
 import { COLORS } from '../theme';
 import { activeTrackId } from '../track';
-import { WATER_TILE, grassTexture, waterTexture } from './sprites';
-import { waterArt } from '../assets';
+import { grassTexture, waterTexture, waterTileSize } from './sprites';
 import { trackById } from '../tracks';
 import { project } from './camera';
 import { ISLAND_DEPTH, ISLAND_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
@@ -251,10 +250,25 @@ function drawChequer(x: number, y: number, w: number, h: number, angle: number):
  * frame — not these, which is why the water can be peeled back out of the cache
  * while the road stays in it.
  */
-/** How wide the painted tile is meant to appear, in design units. */
-const WATER_ART_DESIGN = 256;
-
 export function drawWaterSurface(elapsed: number): void {
+  // Everything here is clipped to the board.
+  //
+  // It was not, and that was one bug wearing two hats. The drifting layers are
+  // filled a whole tile past each edge so the scroll has somewhere to come from,
+  // which put ripple 256 units outside the design area on every side — over the
+  // gradient's edge, outside the vignette, on bare transparent canvas. With the
+  // faint generated tile nobody noticed. With the painted one it showed up as a
+  // second, darker sea framing the first, which is exactly the "two different
+  // things stuck together" it looked like.
+  //
+  // The same overhang was painting 3.72x the design area, twice a frame, for
+  // pixels that are off the board. Clipping fixes the look and most of the cost
+  // in one move.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, DESIGN_W, DESIGN_H);
+  ctx.clip();
+
   const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
   gradient.addColorStop(0, COLORS.waterDeep);
   gradient.addColorStop(0.55, COLORS.water);
@@ -274,14 +288,12 @@ export function drawWaterSurface(elapsed: number): void {
   }
 
   const ripple = waterTexture(ctx);
-  if (!ripple) return;
-
-  // The painted tile is 512 square and is meant to be seen at about half that,
-  // which puts roughly eight crests across a phone. The generated fallback was
-  // authored at its own size and is used as it is.
-  const art = waterArt();
-  const tile = art ? WATER_ART_DESIGN : WATER_TILE;
-  const zoom = art ? WATER_ART_DESIGN / art.width : 1;
+  if (!ripple) {
+    ctx.restore();
+    return;
+  }
+  const tile = waterTileSize();
+  const painted = tile > 128;
 
   // Two copies of the tile crossing at different speeds. Offsets wrap on the
   // tile, so the scroll never accumulates into a big translate and the seams
@@ -298,19 +310,19 @@ export function drawWaterSurface(elapsed: number): void {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(((elapsed * speedX) % tile) - tile, ((elapsed * speedY) % tile) - tile);
-    // A pattern is transformed with the context, so this scales the tile itself.
-    ctx.scale(zoom, zoom);
     ctx.fillStyle = ripple;
-    ctx.fillRect(0, 0, (DESIGN_W + tile * 2) / zoom, (DESIGN_H + tile * 2) / zoom);
+    ctx.fillRect(0, 0, DESIGN_W + tile * 2, DESIGN_H + tile * 2);
     ctx.restore();
   };
   // The painted tile carries far more contrast than the generated one, so it is
   // laid on much more lightly. These two numbers are the only knob between
   // "there is a sea there" and "there is a photograph of a sea there".
-  const strong = art ? 0.34 : 0.85;
-  const weak = art ? 0.18 : 0.55;
+  const strong = painted ? 0.34 : 0.85;
+  const weak = painted ? 0.18 : 0.55;
   drift(4.2, 2.2, strong);
   drift(-2.6, 3.6, weak);
+
+  ctx.restore();
 }
 
 /** Fixed shallows and deeps: [x, y, radius, "r,g,b", alpha]. */

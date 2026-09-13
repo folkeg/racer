@@ -267,8 +267,22 @@ export function asphaltTexture(target: CanvasRenderingContext2D): CanvasPattern 
 
 export const WATER_TILE = 128;
 
-/** Pattern built from the painted tile, once it has loaded. */
+/**
+ * Pattern built from the painted tile, once it has loaded.
+ *
+ * The image is 512 square and wants to be seen at half that, and the first way
+ * of getting there was to scale the context before filling. That works, but it
+ * makes every fill a resampling job. Scaling it once into an offscreen tile
+ * instead means the per-frame fill is an unscaled pattern, which is the path
+ * the canvas is fast at.
+ */
+const WATER_ART_TILE = 256;
 let artPattern: CanvasPattern | null = null;
+
+/** Side of the tile currently in use, in design units. */
+export function waterTileSize(): number {
+  return artPattern ? WATER_ART_TILE : WATER_TILE;
+}
 
 let waterPattern: CanvasPattern | null = null;
 let waterTried = false;
@@ -288,7 +302,14 @@ export function waterTexture(target: CanvasRenderingContext2D): CanvasPattern | 
   if (art) {
     if (!artPattern) {
       try {
-        artPattern = target.createPattern(art as unknown as CanvasImageSource, 'repeat');
+        const scaled = createOffscreenCanvas(WATER_ART_TILE, WATER_ART_TILE);
+        const scaledCtx = scaled ? scaled.getContext('2d') : null;
+        if (scaled && scaledCtx) {
+          scaledCtx.drawImage(
+            art as unknown as CanvasImageSource, 0, 0, WATER_ART_TILE, WATER_ART_TILE
+          );
+          artPattern = target.createPattern(scaled as unknown as CanvasImageSource, 'repeat');
+        }
       } catch (error) {
         artPattern = null;
       }

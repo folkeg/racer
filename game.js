@@ -3337,7 +3337,11 @@ var HarborLoop = (() => {
     return asphaltPattern;
   }
   var WATER_TILE = 128;
+  var WATER_ART_TILE = 256;
   var artPattern = null;
+  function waterTileSize() {
+    return artPattern ? WATER_ART_TILE : WATER_TILE;
+  }
   var waterPattern = null;
   var waterTried = false;
   function waterTexture(target) {
@@ -3345,7 +3349,18 @@ var HarborLoop = (() => {
     if (art) {
       if (!artPattern) {
         try {
-          artPattern = target.createPattern(art, "repeat");
+          const scaled = createOffscreenCanvas(WATER_ART_TILE, WATER_ART_TILE);
+          const scaledCtx = scaled ? scaled.getContext("2d") : null;
+          if (scaled && scaledCtx) {
+            scaledCtx.drawImage(
+              art,
+              0,
+              0,
+              WATER_ART_TILE,
+              WATER_ART_TILE
+            );
+            artPattern = target.createPattern(scaled, "repeat");
+          }
         } catch (error) {
           artPattern = null;
         }
@@ -3684,8 +3699,11 @@ var HarborLoop = (() => {
       }
     }
   }
-  var WATER_ART_DESIGN = 256;
   function drawWaterSurface(elapsed2) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, DESIGN_W, DESIGN_H);
+    ctx.clip();
     const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
     gradient.addColorStop(0, COLORS.waterDeep);
     gradient.addColorStop(0.55, COLORS.water);
@@ -3700,23 +3718,25 @@ var HarborLoop = (() => {
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     }
     const ripple = waterTexture(ctx);
-    if (!ripple) return;
-    const art = waterArt();
-    const tile = art ? WATER_ART_DESIGN : WATER_TILE;
-    const zoom = art ? WATER_ART_DESIGN / art.width : 1;
+    if (!ripple) {
+      ctx.restore();
+      return;
+    }
+    const tile = waterTileSize();
+    const painted = tile > 128;
     const drift = (speedX, speedY, alpha) => {
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.translate(elapsed2 * speedX % tile - tile, elapsed2 * speedY % tile - tile);
-      ctx.scale(zoom, zoom);
       ctx.fillStyle = ripple;
-      ctx.fillRect(0, 0, (DESIGN_W + tile * 2) / zoom, (DESIGN_H + tile * 2) / zoom);
+      ctx.fillRect(0, 0, DESIGN_W + tile * 2, DESIGN_H + tile * 2);
       ctx.restore();
     };
-    const strong = art ? 0.34 : 0.85;
-    const weak = art ? 0.18 : 0.55;
+    const strong = painted ? 0.34 : 0.85;
+    const weak = painted ? 0.18 : 0.55;
     drift(4.2, 2.2, strong);
     drift(-2.6, 3.6, weak);
+    ctx.restore();
   }
   var WATER_PATCHES = [
     [40, 120, 190, "16,42,66", 0.3],
