@@ -3936,9 +3936,45 @@ var HarborLoop = (() => {
       ctx.stroke();
       ctx.restore();
     };
-    stroke(19, "rgba(8,14,20,0.16)");
-    stroke(16, paint.apronEdge);
-    stroke(13, paint.apron);
+    stroke(15, "rgba(8,14,20,0.16)");
+    stroke(12.5, paint.apronEdge);
+    stroke(10, paint.apron);
+    const grain = groundTexture(ctx, paint.tile);
+    if (grain) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      stroke(10, grain);
+      ctx.restore();
+    }
+    const squared = !surfaceFor(activeTrackId).island.planted;
+    for (const structure of placed) {
+      const p = project(structure.x, structure.y);
+      const r = structure.reach * lateralUnit();
+      const w = r * 1.12;
+      const h = r * 0.72;
+      const shape = () => {
+        ctx.beginPath();
+        if (squared) ctx.rect(p.x - w, p.y - h, w * 2, h * 2);
+        else ctx.ellipse(p.x, p.y, w, h, 0, 0, Math.PI * 2);
+      };
+      ctx.fillStyle = paint.apronEdge;
+      shape();
+      ctx.fill();
+      ctx.fillStyle = paint.apron;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(0.93, 0.9);
+      ctx.translate(-p.x, -p.y);
+      shape();
+      ctx.fill();
+      if (grain) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = grain;
+        shape();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
   function shade(x, y, w, h, alpha) {
     ctx.fillStyle = `rgba(10,16,22,${alpha})`;
@@ -6049,13 +6085,23 @@ var HarborLoop = (() => {
     ctx.stroke();
     ctx.restore();
   }
-  var APRON_CORNER_EXTRA = 34;
+  var APRON_CORNER_EXTRA = 14;
+  var APRON_SMOOTH = 26;
+  function smoothProfile(values) {
+    return values.map((_, i) => {
+      let sum = 0;
+      for (let k = -APRON_SMOOTH; k <= APRON_SMOOTH; k++) {
+        sum += values[(i + k + values.length) % values.length];
+      }
+      return sum / (APRON_SMOOTH * 2 + 1);
+    });
+  }
   function drawApron() {
     const paint = surfaceFor(activeTrackId).road;
     const signed = signedCurvature();
     const peak = signed.reduce((most, value) => Math.max(most, Math.abs(value)), 0) || 1;
-    const right = signed.map((k) => ROAD_HALF_WIDTH + APRON_WIDTH + Math.max(0, -k) / peak * APRON_CORNER_EXTRA);
-    const left = signed.map((k) => -(ROAD_HALF_WIDTH + APRON_WIDTH + Math.max(0, k) / peak * APRON_CORNER_EXTRA));
+    const right = smoothProfile(signed.map((k) => ROAD_HALF_WIDTH + APRON_WIDTH + Math.max(0, -k) / peak * APRON_CORNER_EXTRA));
+    const left = smoothProfile(signed.map((k) => -(ROAD_HALF_WIDTH + APRON_WIDTH + Math.max(0, k) / peak * APRON_CORNER_EXTRA)));
     const roadRight = edge(ROAD_HALF_WIDTH);
     const roadLeft = edge(-ROAD_HALF_WIDTH);
     const band = (offsets, road, inset, fill) => {

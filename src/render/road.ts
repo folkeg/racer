@@ -70,7 +70,29 @@ function strokeAlongCentre(halfWidth: number, colour: string): void {
  * is precisely where that happens; the outside has the larger radius and cannot
  * fail. So the inner side stays at the base width and only the outer grows.
  */
-const APRON_CORNER_EXTRA = 34;
+const APRON_CORNER_EXTRA = 14;
+/**
+ * How far the widening is smeared along the lap, in path samples.
+ *
+ * Without this the apron follows the curvature far too literally: the tightest
+ * corner gets the full extra width over a short arc and the ground balloons into
+ * a lump with a ragged edge — an amoeba stuck to the outside of the bend, which
+ * is what happened at 34 units of extra width with no smoothing at all. Real
+ * run-off opens gradually through a corner and closes gradually after it, so the
+ * width profile is averaged over a long window and the curvature underneath only
+ * says where the middle of the corner is.
+ */
+const APRON_SMOOTH = 26;
+
+function smoothProfile(values: number[]): number[] {
+  return values.map((_, i) => {
+    let sum = 0;
+    for (let k = -APRON_SMOOTH; k <= APRON_SMOOTH; k++) {
+      sum += values[(i + k + values.length) % values.length];
+    }
+    return sum / (APRON_SMOOTH * 2 + 1);
+  });
+}
 
 function drawApron(): void {
   const paint = surfaceFor(activeTrackId).road;
@@ -79,10 +101,10 @@ function drawApron(): void {
 
   // Positive curvature turns towards the car's left, so the outside of such a
   // corner is its right — the +offset side.
-  const right = signed.map((k) => ROAD_HALF_WIDTH + APRON_WIDTH
-    + Math.max(0, -k) / peak * APRON_CORNER_EXTRA);
-  const left = signed.map((k) => -(ROAD_HALF_WIDTH + APRON_WIDTH
-    + Math.max(0, k) / peak * APRON_CORNER_EXTRA));
+  const right = smoothProfile(signed.map((k) => ROAD_HALF_WIDTH + APRON_WIDTH
+    + Math.max(0, -k) / peak * APRON_CORNER_EXTRA));
+  const left = smoothProfile(signed.map((k) => -(ROAD_HALF_WIDTH + APRON_WIDTH
+    + Math.max(0, k) / peak * APRON_CORNER_EXTRA)));
 
   const roadRight = edge(ROAD_HALF_WIDTH);
   const roadLeft = edge(-ROAD_HALF_WIDTH);

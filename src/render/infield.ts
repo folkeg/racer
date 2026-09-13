@@ -25,6 +25,7 @@ import type { TrackId } from '../tracks';
 import { lateralUnit, project } from './camera';
 import { SHADOW_X, SHADOW_Y } from './light';
 import { freeGround } from './props';
+import { groundTexture } from './sprites';
 import { surfaceFor } from './surface';
 
 export type StructureKind = 'hall' | 'dome' | 'tank' | 'pavilion';
@@ -102,7 +103,7 @@ function drawServiceRoad(placed: Structure[]): void {
   const paint = surfaceFor(activeTrackId).road;
   const order = [...placed].sort((a, b) => a.y - b.y);
 
-  const stroke = (width: number, colour: string): void => {
+  const stroke = (width: number, colour: string | CanvasPattern): void => {
     ctx.save();
     ctx.beginPath();
     const first = project(order[0].x, order[0].y);
@@ -119,9 +120,63 @@ function drawServiceRoad(placed: Structure[]): void {
     ctx.restore();
   };
 
-  stroke(19, 'rgba(8,14,20,0.16)');
-  stroke(16, paint.apronEdge);
-  stroke(13, paint.apron);
+  // Narrower than it was, with an edge and a material.
+  //
+  // It went in as three plain strokes and came out as a grey stick laid across
+  // the infield — the same failure the run-off had before it was given a grain:
+  // a flat fill between two textured surfaces does not read as a surface at all.
+  // For the thing whose entire job is to say "these buildings can be reached",
+  // that was worth catching.
+  stroke(15, 'rgba(8,14,20,0.16)');
+  stroke(12.5, paint.apronEdge);
+  stroke(10, paint.apron);
+
+  const grain = groundTexture(ctx, paint.tile);
+  if (grain) {
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    stroke(10, grain);
+    ctx.restore();
+  }
+
+  // Pads where it arrives, so the buildings stand on it rather than beside it.
+  //
+  // Tight, and with an edge. The first version drew them at 1.32 by 0.86 of the
+  // structure's reach and they overlapped into one lumpy grey smear across the
+  // middle of the works yard — a pad with no edge is not a pad. They are also
+  // square where the world is: a yard is set out with a rule, and round
+  // hardstanding in an industrial site looks as wrong as a rectangular dune.
+  const squared = !surfaceFor(activeTrackId).island.planted;
+  for (const structure of placed) {
+    const p = project(structure.x, structure.y);
+    const r = structure.reach * lateralUnit();
+    const w = r * 1.12;
+    const h = r * 0.72;
+
+    const shape = (): void => {
+      ctx.beginPath();
+      if (squared) ctx.rect(p.x - w, p.y - h, w * 2, h * 2);
+      else ctx.ellipse(p.x, p.y, w, h, 0, 0, Math.PI * 2);
+    };
+
+    ctx.fillStyle = paint.apronEdge;
+    shape();
+    ctx.fill();
+    ctx.fillStyle = paint.apron;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(0.93, 0.9);
+    ctx.translate(-p.x, -p.y);
+    shape();
+    ctx.fill();
+    if (grain) {
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = grain;
+      shape();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 }
 
 function shade(x: number, y: number, w: number, h: number, alpha: number): void {
