@@ -70,6 +70,8 @@ export function invalidateStaticLayer(): void {
 export function drawStaticScene(): void {
   if (!ensureLayer() || !layer || !layerCtx) {
     // No offscreen canvas: fall back to drawing the scene live every frame.
+    // No offscreen canvas: the whole scene is drawn live anyway, and the sea
+    // has already been laid down by drawRace.
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);

@@ -264,7 +264,7 @@ export function asphaltTexture(target: CanvasRenderingContext2D): CanvasPattern 
 }
 
 
-const WATER_TILE = 128;
+export const WATER_TILE = 128;
 
 let waterPattern: CanvasPattern | null = null;
 let waterTried = false;

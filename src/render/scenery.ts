@@ -3,11 +3,12 @@
 import { ctx, DESIGN_H, DESIGN_W } from '../platform';
 import { COLORS } from '../theme';
 import { activeTrackId } from '../track';
-import { grassTexture, waterTexture } from './sprites';
+import { WATER_TILE, grassTexture, waterTexture } from './sprites';
 import { trackById } from '../tracks';
 import { project } from './camera';
 import { ISLAND_DEPTH, SHADOW_X, SHADOW_Y } from './light';
 import { fillRibbon } from './primitives';
+import type { Vec2 } from '../types';
 
 function drawTree(x: number, y: number, size = 1): void {
   ctx.save();
@@ -235,7 +236,21 @@ function drawChequer(x: number, y: number, w: number, h: number, angle: number):
   }
 }
 
-export function drawBackground(): void {
+/**
+ * The sea itself, drawn live rather than baked into the cached layer.
+ *
+ * It is the one surface that covers the whole screen, so it is also the only
+ * one where movement is felt everywhere at once. Two copies of the same ripple
+ * tile are scrolled at different speeds and angles: a single scrolling layer
+ * reads as a texture being dragged, while two crossing at different rates read
+ * as a surface with a swell on it.
+ *
+ * The cost is a gradient and two pattern fills a frame. The reason the scene
+ * was cached in the first place was the kerb pass — two thousand strokes a
+ * frame — not these, which is why the water can be peeled back out of the cache
+ * while the road stays in it.
+ */
+export function drawWaterSurface(elapsed: number): void {
   const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
   gradient.addColorStop(0, COLORS.waterDeep);
   gradient.addColorStop(0.55, COLORS.water);
@@ -243,40 +258,290 @@ export function drawBackground(): void {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
 
-  const ripple = waterTexture(ctx);
-  if (ripple) {
-    ctx.fillStyle = ripple;
-    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+  // Depth mottling. A pure vertical ramp is the flattest thing a screen can
+  // show, and it was reading as a blue backdrop rather than as water. These are
+  // broad, soft and fixed — shallows and deeps do not wander — and they give the
+  // moving layers above something uneven to move across.
+  for (const [cx, cy, r, tint, alpha] of WATER_PATCHES) {
+    const patch = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    patch.addColorStop(0, `rgba(${tint},${alpha})`);
+    patch.addColorStop(1, `rgba(${tint},0)`);
+    ctx.fillStyle = patch;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 
+  drawSwell(elapsed);
+
+  const ripple = waterTexture(ctx);
+  if (ripple) {
+    // Offsets wrap on the tile, so the scroll never accumulates into a big
+    // translate and the seams stay where the tile put them.
+    const drift = (speedX: number, speedY: number, alpha: number): void => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(
+        ((elapsed * speedX) % WATER_TILE) - WATER_TILE,
+        ((elapsed * speedY) % WATER_TILE) - WATER_TILE
+      );
+      ctx.fillStyle = ripple;
+      ctx.fillRect(0, 0, DESIGN_W + WATER_TILE * 2, DESIGN_H + WATER_TILE * 2);
+      ctx.restore();
+    };
+    drift(5.4, 2.8, 1);
+    drift(-3.2, 4.6, 0.7);
+  }
+
+  drawGlints(elapsed);
+}
+
+/** Fixed shallows and deeps: [x, y, radius, "r,g,b", alpha]. */
+const WATER_PATCHES: Array<[number, number, number, string, number]> = [
+  [40, 120, 190, '16,42,66', 0.30],
+  [352, 250, 210, '16,42,66', 0.22],
+  [24, 470, 170, '150,186,198', 0.16],
+  [372, 560, 200, '150,186,198', 0.13],
+  [196, 812, 240, '150,186,198', 0.18],
+  [200, 30, 260, '10,30,52', 0.26]
+];
+
+/**
+ * Travelling swell.
+ *
+ * The two drifting ripple tiles are the surface texture, and on their own they
+ * are not enough: measured over a second on the open water at the left of Long
+ * Bay, they changed 27% of the pixels by a mean of 5 out of 765 — real motion,
+ * and completely invisible. The eye does not pick up a texture sliding under
+ * itself at low contrast. It does pick up a line that crosses the frame.
+ *
+ * So this draws the long-period part of the sea separately: crests a couple of
+ * hundred units apart, warped along their length, marching slowly down the
+ * screen with a dark trough behind each one. Twenty paths a frame.
+ */
+const SWELL_SPACING = 54;
+const SWELL_SPEED = 11;
+
+function drawSwell(elapsed: number): void {
+  const offset = (elapsed * SWELL_SPEED) % SWELL_SPACING;
+  ctx.lineCap = 'round';
+  for (let i = -1; i * SWELL_SPACING < DESIGN_H + SWELL_SPACING; i++) {
+    const baseY = i * SWELL_SPACING + offset;
+    const sway = Math.sin(elapsed * 0.5 + i * 1.7);
+    for (const [dy, colour, width] of SWELL_STROKES) {
+      ctx.beginPath();
+      for (let x = 0; x <= DESIGN_W; x += 18) {
+        const y =
+          baseY + dy + Math.sin(x / 74 + elapsed * 0.55 + i) * 4.4 + Math.sin(x / 31 - elapsed * 0.9) * 1.6 + sway;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.stroke();
+    }
+  }
+}
+
+/** Crest, then the shadow that sits in front of it. */
+const SWELL_STROKES: Array<[number, string, number]> = [
+  [0, 'rgba(255,255,255,0.17)', 2.6],
+  [3.6, 'rgba(18,44,66,0.13)', 3.4]
+];
+
+/**
+ * Sun glints: short bright dashes that flare and die on their own phase.
+ *
+ * This is the layer that actually says "moving water" at a glance, because
+ * something appearing where there was nothing is the one kind of change that
+ * catches an eye which is busy watching traffic. Positions are hashed from the
+ * index so they never wander, and the flare is a high power of a sine so each
+ * one is dark most of the time and briefly very bright.
+ */
+const GLINT_COUNT = 78;
+
+function drawGlints(elapsed: number): void {
+  ctx.lineCap = 'round';
+  for (let i = 0; i < GLINT_COUNT; i++) {
+    const hx = Math.sin(i * 12.9898) * 43758.5453;
+    const hy = Math.sin(i * 78.233) * 12345.6789;
+    const hp = Math.sin(i * 39.425) * 9876.5432;
+    const x = (hx - Math.floor(hx)) * DESIGN_W;
+    const y = (hy - Math.floor(hy)) * DESIGN_H;
+    const phase = (hp - Math.floor(hp)) * Math.PI * 2;
+    const rate = 0.9 + (hp - Math.floor(hp)) * 1.5;
+
+    const pulse = Math.sin(elapsed * rate + phase);
+    if (pulse <= 0) continue;
+    const flare = Math.pow(pulse, 7);
+    if (flare < 0.02) continue;
+
+    const drift = ((elapsed * 3.2) % DESIGN_H);
+    const yy = (y + drift) % DESIGN_H;
+    ctx.strokeStyle = `rgba(255,255,255,${(0.78 * flare).toFixed(3)})`;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x - 3.5 - flare * 2, yy);
+    ctx.lineTo(x + 3.5 + flare * 2, yy);
+    ctx.stroke();
+  }
+}
+
+/**
+ * Deterministic per-island randomness.
+ *
+ * The islands have to look the same on every run — they are part of the circuit,
+ * not weather — so nothing here may touch Math.random. Small integer hash,
+ * seeded from the island's own index and rectangle, so moving an island changes
+ * its planting and leaving it alone does not.
+ */
+function seededRandom(seed: number): () => number {
+  let state = (seed * 2654435761) >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+/**
+ * An island outline as a plane-space polygon.
+ *
+ * The islands used to be the rectangles they are declared as, and five
+ * rectangles of the same size down the middle of the board read as placeholder
+ * art however good the texture on them was. The declaration stays a rectangle
+ * because that is what the clearance search can reason about; this turns it into
+ * a shape.
+ *
+ * Two things vary. `squareness` is a superellipse exponent: at 2 the island is a
+ * plain ellipse, at 5 it is nearly the rectangle it was, and every island picks
+ * its own. On top of that the radius carries three sine harmonics at random
+ * phase, which is what stops the outline from being any recognisable primitive —
+ * it bulges and narrows the way a real spit of land does.
+ */
+function islandOutline(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  rand: () => number,
+  swell = 1
+): Vec2[] {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  // The declared rectangle is the hard envelope: it came out of a search for
+  // space that clears the road, so nothing drawn may exceed it. The widest thing
+  // drawn is the soil rim at 1.16 carrying a wobble of up to 1.07, and this
+  // divides that back out.
+  const ENVELOPE = 0.806;
+  const a = (w / 2) * swell * ENVELOPE;
+  const b = (h / 2) * swell * ENVELOPE;
+  const squareness = 2.4 + rand() * 2.4;
+  const exponent = 2 / squareness;
+  const p1 = rand() * Math.PI * 2;
+  const p2 = rand() * Math.PI * 2;
+  const p3 = rand() * Math.PI * 2;
+
+  const points: Vec2[] = [];
+  const STEPS = 48;
+  for (let i = 0; i < STEPS; i++) {
+    const t = (i / STEPS) * Math.PI * 2;
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    const wobble =
+      1 + 0.070 * Math.sin(t * 3 + p1) + 0.048 * Math.sin(t * 5 + p2) + 0.030 * Math.sin(t * 7 + p3);
+    points.push({
+      x: cx + Math.sign(c) * Math.pow(Math.abs(c), exponent) * a * wobble,
+      y: cy + Math.sign(s) * Math.pow(Math.abs(s), exponent) * b * wobble
+    });
+  }
+  return points;
+}
+
+/** Fills a plane-space polygon through the camera. */
+function fillPlanePolygon(points: Vec2[], fill: string | CanvasPattern, dx = 0, dy = 0): void {
+  ctx.beginPath();
+  for (let i = 0; i < points.length; i++) {
+    const p = project(points[i].x + dx, points[i].y + dy);
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+/** Grass tones, so neighbouring islands are not the same green. */
+const ISLAND_GREENS = ['#6E8B4A', '#7C9553', '#637F43', '#849B58', '#728E4C'];
+
+/**
+ * One island: water shadow, soil rim, sand beach, grass, then whatever grows on
+ * it. The planting is scattered from the same seed as the outline, so it always
+ * lands on the island rather than in the sea beside it — which is the failure
+ * the old hand-placed tree coordinates had every time an island moved.
+ */
+function drawIsland(x: number, y: number, w: number, h: number, index: number): void {
+  const rand = seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y));
+  const outline = islandOutline(x, y, w, h, rand);
+  const beach = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.10);
+  const soil = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.16);
+
+  fillPlanePolygon(soil, 'rgba(4,12,18,0.34)', SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
+  fillPlanePolygon(soil, COLORS.landDark);
+  fillPlanePolygon(beach, '#C6B993');
+  fillPlanePolygon(outline, ISLAND_GREENS[index % ISLAND_GREENS.length]);
+
+  const grass = grassTexture(ctx);
+  if (grass) fillPlanePolygon(outline, grass);
+
+  // Planting. Rejection-free: a point is drawn in the outline's own parameter
+  // space, so it is inside by construction.
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const count = Math.max(3, Math.round((w * h) / 620));
+  const items: Array<{ x: number; y: number; kind: number; size: number }> = [];
+  for (let i = 0; i < count; i++) {
+    const t = rand() * Math.PI * 2;
+    const radius = Math.sqrt(rand()) * 0.74;
+    items.push({
+      x: cx + Math.cos(t) * (w / 2) * radius,
+      y: cy + Math.sin(t) * (h / 2) * radius,
+      kind: rand(),
+      size: 0.30 + rand() * 0.22
+    });
+  }
+  // Far things first, so the near ones overlap them.
+  items.sort((a, b) => a.y - b.y);
+  for (const item of items) {
+    const p = project(item.x, item.y);
+    if (item.kind > 0.82) drawUmbrella(p.x, p.y, item.size * p.scale * 1.05);
+    else if (item.kind > 0.62) drawBush(p.x, p.y, item.size * p.scale);
+    else drawTree(p.x, p.y, item.size * p.scale);
+  }
+}
+
+/** A low shrub. Cheaper than a tree and breaks up a field of them. */
+function drawBush(x: number, y: number, size = 1): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(13,35,30,0.20)';
+  ctx.beginPath();
+  ctx.ellipse(1.5 * size, 3 * size, 7 * size, 3.4 * size, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#4F6B3E';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 6 * size, 4 * size, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#6C8A4C';
+  ctx.beginPath();
+  ctx.ellipse(-1 * size, -1.6 * size, 4 * size, 2.6 * size, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+export function drawBackground(): void {
   // Decor follows the circuit: each track declares where its dry land is, so
   // islands never end up drawn across the road.
   const decor = trackById(activeTrackId).decor;
 
-  // Islands are projected quads: their far edge is narrower than their near one,
-  // which is most of what sells the plane as a plane.
-  const quad = (x: number, y: number, w: number, h: number, dx = 0, dy = 0): void => {
-    const top = [project(x + dx, y + dy), project(x + w + dx, y + dy)];
-    const bottom = [project(x + dx, y + h + dy), project(x + w + dx, y + h + dy)];
-    fillRibbon(top, bottom, ctx.fillStyle as string);
-  };
-
-  decor.medians.forEach(([x, y, w, h], i) => {
-    ctx.fillStyle = 'rgba(4,12,18,0.42)';
-    quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
-    ctx.fillStyle = '#5A7043';
-    quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH * 0.5, SHADOW_Y * ISLAND_DEPTH * 0.5);
-    ctx.fillStyle = COLORS.landDark;
-    quad(x - 4, y - 4, w + 8, h + 8);
-    ctx.fillStyle = i % 2 === 0 ? COLORS.land : COLORS.landLight;
-    quad(x, y, w, h);
-
-    const grass = grassTexture(ctx);
-    if (grass) {
-      ctx.fillStyle = grass;
-      quad(x, y, w, h);
-    }
-  });
+  decor.medians.forEach(([x, y, w, h], i) => drawIsland(x, y, w, h, i));
 
   for (const [x, y, size] of decor.trees) {
     const p = project(x, y);

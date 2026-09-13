@@ -22,7 +22,7 @@ import { DESIGN_H, DESIGN_W, ctx } from '../platform';
 import { activeTrackId } from '../track';
 import { trackById } from '../tracks';
 import { project } from './camera';
-import { drawBoat } from './scenery';
+import { drawBoat, drawWaterSurface } from './scenery';
 
 /** Seconds since the circuit loaded. Drives every phase below. */
 let elapsed = 0;
@@ -119,6 +119,14 @@ function drawGulls(): void {
     ctx.stroke();
     ctx.restore();
   }
+}
+
+/**
+ * The sea, drawn under everything else. Separate from drawLivingWater because
+ * it goes beneath the cached layer while the boats and gulls go on top of it.
+ */
+export function drawSea(): void {
+  drawWaterSurface(elapsed);
 }
 
 export function drawLivingWater(): void {

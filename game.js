@@ -245,6 +245,9 @@ var HarborLoop = (() => {
   var FIT_Y = 1.02;
   var cosPitch = Math.cos(PITCH);
   var sinPitch = Math.sin(PITCH);
+  var LATERAL_PERSPECTIVE = 0.35;
+  var MID_DEPTH = (NEAR + DESIGN_H / 2) * cosPitch + HEIGHT * sinPitch;
+  var MID_SCALE = FOCAL / MID_DEPTH;
   var SAFE_MARGIN = 26;
   var SAFE_TOP = 64;
   var SAFE_BOTTOM = 700;
@@ -293,8 +296,9 @@ var HarborLoop = (() => {
     const depth = ground * cosPitch + HEIGHT * sinPitch;
     const vertical = ground * sinPitch - HEIGHT * cosPitch;
     const scale2 = FOCAL / Math.max(1, depth);
+    const lateralScale = scale2 * LATERAL_PERSPECTIVE + MID_SCALE * (1 - LATERAL_PERSPECTIVE);
     return {
-      x: (SCREEN_CX + lateral * scale2 * FIT_X) * fitScale + fitDx,
+      x: (SCREEN_CX + lateral * lateralScale * FIT_X) * fitScale + fitDx,
       y: -vertical * scale2 * FIT_Y * fitScaleY + fitDy,
       // Sprite scale is the same magnification the road gets, so a car always
       // covers the same share of its lane. It used to be `midBoardDepth / depth`,
@@ -384,7 +388,7 @@ var HarborLoop = (() => {
     const step = (LONG_BAY_BOTTOM - LONG_BAY_TOP) / (LONG_BAY_ROWS - 1);
     const r = LONG_BAY_RADIUS;
     const eastX = 310;
-    const innerX = 160;
+    const innerX = 184;
     const path = new PathBuilder().start(110, LONG_BAY_TOP);
     for (let row = 0; row < LONG_BAY_ROWS; row++) {
       const y = LONG_BAY_TOP + row * step;
@@ -462,19 +466,27 @@ var HarborLoop = (() => {
     return path.close();
   }
   var LONG_BAY_DECOR = {
-    // Sized by searching each gap for the widest island that still clears the
-    // road by 3 — the fold takes one end of every gap, and which end alternates,
-    // so these are not on a grid. Six rows instead of eight is what bought the
-    // width: 180 across and 42 deep, against 113 by 16 before.
+    // Each of these is the largest rectangle that fits between two rows while
+    // clearing the tarmac by 5, found by search rather than by eye — the fold
+    // takes one end of every gap and which end alternates, so they are not on a
+    // grid. They are envelopes, not shapes: what gets drawn inside them is a
+    // wobbled superellipse that differs island to island.
+    //
+    // The two middle ones reach east past the rows into the bay between the east
+    // folds, which is the only part of the board where land and open water meet on
+    // a diagonal. They are deliberately not the same size as the other three.
     medians: [
-      [106, 108, 180, 42],
-      [158, 234, 180, 42],
-      [88, 360, 180, 42],
-      [158, 486, 180, 42],
-      [92, 612, 180, 42]
+      [110, 112, 190, 42],
+      [198, 238, 148, 40],
+      [100, 364, 200, 42],
+      [186, 490, 168, 40],
+      [116, 616, 172, 40]
     ],
-    trees: [[132, 129, 0.42], [250, 129, 0.4], [196, 255, 0.42], [120, 381, 0.4], [244, 381, 0.42], [200, 507, 0.4], [130, 633, 0.42], [246, 633, 0.4]],
-    umbrellas: [[196, 129, 0.4], [268, 255, 0.38], [178, 381, 0.4], [240, 507, 0.38], [190, 633, 0.4]],
+    // Planting is scattered from each island's own seed now, so it cannot end up
+    // in the water when an island moves — which is exactly what the hand-placed
+    // coordinates that used to be here did every time the geometry changed.
+    trees: [],
+    umbrellas: [],
     buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
     boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
     rocks: [],
@@ -484,8 +496,8 @@ var HarborLoop = (() => {
   };
   var GRAND_OVAL_DECOR = {
     medians: [[170, 216, 50, 356]],
-    trees: [[195, 252, 0.42], [195, 400, 0.42], [195, 540, 0.42]],
-    umbrellas: [[195, 326, 0.4], [195, 468, 0.4]],
+    trees: [],
+    umbrellas: [],
     buoys: [[40, 150], [352, 210], [40, 640], [352, 620]],
     boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, 1.57], [52, 540, 0.72, 1.57]],
     rocks: [],
@@ -3604,39 +3616,194 @@ var HarborLoop = (() => {
       }
     }
   }
-  function drawBackground() {
+  function drawWaterSurface(elapsed2) {
     const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
     gradient.addColorStop(0, COLORS.waterDeep);
     gradient.addColorStop(0.55, COLORS.water);
     gradient.addColorStop(1, "#94AEBA");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+    for (const [cx, cy, r, tint, alpha] of WATER_PATCHES) {
+      const patch = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      patch.addColorStop(0, `rgba(${tint},${alpha})`);
+      patch.addColorStop(1, `rgba(${tint},0)`);
+      ctx.fillStyle = patch;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    drawSwell(elapsed2);
     const ripple = waterTexture(ctx);
     if (ripple) {
-      ctx.fillStyle = ripple;
-      ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+      const drift = (speedX, speedY, alpha) => {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(
+          elapsed2 * speedX % WATER_TILE - WATER_TILE,
+          elapsed2 * speedY % WATER_TILE - WATER_TILE
+        );
+        ctx.fillStyle = ripple;
+        ctx.fillRect(0, 0, DESIGN_W + WATER_TILE * 2, DESIGN_H + WATER_TILE * 2);
+        ctx.restore();
+      };
+      drift(5.4, 2.8, 1);
+      drift(-3.2, 4.6, 0.7);
     }
-    const decor = trackById(activeTrackId).decor;
-    const quad = (x, y, w, h, dx = 0, dy = 0) => {
-      const top = [project(x + dx, y + dy), project(x + w + dx, y + dy)];
-      const bottom = [project(x + dx, y + h + dy), project(x + w + dx, y + h + dy)];
-      fillRibbon(top, bottom, ctx.fillStyle);
-    };
-    decor.medians.forEach(([x, y, w, h], i) => {
-      ctx.fillStyle = "rgba(4,12,18,0.42)";
-      quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
-      ctx.fillStyle = "#5A7043";
-      quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH * 0.5, SHADOW_Y * ISLAND_DEPTH * 0.5);
-      ctx.fillStyle = COLORS.landDark;
-      quad(x - 4, y - 4, w + 8, h + 8);
-      ctx.fillStyle = i % 2 === 0 ? COLORS.land : COLORS.landLight;
-      quad(x, y, w, h);
-      const grass = grassTexture(ctx);
-      if (grass) {
-        ctx.fillStyle = grass;
-        quad(x, y, w, h);
+    drawGlints(elapsed2);
+  }
+  var WATER_PATCHES = [
+    [40, 120, 190, "16,42,66", 0.3],
+    [352, 250, 210, "16,42,66", 0.22],
+    [24, 470, 170, "150,186,198", 0.16],
+    [372, 560, 200, "150,186,198", 0.13],
+    [196, 812, 240, "150,186,198", 0.18],
+    [200, 30, 260, "10,30,52", 0.26]
+  ];
+  var SWELL_SPACING = 54;
+  var SWELL_SPEED = 11;
+  function drawSwell(elapsed2) {
+    const offset = elapsed2 * SWELL_SPEED % SWELL_SPACING;
+    ctx.lineCap = "round";
+    for (let i = -1; i * SWELL_SPACING < DESIGN_H + SWELL_SPACING; i++) {
+      const baseY = i * SWELL_SPACING + offset;
+      const sway = Math.sin(elapsed2 * 0.5 + i * 1.7);
+      for (const [dy, colour, width] of SWELL_STROKES) {
+        ctx.beginPath();
+        for (let x = 0; x <= DESIGN_W; x += 18) {
+          const y = baseY + dy + Math.sin(x / 74 + elapsed2 * 0.55 + i) * 4.4 + Math.sin(x / 31 - elapsed2 * 0.9) * 1.6 + sway;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = width;
+        ctx.stroke();
       }
-    });
+    }
+  }
+  var SWELL_STROKES = [
+    [0, "rgba(255,255,255,0.17)", 2.6],
+    [3.6, "rgba(18,44,66,0.13)", 3.4]
+  ];
+  var GLINT_COUNT = 78;
+  function drawGlints(elapsed2) {
+    ctx.lineCap = "round";
+    for (let i = 0; i < GLINT_COUNT; i++) {
+      const hx = Math.sin(i * 12.9898) * 43758.5453;
+      const hy = Math.sin(i * 78.233) * 12345.6789;
+      const hp = Math.sin(i * 39.425) * 9876.5432;
+      const x = (hx - Math.floor(hx)) * DESIGN_W;
+      const y = (hy - Math.floor(hy)) * DESIGN_H;
+      const phase2 = (hp - Math.floor(hp)) * Math.PI * 2;
+      const rate = 0.9 + (hp - Math.floor(hp)) * 1.5;
+      const pulse = Math.sin(elapsed2 * rate + phase2);
+      if (pulse <= 0) continue;
+      const flare = Math.pow(pulse, 7);
+      if (flare < 0.02) continue;
+      const drift = elapsed2 * 3.2 % DESIGN_H;
+      const yy = (y + drift) % DESIGN_H;
+      ctx.strokeStyle = `rgba(255,255,255,${(0.78 * flare).toFixed(3)})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x - 3.5 - flare * 2, yy);
+      ctx.lineTo(x + 3.5 + flare * 2, yy);
+      ctx.stroke();
+    }
+  }
+  function seededRandom(seed) {
+    let state5 = seed * 2654435761 >>> 0;
+    return () => {
+      state5 = state5 * 1664525 + 1013904223 >>> 0;
+      return state5 / 4294967296;
+    };
+  }
+  function islandOutline(x, y, w, h, rand, swell = 1) {
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const ENVELOPE = 0.806;
+    const a = w / 2 * swell * ENVELOPE;
+    const b = h / 2 * swell * ENVELOPE;
+    const squareness = 2.4 + rand() * 2.4;
+    const exponent = 2 / squareness;
+    const p1 = rand() * Math.PI * 2;
+    const p2 = rand() * Math.PI * 2;
+    const p3 = rand() * Math.PI * 2;
+    const points = [];
+    const STEPS = 48;
+    for (let i = 0; i < STEPS; i++) {
+      const t = i / STEPS * Math.PI * 2;
+      const c = Math.cos(t);
+      const s = Math.sin(t);
+      const wobble = 1 + 0.07 * Math.sin(t * 3 + p1) + 0.048 * Math.sin(t * 5 + p2) + 0.03 * Math.sin(t * 7 + p3);
+      points.push({
+        x: cx + Math.sign(c) * Math.pow(Math.abs(c), exponent) * a * wobble,
+        y: cy + Math.sign(s) * Math.pow(Math.abs(s), exponent) * b * wobble
+      });
+    }
+    return points;
+  }
+  function fillPlanePolygon(points, fill, dx = 0, dy = 0) {
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i++) {
+      const p = project(points[i].x + dx, points[i].y + dy);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  var ISLAND_GREENS = ["#6E8B4A", "#7C9553", "#637F43", "#849B58", "#728E4C"];
+  function drawIsland(x, y, w, h, index) {
+    const rand = seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y));
+    const outline = islandOutline(x, y, w, h, rand);
+    const beach = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.1);
+    const soil = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.16);
+    fillPlanePolygon(soil, "rgba(4,12,18,0.34)", SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
+    fillPlanePolygon(soil, COLORS.landDark);
+    fillPlanePolygon(beach, "#C6B993");
+    fillPlanePolygon(outline, ISLAND_GREENS[index % ISLAND_GREENS.length]);
+    const grass = grassTexture(ctx);
+    if (grass) fillPlanePolygon(outline, grass);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const count = Math.max(3, Math.round(w * h / 620));
+    const items = [];
+    for (let i = 0; i < count; i++) {
+      const t = rand() * Math.PI * 2;
+      const radius = Math.sqrt(rand()) * 0.74;
+      items.push({
+        x: cx + Math.cos(t) * (w / 2) * radius,
+        y: cy + Math.sin(t) * (h / 2) * radius,
+        kind: rand(),
+        size: 0.3 + rand() * 0.22
+      });
+    }
+    items.sort((a, b) => a.y - b.y);
+    for (const item of items) {
+      const p = project(item.x, item.y);
+      if (item.kind > 0.82) drawUmbrella(p.x, p.y, item.size * p.scale * 1.05);
+      else if (item.kind > 0.62) drawBush(p.x, p.y, item.size * p.scale);
+      else drawTree(p.x, p.y, item.size * p.scale);
+    }
+  }
+  function drawBush(x, y, size = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = "rgba(13,35,30,0.20)";
+    ctx.beginPath();
+    ctx.ellipse(1.5 * size, 3 * size, 7 * size, 3.4 * size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#4F6B3E";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 6 * size, 4 * size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#6C8A4C";
+    ctx.beginPath();
+    ctx.ellipse(-1 * size, -1.6 * size, 4 * size, 2.6 * size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  function drawBackground() {
+    const decor = trackById(activeTrackId).decor;
+    decor.medians.forEach(([x, y, w, h], i) => drawIsland(x, y, w, h, i));
     for (const [x, y, size] of decor.trees) {
       const p = project(x, y);
       drawTree(p.x, p.y, size * p.scale);
@@ -3726,6 +3893,9 @@ var HarborLoop = (() => {
       ctx.stroke();
       ctx.restore();
     }
+  }
+  function drawSea() {
+    drawWaterSurface(elapsed);
   }
   function drawLivingWater() {
     const decor = trackById(activeTrackId).decor;
@@ -5679,6 +5849,11 @@ var HarborLoop = (() => {
     updateRun(simDt);
   }
   function drawRace() {
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+    drawSea();
+    ctx.restore();
     drawStaticScene();
     ctx.save();
     ctx.translate(offsetX, offsetY);

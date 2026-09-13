@@ -31,7 +31,7 @@ import { drawControls, drawHud } from './render/hud';
 import { drawBlackout, drawHazardLane } from './render/overlays';
 import { drawFloaters, drawParticles, updateFloaters, updateParticles } from './render/particles';
 import { drawSpeedLines } from './render/speedLines';
-import { drawLivingWater, updateLivingWater } from './render/livingWater';
+import { drawLivingWater, drawSea, updateLivingWater } from './render/livingWater';
 import { drawStaticScene } from './render/staticLayer';
 import { drawCars } from './render/vehicles';
 import { runIsOver, updateRun } from './run';
@@ -79,6 +79,14 @@ function stepRace(dt: number): void {
 
 /** The static scene is blitted first, then only the moving parts are drawn. */
 function drawRace(): void {
+  // The sea moves, so it cannot live in the layer that is rendered once. It is
+  // drawn first and the cached road, kerbs and islands are blitted over it.
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
+  drawSea();
+  ctx.restore();
+
   drawStaticScene();
 
   ctx.save();

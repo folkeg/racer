@@ -88,7 +88,12 @@ function buildLongBay(): Vec2[] {
   const step = (LONG_BAY_BOTTOM - LONG_BAY_TOP) / (LONG_BAY_ROWS - 1);
   const r = LONG_BAY_RADIUS;
   const eastX = 310;
-  const innerX = 160;
+  // 160 put the west folds through the return straight: their outer edge reached
+  // x=80.8 while the straight's own edge sat at 84.2, so three units of tarmac
+  // overlapped and the U looked welded to the straight it passes. Measured as a
+  // minimum centre-line distance of 65.0 against the 68.4 two roads need to
+  // touch. 184 opens a 20-unit channel of water between them.
+  const innerX = 184;
   const path = new PathBuilder().start(110, LONG_BAY_TOP);
 
   for (let row = 0; row < LONG_BAY_ROWS; row++) {
@@ -257,19 +262,27 @@ export interface TrackDefinition {
 }
 
 const LONG_BAY_DECOR: TrackDecor = {
-  // Sized by searching each gap for the widest island that still clears the
-  // road by 3 — the fold takes one end of every gap, and which end alternates,
-  // so these are not on a grid. Six rows instead of eight is what bought the
-  // width: 180 across and 42 deep, against 113 by 16 before.
+  // Each of these is the largest rectangle that fits between two rows while
+  // clearing the tarmac by 5, found by search rather than by eye — the fold
+  // takes one end of every gap and which end alternates, so they are not on a
+  // grid. They are envelopes, not shapes: what gets drawn inside them is a
+  // wobbled superellipse that differs island to island.
+  //
+  // The two middle ones reach east past the rows into the bay between the east
+  // folds, which is the only part of the board where land and open water meet on
+  // a diagonal. They are deliberately not the same size as the other three.
   medians: [
-    [106, 108, 180, 42],
-    [158, 234, 180, 42],
-    [88, 360, 180, 42],
-    [158, 486, 180, 42],
-    [92, 612, 180, 42]
+    [110, 112, 190, 42],
+    [198, 238, 148, 40],
+    [100, 364, 200, 42],
+    [186, 490, 168, 40],
+    [116, 616, 172, 40]
   ],
-  trees: [[132, 129, 0.42], [250, 129, 0.4], [196, 255, 0.42], [120, 381, 0.4], [244, 381, 0.42], [200, 507, 0.4], [130, 633, 0.42], [246, 633, 0.4]],
-  umbrellas: [[196, 129, 0.4], [268, 255, 0.38], [178, 381, 0.4], [240, 507, 0.38], [190, 633, 0.4]],
+  // Planting is scattered from each island's own seed now, so it cannot end up
+  // in the water when an island moves — which is exactly what the hand-placed
+  // coordinates that used to be here did every time the geometry changed.
+  trees: [],
+  umbrellas: [],
   buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
   boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
   rocks: [],
@@ -281,8 +294,8 @@ const LONG_BAY_DECOR: TrackDecor = {
 /** The oval's infield is one long clear strip, so it gets one long island. */
 const GRAND_OVAL_DECOR: TrackDecor = {
   medians: [[170, 216, 50, 356]],
-  trees: [[195, 252, 0.42], [195, 400, 0.42], [195, 540, 0.42]],
-  umbrellas: [[195, 326, 0.4], [195, 468, 0.4]],
+  trees: [],
+  umbrellas: [],
   buoys: [[40, 150], [352, 210], [40, 640], [352, 620]],
   boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, 1.57], [52, 540, 0.72, 1.57]],
   rocks: [],

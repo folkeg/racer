@@ -109,6 +109,37 @@ const FIT_Y = 1.02;
 const cosPitch = Math.cos(PITCH);
 const sinPitch = Math.sin(PITCH);
 
+/**
+ * How much of the perspective applies *sideways*.
+ *
+ * Full perspective magnifies lateral distance with nearness, so two parallel
+ * lines converge towards the vanishing point. That is correct, and on an
+ * off-centre straight it is also the single thing that makes the board read as
+ * tilted rather than as receding: Long Bay's west straight is exactly vertical
+ * in the track's own geometry, and at full strength its two ends land 14.7px
+ * apart — on a 390-wide screen, a visible lean, against a frame of HUD pills and
+ * buttons that are all dead square.
+ *
+ * Lateral scale is therefore blended towards the scale at the middle of the
+ * board. Measured on that straight:
+ *
+ *   blend   lean    lateral near/far   car near/far
+ *   1.00    14.7px      1.143             1.143
+ *   0.60     8.8px      1.083             1.143
+ *   0.35     5.1px      1.048             1.143
+ *   0.00     0.0px      1.000             1.143
+ *
+ * The last column is the point. Sprites keep scaling on true depth, so cars at
+ * the far end stay 14% smaller than cars at the near end whatever this is set
+ * to — the depth cue that reads as 3D is carried by the things that move, not
+ * by the convergence of the road. 0.35 keeps a third of the convergence, which
+ * is enough to feel at the top of the frame, and drops the lean to a third of a
+ * lane width across the longest straight in the game.
+ */
+const LATERAL_PERSPECTIVE = 0.35;
+const MID_DEPTH = (NEAR + DESIGN_H / 2) * cosPitch + HEIGHT * sinPitch;
+const MID_SCALE = FOCAL / MID_DEPTH;
+
 
 /**
  * Shrink-to-fit, applied after projection.
@@ -235,8 +266,9 @@ export function project(x: number, y: number): Projected {
   const vertical = ground * sinPitch - HEIGHT * cosPitch;
 
   const scale = FOCAL / Math.max(1, depth);
+  const lateralScale = scale * LATERAL_PERSPECTIVE + MID_SCALE * (1 - LATERAL_PERSPECTIVE);
   return {
-    x: (SCREEN_CX + lateral * scale * FIT_X) * fitScale + fitDx,
+    x: (SCREEN_CX + lateral * lateralScale * FIT_X) * fitScale + fitDx,
     y: -vertical * scale * FIT_Y * fitScaleY + fitDy,
     // Sprite scale is the same magnification the road gets, so a car always
     // covers the same share of its lane. It used to be `midBoardDepth / depth`,
