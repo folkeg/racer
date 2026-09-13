@@ -95,6 +95,23 @@ export interface Surface {
      */
     seams: boolean;
   };
+  /**
+   * The islands a circuit declares, in this world's materials.
+   *
+   * They were green whatever the world was, because they were written when
+   * every track was a harbour — so the city circuit had a strip of meadow down
+   * the middle of a tarmac yard and the works yard had one too. An island is a
+   * piece of the ground it stands in, not a piece of scenery that travels.
+   */
+  island: {
+    rim: string;
+    beach: string;
+    tops: string[];
+    cliff: string;
+    shelf: string;
+    /** Whether anything grows on it. A yard island is not a park. */
+    planted: boolean;
+  };
   /** What stands about on the open ground, and how densely. */
   props: PropKind[];
   propDensity: number;
@@ -130,6 +147,14 @@ export const SURFACES: Record<string, Surface> = {
       apronEdge: '#8E8E82',
       seams: true
     },
+    island: {
+      rim: '#3E4636',
+      beach: '#C6B993',
+      tops: ['#6E8B4A', '#7C9553', '#637F43', '#849B58', '#728E4C'],
+      cliff: '#333B2C',
+      shelf: '#9C8F62',
+      planted: true
+    },
     props: [],
     propDensity: 0,
     structures: []
@@ -162,6 +187,14 @@ export const SURFACES: Record<string, Surface> = {
       apronEdge: '#8C7F65',
       seams: true
     },
+    island: {
+      rim: '#8A7A56',
+      beach: '#E2D0A2',
+      tops: ['#C3AE79', '#B7A16C', '#CBB684', '#AF9962', '#C0AB76'],
+      cliff: '#7E6F4E',
+      shelf: '#D8C79A',
+      planted: true
+    },
     props: ['rock', 'tuft', 'parasol'],
     propDensity: 1,
     structures: ['pavilion', 'dome']
@@ -191,6 +224,14 @@ export const SURFACES: Record<string, Surface> = {
       apronEdge: '#414A53',
       seams: false
     },
+    island: {
+      rim: '#252B31',
+      beach: '#6E7680',
+      tops: ['#4E565E', '#565E66', '#464E56', '#5C646C', '#4A525A'],
+      cliff: '#1E242A',
+      shelf: '#5E666E',
+      planted: false
+    },
     props: ['barrier', 'lamp', 'cone'],
     propDensity: 1.1,
     structures: ['hall', 'dome', 'hall']
@@ -219,6 +260,14 @@ export const SURFACES: Record<string, Surface> = {
       apronEdge: '#6E6657',
       seams: false
     },
+    island: {
+      rim: '#3A362F',
+      beach: '#8A8272',
+      tops: ['#6E6658', '#766E60', '#665E52', '#7E7668', '#6A6254'],
+      cliff: '#332F29',
+      shelf: '#7A7264',
+      planted: false
+    },
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
     structures: ['hall', 'tank', 'tank']
@@ -245,6 +294,14 @@ export const SURFACES: Record<string, Surface> = {
       apron: '#AAA184',
       apronEdge: '#8A8268',
       seams: true
+    },
+    island: {
+      rim: '#2E3A24',
+      beach: '#C2BC94',
+      tops: ['#6E8B4A', '#7C9553', '#637F43', '#849B58', '#728E4C'],
+      cliff: '#2A3420',
+      shelf: '#A29A72',
+      planted: true
     },
     props: ['tree', 'bush', 'rock'],
     propDensity: 1,

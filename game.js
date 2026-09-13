@@ -30,6 +30,7 @@ var HarborLoop = (() => {
     ROAD_HALF_WIDTH: () => ROAD_HALF_WIDTH,
     TRACKS: () => TRACKS,
     activeParticles: () => activeParticles,
+    activeTrackId: () => activeTrackId,
     aiCars: () => aiCars,
     app: () => app,
     audio: () => audio,
@@ -65,6 +66,7 @@ var HarborLoop = (() => {
     run: () => run,
     saveMuted: () => saveMuted,
     setSeed: () => setSeed,
+    setTrack: () => setTrack,
     setUnlockOverride: () => setUnlockOverride,
     shareForRevive: () => shareForRevive,
     starsFor: () => starsFor,
@@ -3479,6 +3481,14 @@ var HarborLoop = (() => {
         apronEdge: "#8E8E82",
         seams: true
       },
+      island: {
+        rim: "#3E4636",
+        beach: "#C6B993",
+        tops: ["#6E8B4A", "#7C9553", "#637F43", "#849B58", "#728E4C"],
+        cliff: "#333B2C",
+        shelf: "#9C8F62",
+        planted: true
+      },
       props: [],
       propDensity: 0,
       structures: []
@@ -3510,6 +3520,14 @@ var HarborLoop = (() => {
         apronEdge: "#8C7F65",
         seams: true
       },
+      island: {
+        rim: "#8A7A56",
+        beach: "#E2D0A2",
+        tops: ["#C3AE79", "#B7A16C", "#CBB684", "#AF9962", "#C0AB76"],
+        cliff: "#7E6F4E",
+        shelf: "#D8C79A",
+        planted: true
+      },
       props: ["rock", "tuft", "parasol"],
       propDensity: 1,
       structures: ["pavilion", "dome"]
@@ -3538,6 +3556,14 @@ var HarborLoop = (() => {
         apronEdge: "#414A53",
         seams: false
       },
+      island: {
+        rim: "#252B31",
+        beach: "#6E7680",
+        tops: ["#4E565E", "#565E66", "#464E56", "#5C646C", "#4A525A"],
+        cliff: "#1E242A",
+        shelf: "#5E666E",
+        planted: false
+      },
       props: ["barrier", "lamp", "cone"],
       propDensity: 1.1,
       structures: ["hall", "dome", "hall"]
@@ -3565,6 +3591,14 @@ var HarborLoop = (() => {
         apronEdge: "#6E6657",
         seams: false
       },
+      island: {
+        rim: "#3A362F",
+        beach: "#8A8272",
+        tops: ["#6E6658", "#766E60", "#665E52", "#7E7668", "#6A6254"],
+        cliff: "#332F29",
+        shelf: "#7A7264",
+        planted: false
+      },
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
       structures: ["hall", "tank", "tank"]
@@ -3590,6 +3624,14 @@ var HarborLoop = (() => {
         apron: "#AAA184",
         apronEdge: "#8A8268",
         seams: true
+      },
+      island: {
+        rim: "#2E3A24",
+        beach: "#C2BC94",
+        tops: ["#6E8B4A", "#7C9553", "#637F43", "#849B58", "#728E4C"],
+        cliff: "#2A3420",
+        shelf: "#A29A72",
+        planted: true
       },
       props: ["tree", "bush", "rock"],
       propDensity: 1,
@@ -4342,8 +4384,8 @@ var HarborLoop = (() => {
     ctx.fillStyle = fill;
     ctx.fill();
   }
-  var ISLAND_GREENS = ["#6E8B4A", "#7C9553", "#637F43", "#849B58", "#728E4C"];
   function drawIsland(x, y, w, h, index) {
+    const island = surfaceFor(activeTrackId).island;
     const rand = seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y));
     const outline = islandOutline(x, y, w, h, rand);
     const beach = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.1);
@@ -4354,20 +4396,23 @@ var HarborLoop = (() => {
       x + w / 2 + (point.x - x - w / 2) * 0.94,
       y + h / 2 + (point.y - y - h / 2) * 0.94
     ));
-    fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, "#333B2C");
+    fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, island.cliff);
     fillNearFaces(
       projected,
       inward,
       ISLAND_WALL_HEIGHT,
-      "#9C8F62",
+      island.shelf,
       "rgba(232,244,248,0.75)",
       ISLAND_WALL_HEIGHT * 0.55
     );
-    fillPlanePolygon(soil, COLORS.landDark);
-    fillPlanePolygon(beach, "#C6B993");
-    fillPlanePolygon(outline, ISLAND_GREENS[index % ISLAND_GREENS.length]);
-    const grass = grassTexture(ctx);
-    if (grass) fillPlanePolygon(outline, grass);
+    fillPlanePolygon(soil, island.rim);
+    fillPlanePolygon(beach, island.beach);
+    fillPlanePolygon(outline, island.tops[index % island.tops.length]);
+    if (island.planted) {
+      const grass = grassTexture(ctx);
+      if (grass) fillPlanePolygon(outline, grass);
+    }
+    if (!island.planted) return;
     const cx = x + w / 2;
     const cy = y + h / 2;
     const count = Math.max(3, Math.round(w * h / 620));

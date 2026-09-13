@@ -208,5 +208,8 @@ export { countdownActive, countdownRemaining, clearCountdown } from './countdown
 export { setSeed, clearSeed, random, isSeeded } from './rng';
 export { bestScore, careerPoints, dailyBestScore, submitDailyBest } from './storage';
 export { TRACKS } from './tracks';
+// Exported so a session can be pointed at a circuit directly — useful to the
+// headless tests, and the only sane way to compare four worlds side by side.
+export { setTrack, activeTrackId } from './track';
 export { totalStars, starsFor, modeUnlocked, modeUnlockCost, setUnlockOverride } from './progress';
 export { LANE_COUNT, LANE_GAP, ROAD_HALF_WIDTH, KERB_WIDTH } from './config';

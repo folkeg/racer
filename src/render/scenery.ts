@@ -432,9 +432,6 @@ function fillPlanePolygon(points: Vec2[], fill: string | CanvasPattern, dx = 0, 
   ctx.fill();
 }
 
-/** Grass tones, so neighbouring islands are not the same green. */
-const ISLAND_GREENS = ['#6E8B4A', '#7C9553', '#637F43', '#849B58', '#728E4C'];
-
 /**
  * One island: water shadow, soil rim, sand beach, grass, then whatever grows on
  * it. The planting is scattered from the same seed as the outline, so it always
@@ -442,6 +439,7 @@ const ISLAND_GREENS = ['#6E8B4A', '#7C9553', '#637F43', '#849B58', '#728E4C'];
  * the old hand-placed tree coordinates had every time an island moved.
  */
 function drawIsland(x: number, y: number, w: number, h: number, index: number): void {
+  const island = surfaceFor(currentTrack).island;
   const rand = seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y));
   const outline = islandOutline(x, y, w, h, rand);
   const beach = islandOutline(x, y, w, h, seededRandom(index * 7919 + Math.round(x) * 31 + Math.round(y)), 1.10);
@@ -457,19 +455,24 @@ function drawIsland(x: number, y: number, w: number, h: number, index: number): 
                                              y + h / 2 + (point.y - y - h / 2) * 0.94));
   // Two courses: rock under a sandy shelf, because a single flat band reads as
   // an outline rather than as the side of something.
-  fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, '#333B2C');
-  fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, '#9C8F62', 'rgba(232,244,248,0.75)',
+  fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, island.cliff);
+  fillNearFaces(projected, inward, ISLAND_WALL_HEIGHT, island.shelf, 'rgba(232,244,248,0.75)',
     ISLAND_WALL_HEIGHT * 0.55);
 
-  fillPlanePolygon(soil, COLORS.landDark);
-  fillPlanePolygon(beach, '#C6B993');
-  fillPlanePolygon(outline, ISLAND_GREENS[index % ISLAND_GREENS.length]);
+  fillPlanePolygon(soil, island.rim);
+  fillPlanePolygon(beach, island.beach);
+  fillPlanePolygon(outline, island.tops[index % island.tops.length]);
 
-  const grass = grassTexture(ctx);
-  if (grass) fillPlanePolygon(outline, grass);
+  // The grass tile only belongs on an island that is actually planted; on a
+  // concrete one in the city it was reading as moss.
+  if (island.planted) {
+    const grass = grassTexture(ctx);
+    if (grass) fillPlanePolygon(outline, grass);
+  }
 
   // Planting. Rejection-free: a point is drawn in the outline's own parameter
-  // space, so it is inside by construction.
+  // space, so it is inside by construction. A yard island grows nothing.
+  if (!island.planted) return;
   const cx = x + w / 2;
   const cy = y + h / 2;
   const count = Math.max(3, Math.round((w * h) / 620));
