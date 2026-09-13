@@ -7,17 +7,17 @@
 
 import { app, goBack, retryRun } from './app';
 import { audio } from './audio';
-import { controlAtDesignPoint, flashLaneButton } from './controls';
+import { controlAtDesignPoint, pressSteer, releaseSteer } from './controls';
 import { canvas, DESIGN_W, screenToDesignX, screenToDesignY, VIEW_H, VIEW_W } from './platform';
 import { requestLaneChange, setThrottle } from './player';
 import { BACK_BUTTON } from './render/hud';
 import { handleMenuTap } from './screens/menu';
 import { handleResultTap } from './screens/result';
 import { handleTrackSelectTap } from './screens/trackSelect';
-import type { Control, KeyboardEventLike, PointerEventLike } from './types';
+import type { KeyboardEventLike, PointerEventLike } from './types';
 
 /** pointer id -> what it is currently driving. */
-type PointerAssignment = 'left' | 'right' | 'throttle' | 'track' | 'none';
+type PointerAssignment = 'steer' | 'left' | 'right' | 'throttle' | 'track' | 'none';
 
 const activePointers = new Map<number, PointerAssignment>();
 
@@ -32,10 +32,16 @@ function refreshThrottleFromPointers(): void {
   setThrottle(held);
 }
 
-function pressControl(control: Control): void {
-  if (control.kind === 'throttle') return;
-  flashLaneButton(control.id);
-  requestLaneChange(control.direction);
+function anyPointerOnSteer(): boolean {
+  for (const assignment of activePointers.values()) {
+    if (assignment === 'steer') return true;
+  }
+  return false;
+}
+
+/** Lets go of the pad once no thumb is left on it. */
+function refreshSteerFromPointers(): void {
+  if (!anyPointerOnSteer()) releaseSteer();
 }
 
 export function pointerDown(pointerId: number, screenX: number, screenY: number): void {
@@ -67,8 +73,11 @@ export function pointerDown(pointerId: number, screenX: number, screenY: number)
 
   if (control) {
     activePointers.set(pointerId, control.id);
-    if (control.kind === 'throttle') audio.ensureStarted();
-    pressControl(control);
+    audio.ensureStarted();
+    if (control.kind === 'steer') pressSteer(x);
+    // The arrows stay strictly one tap, one lane. Holding one does nothing
+    // extra; that is what the stick next to them is for.
+    else if (control.kind === 'lane') requestLaneChange(control.direction);
     refreshThrottleFromPointers();
     return;
   }
@@ -76,7 +85,7 @@ export function pointerDown(pointerId: number, screenX: number, screenY: number)
   // Above the control bar the original invisible left/right halves still work,
   // so the old one-thumb play style keeps working alongside the buttons.
   activePointers.set(pointerId, 'track');
-  requestLaneChange(x < DESIGN_W * 0.5 ? +1 : -1);
+  requestLaneChange(x < DESIGN_W * 0.5 ? -1 : +1);
 }
 
 export function pointerMove(pointerId: number, screenX: number, screenY: number): void {
@@ -90,20 +99,29 @@ export function pointerMove(pointerId: number, screenX: number, screenY: number)
   if (control && control.kind === 'throttle') {
     if (previous !== 'throttle') audio.ensureStarted();
     activePointers.set(pointerId, 'throttle');
-  } else if (previous === 'throttle') {
+  } else if (control && control.kind === 'steer') {
+    // Re-reading the position every move is what makes it a stick rather than
+    // a pair of buttons: swinging the thumb the other way reverses the car
+    // without lifting off.
+    activePointers.set(pointerId, 'steer');
+    pressSteer(screenToDesignX(screenX));
+  } else if (previous === 'throttle' || previous === 'steer') {
     activePointers.set(pointerId, 'none');
   }
   refreshThrottleFromPointers();
+  refreshSteerFromPointers();
 }
 
 export function pointerUp(pointerId: number): void {
   if (!activePointers.delete(pointerId)) return;
   refreshThrottleFromPointers();
+  refreshSteerFromPointers();
 }
 
 export function releaseAllPointers(): void {
   activePointers.clear();
   setThrottle(false);
+  releaseSteer();
 }
 
 function isThrottleKey(event: KeyboardEventLike): boolean {
@@ -124,11 +142,11 @@ function handleKeyboardInput(event: KeyboardEventLike): void {
 
   if (key === 'arrowleft' || key === 'left' || key === 'a' ||
       code === 'ArrowLeft' || code === 'KeyA' || keyCode === 37 || keyCode === 65) {
-    requestLaneChange(+1);
+    requestLaneChange(-1);
     handled = true;
   } else if (key === 'arrowright' || key === 'right' || key === 'd' ||
              code === 'ArrowRight' || code === 'KeyD' || keyCode === 39 || keyCode === 68) {
-    requestLaneChange(-1);
+    requestLaneChange(+1);
     handled = true;
   } else if (isThrottleKey(event)) {
     setThrottle(true);

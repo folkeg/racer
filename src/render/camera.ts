@@ -62,14 +62,26 @@ const PERSPECTIVE = true;
  *   1.50     0.9%      610px        1.06
  *   PI/2     0.0%      724px        1.00
  *
- * 1.50 puts the lean under a pixel per hundred — invisible — and more than
- * doubles the usable length of a straight against the original 0.90. What it
- * costs is the depth cue: at 1.06 near/far, the far side of the board is
- * within six percent of the size of the near side, so this reads as a top-down
- * board with a hint of tilt rather than a raised camera. Drop back towards 1.20
- * to trade length and straightness for that depth again.
+ * 1.50 went too far. It put the lean under a pixel per hundred, but at 1.06
+ * near/far the far side of the board is within six percent of the size of the
+ * near side — no depth cue at all, a flat top-down board. Nothing else on
+ * screen moves much either, so that flatness was most of why the game stopped
+ * reading as alive.
+ *
+ * 1.40 buys the depth back for almost nothing. Measured across the circuits:
+ *
+ *   pitch   near/far   lean   height filled
+ *   1.50      1.06      0.9%      100%
+ *   1.40      1.14      2.3%      100%
+ *   1.30      1.21      3.6%       97%
+ *   1.25      1.25      4.2%       94%
+ *
+ * The taper is visible again at 1.40 and the frame is still completely filled,
+ * so it costs nothing that was fought for. 1.30 has more depth still, but there
+ * the lean is plainly visible on Delta Run's west straight, which is meant to
+ * read as dead vertical. Below 1.30 the fit starts giving back real size.
  */
-const PITCH = 1.50;
+const PITCH = 1.40;
 /** Height above the plane, in design units. */
 const HEIGHT = 900;
 /** Ground distance from the camera to the nearest edge of the design area. */
@@ -114,9 +126,22 @@ const sinPitch = Math.sin(PITCH);
  * was tuned by hand survives at a slightly smaller size instead of being
  * squashed on one axis.
  */
-const SAFE_MARGIN = 4;
-const SAFE_TOP = 50;
-const SAFE_BOTTOM = 742;
+/**
+ * How much frame the circuit is allowed to claim.
+ *
+ * These were pushed to the edge — a margin of 4 — when the board was reading as
+ * too small, and at that setting Long Bay covers 98% of the width. That solved
+ * the size complaint and created the opposite one: with the road running to the
+ * bezel there is nowhere for the harbour to be, so the water it sits in reads as
+ * a thin border rather than as somewhere the track was built.
+ *
+ * The side margin is the one that matters, because the sides are where the
+ * boats and buoys live. Vertical is pulled in only slightly: height was the
+ * scarce axis in the first place and is still what the fit fights for.
+ */
+const SAFE_MARGIN = 26;
+const SAFE_TOP = 64;
+const SAFE_BOTTOM = 700;
 
 /**
  * How much taller than wide the fit may pull the plane.

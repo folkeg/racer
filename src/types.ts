@@ -90,13 +90,21 @@ export interface VehicleStyle {
   rim: string;
 }
 
-export type ControlKind = 'lane' | 'throttle';
-export type ControlId = 'left' | 'right' | 'throttle';
+export type ControlKind = 'steer' | 'lane' | 'throttle';
+export type ControlId = 'steer' | 'left' | 'right' | 'throttle';
 
 export interface Control {
   id: ControlId;
   kind: ControlKind;
-  /** +1 moves one lane left, -1 one lane right; 0 for the throttle. */
+  /** Hit-tested as a circle inscribed in the box, not as the box itself. */
+  round?: boolean;
+  /**
+   * Lane-index delta. +1 is the car's own RIGHT, not its left: lane offsets are
+   * taken along the normal (-dy, dx), and with screen y pointing down that
+   * normal is the right-hand side of the direction of travel. Measured at eight
+   * stations on all four circuits, 8/8 agreeing. The controls asserted the
+   * opposite for a long time, which is why pressing left drove the car right.
+   */
   direction: number;
   x: number;
   y: number;

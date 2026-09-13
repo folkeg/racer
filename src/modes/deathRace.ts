@@ -13,7 +13,7 @@ export const deathRace: ModeDefinition = {
   timeLimit: 90,
   scoreUnit: 'POINTS',
   trafficScale: 0.85,
-  trackId: 'delta-run',
+  trackId: 'half-moon',
   stars: [800, 2000, 3600],
   // Contact always destroys here, never crashes, so there's no crash to wait
   // for — the clock has to be what ends the run.

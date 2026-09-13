@@ -17,7 +17,7 @@
 
 import type { Vec2 } from '../types';
 
-export type TrackId = 'long-bay' | 'grand-oval' | 'delta-run';
+export type TrackId = 'long-bay' | 'grand-oval' | 'tide-drop' | 'half-moon';
 
 class PathBuilder {
   readonly points: Vec2[] = [];
@@ -66,27 +66,52 @@ class PathBuilder {
 }
 
 /**
- * Long Bay — the original circuit. Eight long straights folded into broad
- * hairpins give the longest lap and the most room to build a combo.
+ * Long Bay — the original circuit, folded loosely rather than tightly.
+ *
+ * It used to be eight rows of straight stacked 90 apart, which left a gap of
+ * only 21 between one road edge and the next once the road was widened to 68.
+ * That is not enough to put anything in, so the circuit filled the screen with
+ * nothing but circuit. Six rows over the same footprint spread the gap to 57,
+ * which is where the planted islands live — the point of removing folds was to
+ * make room beside the road, not to make the lap shorter.
+ *
+ * Each fold is a U rather than a half circle now: a quarter turn, a straight
+ * down the outside, then a quarter turn back. A single 180 of radius 45 can
+ * only span 90, so the wider spacing needs the straight in between.
  */
+const LONG_BAY_ROWS = 6;
+const LONG_BAY_TOP = 70;
+const LONG_BAY_BOTTOM = 700;
+const LONG_BAY_RADIUS = 45;
+
 function buildLongBay(): Vec2[] {
-  const path = new PathBuilder().start(110, 70);
-  path.lineTo(310, 70);
-  path.arcTo(310, 115, 45, -Math.PI / 2, Math.PI / 2);
-  path.lineTo(160, 160);
-  path.arcTo(160, 205, 45, -Math.PI / 2, -3 * Math.PI / 2);
-  path.lineTo(310, 250);
-  path.arcTo(310, 295, 45, -Math.PI / 2, Math.PI / 2);
-  path.lineTo(160, 340);
-  path.arcTo(160, 385, 45, -Math.PI / 2, -3 * Math.PI / 2);
-  path.lineTo(310, 430);
-  path.arcTo(310, 475, 45, -Math.PI / 2, Math.PI / 2);
-  path.lineTo(160, 520);
-  path.arcTo(160, 565, 45, -Math.PI / 2, -3 * Math.PI / 2);
-  path.lineTo(310, 610);
-  path.arcTo(310, 655, 45, -Math.PI / 2, Math.PI / 2);
-  path.lineTo(110, 700);
-  path.arcTo(110, 640, 60, Math.PI / 2, Math.PI);
+  const step = (LONG_BAY_BOTTOM - LONG_BAY_TOP) / (LONG_BAY_ROWS - 1);
+  const r = LONG_BAY_RADIUS;
+  const eastX = 310;
+  const innerX = 160;
+  const path = new PathBuilder().start(110, LONG_BAY_TOP);
+
+  for (let row = 0; row < LONG_BAY_ROWS; row++) {
+    const y = LONG_BAY_TOP + row * step;
+    const goingEast = row % 2 === 0;
+    const last = row === LONG_BAY_ROWS - 1;
+
+    // The final row runs all the way back to the west loop instead of folding.
+    path.lineTo(last ? 110 : (goingEast ? eastX : innerX), y);
+    if (last) break;
+
+    if (goingEast) {
+      path.arcTo(eastX, y + r, r, -Math.PI / 2, 0);
+      path.lineTo(eastX + r, y + step - r);
+      path.arcTo(eastX, y + step - r, r, 0, Math.PI / 2);
+    } else {
+      path.arcTo(innerX, y + r, r, -Math.PI / 2, -Math.PI);
+      path.lineTo(innerX - r, y + step - r);
+      path.arcTo(innerX, y + step - r, r, -Math.PI, -3 * Math.PI / 2);
+    }
+  }
+
+  path.arcTo(110, LONG_BAY_BOTTOM - 60, 60, Math.PI / 2, Math.PI);
   path.lineTo(50, 130);
   path.arcTo(110, 130, 60, Math.PI, 3 * Math.PI / 2);
   return path.close();
@@ -114,75 +139,86 @@ function buildGrandOval(): Vec2[] {
 }
 
 /**
- * Rounds every corner of a convex polygon to `radius` and returns the closed
- * centre line. Written generically because a triangle's corners are not the
- * right angles the other circuits are built from: each one needs its tangent
- * points derived from the actual interior angle.
+ * Tide Drop — a small northern turn and a big southern one, joined by their
+ * common tangents.
+ *
+ * Built this way on purpose. The first attempt here was a kidney, with a
+ * concave arc denting one side, and a concave joint has to be solved for
+ * external tangency — centre distance equal to the *sum* of the radii. Getting
+ * it wrong does not look subtly off, it doubles the road back on itself: the
+ * measured heading jumped 178 degrees at the joint. A straight drawn tangent to
+ * two circles cannot have that failure, because a tangent meets its circle at a
+ * right angle to the radius by definition, so continuity is free rather than
+ * solved.
+ *
+ * The two ends being different sizes is what makes it a shape rather than a
+ * stadium: the north turn is tight enough to cost you the combo, the south one
+ * opens far enough to get it back.
  */
-function roundedPolygon(vertices: Vec2[], radius: number): Vec2[] {
-  const count = vertices.length;
-  const corners = vertices.map((vertex, index) => {
-    const previous = vertices[(index - 1 + count) % count];
-    const next = vertices[(index + 1) % count];
+function buildTideDrop(): Vec2[] {
+  const axisX = 200;
+  const northY = 180;
+  const southY = 555;
+  const northR = 70;
+  const southR = 150;
 
-    const toPreviousLength = Math.hypot(previous.x - vertex.x, previous.y - vertex.y);
-    const toNextLength = Math.hypot(next.x - vertex.x, next.y - vertex.y);
-    const toPrevious = { x: (previous.x - vertex.x) / toPreviousLength, y: (previous.y - vertex.y) / toPreviousLength };
-    const toNext = { x: (next.x - vertex.x) / toNextLength, y: (next.y - vertex.y) / toNextLength };
+  const span = southY - northY;
+  // Unit normal of the common tangent. Its axial component is fixed by the
+  // difference in radii; the rest follows from it being a unit vector.
+  const ny = (southR - northR) / span;
+  const nx = Math.sqrt(1 - ny * ny);
+  const lean = Math.atan2(ny, nx);
 
-    const dot = Math.max(-1, Math.min(1, toPrevious.x * toNext.x + toPrevious.y * toNext.y));
-    const interior = Math.acos(dot);
-    const tangent = radius / Math.tan(interior / 2);
+  // Each tangent point is the foot of the perpendicular from its centre, which
+  // is centre *minus* the radius along the normal. Adding it instead puts the
+  // point on the far side of the circle and the line stops being tangent at
+  // all — the check that catches it is that the line direction must dot to zero
+  // against the radius, and the wrong sign gives 0.40.
+  const northWest = { x: axisX - northR * nx, y: northY - northR * ny };
+  const northEast = { x: axisX + northR * nx, y: northY - northR * ny };
+  const southEast = { x: axisX + southR * nx, y: southY - southR * ny };
 
-    const bisectorLength = Math.hypot(toPrevious.x + toNext.x, toPrevious.y + toNext.y);
-    const bisector = {
-      x: (toPrevious.x + toNext.x) / bisectorLength,
-      y: (toPrevious.y + toNext.y) / bisectorLength
-    };
-    const centreDistance = radius / Math.sin(interior / 2);
-
-    return {
-      entry: { x: vertex.x + toPrevious.x * tangent, y: vertex.y + toPrevious.y * tangent },
-      exit: { x: vertex.x + toNext.x * tangent, y: vertex.y + toNext.y * tangent },
-      centre: { x: vertex.x + bisector.x * centreDistance, y: vertex.y + bisector.y * centreDistance }
-    };
-  });
-
-  const path = new PathBuilder().start(corners[0].exit.x, corners[0].exit.y);
-  for (let i = 1; i <= count; i++) {
-    const corner = corners[i % count];
-    path.lineTo(corner.entry.x, corner.entry.y);
-
-    const from = Math.atan2(corner.entry.y - corner.centre.y, corner.entry.x - corner.centre.x);
-    const to = Math.atan2(corner.exit.y - corner.centre.y, corner.exit.x - corner.centre.x);
-    // A convex corner always sweeps less than half a turn, so take the short way.
-    let sweep = to - from;
-    while (sweep > Math.PI) sweep -= Math.PI * 2;
-    while (sweep < -Math.PI) sweep += Math.PI * 2;
-    path.arcTo(corner.centre.x, corner.centre.y, radius, from, from + sweep);
-  }
+  const path = new PathBuilder().start(northEast.x, northEast.y);
+  path.lineTo(southEast.x, southEast.y);
+  path.arcTo(axisX, southY, southR, -lean, Math.PI + lean);   // round the open south turn
+  path.lineTo(northWest.x, northWest.y);
+  path.arcTo(axisX, northY, northR, Math.PI + lean, Math.PI * 2 - lean);
   return path.close();
 }
 
 /**
- * Delta Run — three corners and nothing else, the simplest circuit here.
+ * Half Moon — one dead-straight side and one continuous sweep.
  *
- * Deliberately scalene: the long west side is a dead-straight north run (the
- * same shape of straight Long Bay opens with), and the two returning sides are
- * different lengths, so the lap never settles into a rhythm you can drive on
- * autopilot the way an equilateral one would.
+ * A true D is a semicircle on its diameter, and those meet at ninety degrees:
+ * drawn that way the road had two hard corners where the car's heading changed
+ * in a single step. Rounding them costs a little of the flat side and nothing of
+ * the silhouette. The big arc's centre and radius are then solved so it stays
+ * tangent to both corners and still reaches the east edge.
  */
-function buildDeltaRun(): Vec2[] {
-  // These vertices sit well outside the usual box on purpose. Two of the three
-  // corners are under 45 degrees, and rounding a corner that sharp pulls the
-  // road a long way back from the point — at radius 58 the apexes move inward
-  // by roughly 110 and 90 units. The resulting *path* lands at x 64..375,
-  // y 95..681, which is the footprint the other circuits fill.
-  return roundedPolygon([
-    { x: 64, y: -20 },  // top of the long straight
-    { x: 392, y: 415 }, // east apex
-    { x: 64, y: 772 }   // foot of the long straight
-  ], 58);
+function buildHalfMoon(): Vec2[] {
+  const straightX = 70;
+  const topY = 170;
+  const bottomY = 610;
+  const cornerR = 60;
+  const eastX = 330;
+
+  const midY = (topY + bottomY) / 2;
+  const halfSpan = (bottomY - topY) / 2;
+  const cornerCX = straightX + cornerR;
+  // Internal tangency this time — the corners and the sweep bend the same way —
+  // so |C - corner| = R - cornerR, solved together with C.x + R = eastX.
+  const far = eastX - cornerR;
+  const sweepCX =
+    (far * far - cornerCX * cornerCX - halfSpan * halfSpan) / (2 * (far - cornerCX));
+  const sweepR = eastX - sweepCX;
+  const handover = Math.atan2(halfSpan, cornerCX - sweepCX);
+
+  const path = new PathBuilder().start(straightX, bottomY);
+  path.lineTo(straightX, topY);
+  path.arcTo(cornerCX, topY, cornerR, Math.PI, Math.PI * 2 - handover);
+  path.arcTo(sweepCX, midY, sweepR, -handover, handover);
+  path.arcTo(cornerCX, bottomY, cornerR, handover, Math.PI);
+  return path.close();
 }
 
 /** Decor sits in the space a circuit leaves empty, so it is defined per track. */
@@ -221,17 +257,19 @@ export interface TrackDefinition {
 }
 
 const LONG_BAY_DECOR: TrackDecor = {
+  // Sized by searching each gap for the widest island that still clears the
+  // road by 3 — the fold takes one end of every gap, and which end alternates,
+  // so these are not on a grid. Six rows instead of eight is what bought the
+  // width: 180 across and 42 deep, against 113 by 16 before.
   medians: [
-    [178, 111, 113, 16],
-    [178, 201, 113, 16],
-    [178, 291, 113, 16],
-    [178, 381, 113, 16],
-    [178, 471, 113, 16],
-    [178, 561, 113, 16],
-    [178, 651, 113, 16]
+    [106, 108, 180, 42],
+    [158, 234, 180, 42],
+    [88, 360, 180, 42],
+    [158, 486, 180, 42],
+    [92, 612, 180, 42]
   ],
-  trees: [[194, 119, 0.4], [265, 209, 0.38], [205, 299, 0.4], [204, 479, 0.4], [265, 569, 0.38]],
-  umbrellas: [[242, 119, 0.38], [252, 389, 0.38], [220, 659, 0.38]],
+  trees: [[132, 129, 0.42], [250, 129, 0.4], [196, 255, 0.42], [120, 381, 0.4], [244, 381, 0.42], [200, 507, 0.4], [130, 633, 0.42], [246, 633, 0.4]],
+  umbrellas: [[196, 129, 0.4], [268, 255, 0.38], [178, 381, 0.4], [240, 507, 0.38], [190, 633, 0.4]],
   buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
   boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
   rocks: [],
@@ -269,7 +307,8 @@ const OPEN_WATER_DECOR: TrackDecor = {
 export const TRACKS: TrackDefinition[] = [
   { id: 'long-bay', name: 'LONG BAY', build: buildLongBay, decor: LONG_BAY_DECOR },
   { id: 'grand-oval', name: 'GRAND OVAL', build: buildGrandOval, decor: GRAND_OVAL_DECOR },
-  { id: 'delta-run', name: 'DELTA RUN', build: buildDeltaRun, decor: OPEN_WATER_DECOR }
+  { id: 'tide-drop', name: 'TIDE DROP', build: buildTideDrop, decor: OPEN_WATER_DECOR },
+  { id: 'half-moon', name: 'HALF MOON', build: buildHalfMoon, decor: OPEN_WATER_DECOR }
 ];
 
 const BY_ID = new Map<TrackId, TrackDefinition>(TRACKS.map((track) => [track.id, track]));

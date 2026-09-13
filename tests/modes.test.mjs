@@ -8,9 +8,9 @@ import { createGame, reporter, touch } from './harness.mjs';
 const { game, step, fire, canvasCount } = createGame();
 const { check, finish } = reporter();
 
-const THROTTLE = touch(1, 303, 774);
-const LEFT_BTN = touch(2, 58, 774);
-const RIGHT_BTN = touch(3, 142, 774);
+const THROTTLE = touch(1, 330, 766);
+const LEFT_BTN = touch(2, 144, 766);
+const RIGHT_BTN = touch(3, 220, 766);
 
 /**
  * Parks a living car right on top of the player, so the next step collides.
@@ -143,7 +143,13 @@ check(
 const BASE_CRUISE = 125; // PLAYER_CRUISE_BASE_SPEED in config.ts
 game.startMode('speed-monkey');
 game.clearCountdown();
-check('a run puts 24 cars on track', game.aiCars.length === 24, `cars=${game.aiCars.length}`);
+// Not a fixed 24 any more: the field is derived from the lap, so pin the
+// derivation rather than a number that moves whenever a circuit is reshaped.
+const REFERENCE_LAP = 2988;   // Long Bay's lap when 24 was chosen
+const expectedField = Math.round(24 * (game.trackLength() / REFERENCE_LAP));
+check('the field is scaled from the lap, not fixed',
+  game.aiCars.length === expectedField,
+  `${game.aiCars.length} cars for a lap of ${game.trackLength().toFixed(0)}`);
 
 // Field size scales with the lap, so short circuits are not twice as crowded as
 // long ones. What has to stay constant is the gap between cars, not the count.
@@ -239,9 +245,29 @@ for (const track of game.TRACKS) {
     `closest ${closest.toFixed(0)}, driving surface needs ${surface.toFixed(0)}`);
 }
 
+// No circuit may kink. Arcs turn gradually, so a heading that jumps between two
+// consecutive points is a joint whose two pieces were not actually tangent —
+// the road draws a notch and the car's heading snaps as it passes. Two separate
+// builds shipped that fault before this check existed: a concave arc solved
+// against the wrong tangency condition (178 degrees, the road doubling back),
+// and a "tangent" line taken from the wrong side of its circle (24 degrees).
+for (const track of game.TRACKS) {
+  const points = track.build();
+  const n = points.length;
+  let worst = 0;
+  for (let i = 0; i < n; i++) {
+    const a = points[i], b = points[(i + 1) % n], c = points[(i + 2) % n];
+    let turn = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x);
+    while (turn > Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    worst = Math.max(worst, Math.abs(turn) * 180 / Math.PI);
+  }
+  check(`${track.id} has no kink in it`, worst < 8, `worst single-step turn ${worst.toFixed(1)} degrees`);
+}
+
 // Circuits: every mode names a real one, and they are not all the same.
 const trackIds = new Set(game.MODES.map((mode) => mode.trackId));
-check('three circuits are in rotation', trackIds.size === 3, [...trackIds].join(', '));
+check('four circuits are in rotation', trackIds.size === 4, [...trackIds].join(', '));
 check('every mode names a known circuit',
   game.MODES.every((mode) => typeof mode.trackId === 'string' && mode.trackId.length > 0));
 

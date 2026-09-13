@@ -8,8 +8,8 @@ import { createGame, reporter, touch } from './harness.mjs';
 const { game, step, fire } = createGame();
 const { check, finish } = reporter();
 
-const THROTTLE = touch(1, 303, 774);
-const LEFT_BTN = touch(2, 58, 774);
+const THROTTLE = touch(1, 330, 766);
+const LEFT_BTN = touch(2, 144, 766);
 
 // --- the plan is a pure function of the date -------------------------------
 const a = game.dailyPlan('2026-08-04');

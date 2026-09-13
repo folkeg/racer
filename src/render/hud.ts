@@ -1,7 +1,7 @@
 /** In-race HUD: combo, clock, score, objective bar, banners and the control bar. */
 
 import { PLAYER_TIER_BOOST_DURATION } from '../config';
-import { CONTROL_RADIUS, CONTROLS, laneButtonFlash } from '../controls';
+import { CONTROLS, STICK, laneButtonFlash, steer } from '../controls';
 import { modeById } from '../modes';
 import { ctx, DESIGN_W } from '../platform';
 import { run } from '../run';
@@ -167,9 +167,9 @@ function drawOnboarding(): void {
   };
 
   // Kept hugging the control bar, which moved down when the buttons shrank.
-  if (hints.lane) hint('点这里换车道', 96, 738, 11, COLORS.accentLight);
-  if (hints.throttle) hint('按住加速', 307, 738, 11, COLORS.accentLight);
-  if (hints.lane || hints.throttle) hint('超车加 Combo · 撞车清零', DESIGN_W / 2, 708, 10, COLORS.text);
+  if (hints.lane) hint('摇杆推住连续变道', 96, 706, 11, COLORS.accentLight);
+  if (hints.throttle) hint('按住加速', 311, 706, 11, COLORS.accentLight);
+  if (hints.lane || hints.throttle) hint('超车加 Combo · 撞车清零', DESIGN_W / 2, 678, 10, COLORS.text);
 
   ctx.restore();
 }
@@ -185,59 +185,242 @@ export function drawHud(): void {
   drawCountdown();
 }
 
-function drawLaneArrow(cx: number, cy: number, direction: number, color: string): void {
-  // direction +1 is the left-hand lane change, so it draws the left-pointing arrow.
-  const tip = direction > 0 ? -15 : 15;
+/**
+ * A round arcade button, built the same way the stick's base is.
+ *
+ * The bar used to be flat rounded rectangles with a hairline stroke, which read
+ * as placeholders beside a scene that has lighting and cast shadows. These are
+ * the same object as the stick's dish — shadow, side wall, lit top face, rim —
+ * so the whole strip reads as one piece of hardware rather than as a stick that
+ * happens to sit next to some tiles.
+ */
+function roundButton(cx: number, cy: number, radius: number, active: boolean): void {
+  ctx.save();
+
   ctx.beginPath();
-  ctx.moveTo(cx + tip, cy);
-  ctx.lineTo(cx - tip * 0.6, cy - 15);
-  ctx.lineTo(cx - tip * 0.6, cy + 15);
-  ctx.closePath();
-  ctx.fillStyle = color;
+  ctx.arc(cx, cy + 6, radius, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(3,8,13,0.42)';
   ctx.fill();
+
+  // Side wall: the same disc pushed down, so the button has a height.
+  ctx.beginPath();
+  ctx.arc(cx, cy + 3.5, radius, 0, Math.PI * 2);
+  ctx.fillStyle = active ? '#0E4B50' : '#0B141C';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  const face = ctx.createLinearGradient(0, cy - radius, 0, cy + radius);
+  if (active) {
+    face.addColorStop(0, '#8AF0E6');
+    face.addColorStop(1, '#2B9AA2');
+  } else {
+    face.addColorStop(0, '#31485C');
+    face.addColorStop(1, '#131F2A');
+  }
+  ctx.fillStyle = face;
+  ctx.fill();
+
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = active ? 'rgba(214,255,250,0.9)' : 'rgba(247,244,234,0.3)';
+  ctx.stroke();
+
+  // Inner ring: what makes a blank disc read as a button you press rather than
+  // a dot. It is also all the throttle has now that its label is gone.
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.68, 0, Math.PI * 2);
+  ctx.lineWidth = 1.1;
+  ctx.strokeStyle = active ? 'rgba(255,255,255,0.34)' : 'rgba(247,244,234,0.12)';
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/**
+ * A chevron rather than a solid triangle: lighter, and it reads as a hint.
+ *
+ * `direction` is the lane-index delta, where +1 is the car's right, so the
+ * negative one is the arrow that points left. Deriving the glyph from the same
+ * number the button sends is what keeps the icon honest: when the mapping was
+ * corrected, this flipped with it instead of having to be remembered.
+ */
+function drawChevron(cx: number, cy: number, direction: number, size: number, color: string, alpha: number): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = size * 0.3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const tip = direction < 0 ? -size * 0.5 : size * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - tip, cy - size * 0.72);
+  ctx.lineTo(cx + tip, cy);
+  ctx.lineTo(cx - tip, cy + size * 0.72);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The stick, drawn as if you were standing over it rather than looking at it
+ * side on.
+ *
+ * The first version put the ball straight above the centre of the dish, which
+ * is what you would see from directly in front — but the dish is an ellipse,
+ * which is what you see from above. Those two disagreed, and the eye resolves a
+ * contradiction like that as "flat". Everything here exists to make them agree
+ * on one viewpoint: a cabinet stick seen from where the player stands, leaning
+ * back towards them.
+ *
+ * Four cues, in order of how much they carry:
+ *
+ *   shadow   The ball drops a shadow onto the dish, offset the way the ball
+ *            leans. Nothing else locates one object above another as cheaply.
+ *   overlap  The ball is large and covers part of the near rim, so it is
+ *            unambiguously in front of the base rather than beside it.
+ *   rim      The dish is drawn twice, the lower copy darker, which gives the
+ *            base a thickness instead of being a painted circle.
+ *   taper    The shaft is wider where it leaves the dish than where it meets
+ *            the ball, which is foreshortening.
+ */
+function drawStick(): void {
+  const { cx, cy, radius } = STICK;
+  const lean = steer.offset;
+  const pushed = steer.direction !== 0;
+
+  // A flatter ellipse than a true top-down circle: this is the angle the whole
+  // control is drawn at, and the ball's position below is derived from it.
+  const dishRY = radius * 0.52;
+
+  ctx.save();
+
+  // Base, drawn as a slab: a dark copy pushed down is its side wall.
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 9, radius, dishRY, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(3,8,13,0.5)';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 5, radius, dishRY, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#0C1620';
+  ctx.fill();
+
+  // Top face.
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, radius, dishRY, 0, 0, Math.PI * 2);
+  const face = ctx.createLinearGradient(0, cy - dishRY, 0, cy + dishRY);
+  face.addColorStop(0, '#2C4255');
+  face.addColorStop(1, '#101D28');
+  ctx.fillStyle = face;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(247,244,234,0.26)';
+  ctx.stroke();
+
+  // The well the shaft rises out of.
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 1, radius * 0.4, dishRY * 0.4, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(2,6,10,0.6)';
+  ctx.fill();
+
+  const ballR = radius * 0.5;
+  // Leaning swings the ball across the dish and drops it, the way the top of a
+  // real shaft travels on an arc rather than sliding along a rail.
+  const ballX = cx + lean * (radius * 0.66);
+  const ballY = cy - (ballR + 6) + Math.abs(lean) * 7;
+  const baseX = cx + lean * (radius * 0.2);
+
+  // Shadow on the dish, thrown opposite the light and squashed to lie flat.
+  ctx.beginPath();
+  ctx.ellipse(ballX + 5, cy + 4, ballR * 0.82, ballR * 0.34, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(2,6,10,0.45)';
+  ctx.fill();
+
+  // Shaft: wider at the dish than at the ball.
+  ctx.beginPath();
+  ctx.moveTo(baseX - 8.5, cy + 2);
+  ctx.lineTo(ballX - ballR * 0.34, ballY);
+  ctx.lineTo(ballX + ballR * 0.34, ballY);
+  ctx.lineTo(baseX + 8.5, cy + 2);
+  ctx.closePath();
+  const shaft = ctx.createLinearGradient(baseX - 9, 0, baseX + 9, 0);
+  shaft.addColorStop(0, '#4A545B');
+  shaft.addColorStop(0.4, '#D2D8DA');
+  shaft.addColorStop(1, '#4A545B');
+  ctx.fillStyle = shaft;
+  ctx.fill();
+
+  // Ball, lit from the top left like the rest of the scene.
+  ctx.beginPath();
+  ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+  const ball = ctx.createRadialGradient(
+    ballX - ballR * 0.4, ballY - ballR * 0.45, ballR * 0.1,
+    ballX, ballY, ballR
+  );
+  if (pushed) {
+    ball.addColorStop(0, '#F2FFFD');
+    ball.addColorStop(0.45, '#7BE0DA');
+    ball.addColorStop(1, '#16646B');
+  } else {
+    ball.addColorStop(0, '#FFFEF8');
+    ball.addColorStop(0.45, '#DAD4C6');
+    ball.addColorStop(1, '#5C615E');
+  }
+  ctx.fillStyle = ball;
+  ctx.fill();
+
+  // A darker crescent along the lower edge sells it as a sphere rather than a
+  // disc: the terminator, where the surface turns away from the light.
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.beginPath();
+  ctx.arc(ballX + ballR * 0.3, ballY + ballR * 0.42, ballR, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(4,10,16,0.28)';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(ballX - ballR * 0.33, ballY - ballR * 0.4, ballR * 0.22, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.82)';
+  ctx.fill();
+
+  ctx.restore();
 }
 
 export function drawControls(): void {
+  drawStick();
+
   for (const control of CONTROLS) {
+    if (control.kind === 'steer') continue;
+
+    const cx = control.x + control.w * 0.5;
+    const cy = control.y + control.h * 0.5;
+    const radius = control.w * 0.5;
     const active = control.kind === 'throttle'
       ? inputState.throttle
       : laneButtonFlash[control.id as 'left' | 'right'] > 0;
-    const cx = control.x + control.w * 0.5;
-    const cy = control.y + control.h * 0.5;
 
-    roundRect(ctx, control.x, control.y, control.w, control.h, CONTROL_RADIUS);
-    ctx.fillStyle = COLORS.button;
-    ctx.fill();
-    if (active) {
-      ctx.fillStyle = COLORS.buttonActive;
-      ctx.fill();
-    }
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = active ? COLORS.accentLight : COLORS.buttonEdge;
-    ctx.stroke();
+    roundButton(cx, cy, radius, active);
 
-    const glyph = active ? COLORS.accentLight : COLORS.text;
     if (control.kind === 'lane') {
-      drawLaneArrow(cx, cy, control.direction, glyph);
-    } else {
-      // The throttle doubles as the heat gauge in Hot Rods.
-      if (player.heat > 0) {
-        const heatH = (control.h - 8) * Math.min(1, player.heat);
-        roundRect(ctx, control.x + 4, control.y + control.h - 4 - heatH, control.w - 8, heatH, 12);
-        ctx.fillStyle = player.heat > 0.75 ? 'rgba(255,110,90,0.42)' : 'rgba(255,181,90,0.26)';
-        ctx.fill();
-      }
+      drawChevron(cx, cy, control.direction, 15,
+        active ? '#08323A' : COLORS.text, active ? 0.9 : 0.78);
+      continue;
+    }
 
+    // The throttle carries no glyph at all now. In Hot Rods it still doubles as
+    // the heat gauge, which fills it from the bottom — clipped to the disc so
+    // the fill follows the button's own shape.
+    if (player.heat > 0) {
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(cx, cy - 19);
-      ctx.lineTo(cx - 15, cy);
-      ctx.lineTo(cx + 15, cy);
-      ctx.closePath();
-      ctx.fillStyle = glyph;
-      ctx.fill();
-      ctx.font = '900 13px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('GAS', cx, cy + 21);
+      ctx.arc(cx, cy, radius - 2, 0, Math.PI * 2);
+      ctx.clip();
+      const heatH = radius * 2 * Math.min(1, player.heat);
+      ctx.fillStyle = player.heat > 0.75 ? 'rgba(255,110,90,0.5)' : 'rgba(255,181,90,0.32)';
+      ctx.fillRect(cx - radius, cy + radius - heatH, radius * 2, heatH);
+      ctx.restore();
     }
   }
 }

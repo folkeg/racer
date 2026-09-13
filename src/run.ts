@@ -11,6 +11,7 @@ import { beginOnboarding } from './onboarding';
 import { touchStreak } from './streak';
 import { clearFloaters, clearParticles } from './render/particles';
 import { resetFeel } from './feel';
+import { resetLivingWater } from './render/livingWater';
 import { aiCars, player, resetGame } from './state';
 import { setTrack } from './track';
 import type { TrackId } from './tracks';
@@ -57,6 +58,8 @@ export function startRun(
   resetGame();
   resetEffects();
   resetFeel();
+  // Scenery phase is part of what a seeded daily run has to reproduce.
+  resetLivingWater();
   clearParticles();
   clearFloaters();
   // However long the menu was open must not land on the first frame of the run.

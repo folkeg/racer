@@ -24,7 +24,7 @@ export const ghostLane: ModeDefinition = {
   timeLimit: 60,
   scoreUnit: 'PASSES',
   trafficScale: 1,
-  trackId: 'delta-run',
+  trackId: 'tide-drop',
   stars: [10, 20, 33],
 
   setup() {

@@ -27,7 +27,7 @@ function drawTree(x: number, y: number, size = 1): void {
  * A moored boat: hull, deck and cabin, pointing along `angle`. These are what
  * make the water read as a marina rather than as empty background.
  */
-function drawBoat(x: number, y: number, size: number, angle: number): void {
+export function drawBoat(x: number, y: number, size: number, angle: number): void {
   const length = 26 * size;
   const beam = 8.5 * size;
 
@@ -290,19 +290,9 @@ export function drawBackground(): void {
   for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
   for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
   for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
-  for (const [x, y, size, angle] of decor.boats) {
-    const p = project(x, y);
-    drawBoat(p.x, p.y, size * p.scale, angle);
-  }
-
-  // A few distant buoys fill negative space without competing with cars.
-  for (const [x, y] of decor.buoys) {
-    const p = project(x, y);
-    ctx.fillStyle = 'rgba(240,231,204,0.75)';
-    ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 * p.scale, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(232,112,79,0.85)';
-    ctx.beginPath(); ctx.arc(p.x, p.y - 2.8 * p.scale, 1.2 * p.scale, 0, Math.PI * 2); ctx.fill();
-  }
+  // Boats and buoys are deliberately absent here. They are the only decor that
+  // ought to move, so they are drawn per frame by livingWater.ts instead of
+  // being baked into a layer that is rendered once and never touched again.
 
   drawVignette();
 }

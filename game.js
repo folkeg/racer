@@ -2,26 +2,9 @@
 "use strict";
 var HarborLoop = (() => {
   var __defProp = Object.defineProperty;
-  var __defProps = Object.defineProperties;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
   var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __getOwnPropSymbols = Object.getOwnPropertySymbols;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __propIsEnum = Object.prototype.propertyIsEnumerable;
-  var __defNormalProp = (obj, key2, value) => key2 in obj ? __defProp(obj, key2, { enumerable: true, configurable: true, writable: true, value }) : obj[key2] = value;
-  var __spreadValues = (a, b) => {
-    for (var prop in b || (b = {}))
-      if (__hasOwnProp.call(b, prop))
-        __defNormalProp(a, prop, b[prop]);
-    if (__getOwnPropSymbols)
-      for (var prop of __getOwnPropSymbols(b)) {
-        if (__propIsEnum.call(b, prop))
-          __defNormalProp(a, prop, b[prop]);
-      }
-    return a;
-  };
-  var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -87,6 +70,7 @@ var HarborLoop = (() => {
     starsFor: () => starsFor,
     startDaily: () => startDaily,
     startMode: () => startMode,
+    steer: () => steer,
     submitDailyBest: () => submitDailyBest,
     todayKey: () => todayKey,
     totalStars: () => totalStars,
@@ -252,7 +236,7 @@ var HarborLoop = (() => {
 
   // src/render/camera.ts
   var PERSPECTIVE = true;
-  var PITCH = 1.5;
+  var PITCH = 1.4;
   var HEIGHT = 900;
   var NEAR = 700;
   var FOCAL = 1400;
@@ -261,9 +245,9 @@ var HarborLoop = (() => {
   var FIT_Y = 1.02;
   var cosPitch = Math.cos(PITCH);
   var sinPitch = Math.sin(PITCH);
-  var SAFE_MARGIN = 4;
-  var SAFE_TOP = 50;
-  var SAFE_BOTTOM = 742;
+  var SAFE_MARGIN = 26;
+  var SAFE_TOP = 64;
+  var SAFE_BOTTOM = 700;
   var MAX_VERTICAL_STRETCH = 1.22;
   var fitScale = 1;
   var fitScaleY = 1;
@@ -392,24 +376,33 @@ var HarborLoop = (() => {
       return points;
     }
   };
+  var LONG_BAY_ROWS = 6;
+  var LONG_BAY_TOP = 70;
+  var LONG_BAY_BOTTOM = 700;
+  var LONG_BAY_RADIUS = 45;
   function buildLongBay() {
-    const path = new PathBuilder().start(110, 70);
-    path.lineTo(310, 70);
-    path.arcTo(310, 115, 45, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(160, 160);
-    path.arcTo(160, 205, 45, -Math.PI / 2, -3 * Math.PI / 2);
-    path.lineTo(310, 250);
-    path.arcTo(310, 295, 45, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(160, 340);
-    path.arcTo(160, 385, 45, -Math.PI / 2, -3 * Math.PI / 2);
-    path.lineTo(310, 430);
-    path.arcTo(310, 475, 45, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(160, 520);
-    path.arcTo(160, 565, 45, -Math.PI / 2, -3 * Math.PI / 2);
-    path.lineTo(310, 610);
-    path.arcTo(310, 655, 45, -Math.PI / 2, Math.PI / 2);
-    path.lineTo(110, 700);
-    path.arcTo(110, 640, 60, Math.PI / 2, Math.PI);
+    const step = (LONG_BAY_BOTTOM - LONG_BAY_TOP) / (LONG_BAY_ROWS - 1);
+    const r = LONG_BAY_RADIUS;
+    const eastX = 310;
+    const innerX = 160;
+    const path = new PathBuilder().start(110, LONG_BAY_TOP);
+    for (let row = 0; row < LONG_BAY_ROWS; row++) {
+      const y = LONG_BAY_TOP + row * step;
+      const goingEast = row % 2 === 0;
+      const last = row === LONG_BAY_ROWS - 1;
+      path.lineTo(last ? 110 : goingEast ? eastX : innerX, y);
+      if (last) break;
+      if (goingEast) {
+        path.arcTo(eastX, y + r, r, -Math.PI / 2, 0);
+        path.lineTo(eastX + r, y + step - r);
+        path.arcTo(eastX, y + step - r, r, 0, Math.PI / 2);
+      } else {
+        path.arcTo(innerX, y + r, r, -Math.PI / 2, -Math.PI);
+        path.lineTo(innerX - r, y + step - r);
+        path.arcTo(innerX, y + step - r, r, -Math.PI, -3 * Math.PI / 2);
+      }
+    }
+    path.arcTo(110, LONG_BAY_BOTTOM - 60, 60, Math.PI / 2, Math.PI);
     path.lineTo(50, 130);
     path.arcTo(110, 130, 60, Math.PI, 3 * Math.PI / 2);
     return path.close();
@@ -428,65 +421,60 @@ var HarborLoop = (() => {
     path.arcTo(midX, bottom, radius, 0, Math.PI);
     return path.close();
   }
-  function roundedPolygon(vertices, radius) {
-    const count = vertices.length;
-    const corners = vertices.map((vertex, index) => {
-      const previous = vertices[(index - 1 + count) % count];
-      const next = vertices[(index + 1) % count];
-      const toPreviousLength = Math.hypot(previous.x - vertex.x, previous.y - vertex.y);
-      const toNextLength = Math.hypot(next.x - vertex.x, next.y - vertex.y);
-      const toPrevious = { x: (previous.x - vertex.x) / toPreviousLength, y: (previous.y - vertex.y) / toPreviousLength };
-      const toNext = { x: (next.x - vertex.x) / toNextLength, y: (next.y - vertex.y) / toNextLength };
-      const dot = Math.max(-1, Math.min(1, toPrevious.x * toNext.x + toPrevious.y * toNext.y));
-      const interior = Math.acos(dot);
-      const tangent = radius / Math.tan(interior / 2);
-      const bisectorLength = Math.hypot(toPrevious.x + toNext.x, toPrevious.y + toNext.y);
-      const bisector = {
-        x: (toPrevious.x + toNext.x) / bisectorLength,
-        y: (toPrevious.y + toNext.y) / bisectorLength
-      };
-      const centreDistance = radius / Math.sin(interior / 2);
-      return {
-        entry: { x: vertex.x + toPrevious.x * tangent, y: vertex.y + toPrevious.y * tangent },
-        exit: { x: vertex.x + toNext.x * tangent, y: vertex.y + toNext.y * tangent },
-        centre: { x: vertex.x + bisector.x * centreDistance, y: vertex.y + bisector.y * centreDistance }
-      };
-    });
-    const path = new PathBuilder().start(corners[0].exit.x, corners[0].exit.y);
-    for (let i = 1; i <= count; i++) {
-      const corner = corners[i % count];
-      path.lineTo(corner.entry.x, corner.entry.y);
-      const from = Math.atan2(corner.entry.y - corner.centre.y, corner.entry.x - corner.centre.x);
-      const to = Math.atan2(corner.exit.y - corner.centre.y, corner.exit.x - corner.centre.x);
-      let sweep = to - from;
-      while (sweep > Math.PI) sweep -= Math.PI * 2;
-      while (sweep < -Math.PI) sweep += Math.PI * 2;
-      path.arcTo(corner.centre.x, corner.centre.y, radius, from, from + sweep);
-    }
+  function buildTideDrop() {
+    const axisX = 200;
+    const northY = 180;
+    const southY = 555;
+    const northR = 70;
+    const southR = 150;
+    const span = southY - northY;
+    const ny = (southR - northR) / span;
+    const nx = Math.sqrt(1 - ny * ny);
+    const lean = Math.atan2(ny, nx);
+    const northWest = { x: axisX - northR * nx, y: northY - northR * ny };
+    const northEast = { x: axisX + northR * nx, y: northY - northR * ny };
+    const southEast = { x: axisX + southR * nx, y: southY - southR * ny };
+    const path = new PathBuilder().start(northEast.x, northEast.y);
+    path.lineTo(southEast.x, southEast.y);
+    path.arcTo(axisX, southY, southR, -lean, Math.PI + lean);
+    path.lineTo(northWest.x, northWest.y);
+    path.arcTo(axisX, northY, northR, Math.PI + lean, Math.PI * 2 - lean);
     return path.close();
   }
-  function buildDeltaRun() {
-    return roundedPolygon([
-      { x: 64, y: -20 },
-      // top of the long straight
-      { x: 392, y: 415 },
-      // east apex
-      { x: 64, y: 772 }
-      // foot of the long straight
-    ], 58);
+  function buildHalfMoon() {
+    const straightX = 70;
+    const topY = 170;
+    const bottomY = 610;
+    const cornerR = 60;
+    const eastX = 330;
+    const midY = (topY + bottomY) / 2;
+    const halfSpan = (bottomY - topY) / 2;
+    const cornerCX = straightX + cornerR;
+    const far = eastX - cornerR;
+    const sweepCX = (far * far - cornerCX * cornerCX - halfSpan * halfSpan) / (2 * (far - cornerCX));
+    const sweepR = eastX - sweepCX;
+    const handover = Math.atan2(halfSpan, cornerCX - sweepCX);
+    const path = new PathBuilder().start(straightX, bottomY);
+    path.lineTo(straightX, topY);
+    path.arcTo(cornerCX, topY, cornerR, Math.PI, Math.PI * 2 - handover);
+    path.arcTo(sweepCX, midY, sweepR, -handover, handover);
+    path.arcTo(cornerCX, bottomY, cornerR, handover, Math.PI);
+    return path.close();
   }
   var LONG_BAY_DECOR = {
+    // Sized by searching each gap for the widest island that still clears the
+    // road by 3 — the fold takes one end of every gap, and which end alternates,
+    // so these are not on a grid. Six rows instead of eight is what bought the
+    // width: 180 across and 42 deep, against 113 by 16 before.
     medians: [
-      [178, 111, 113, 16],
-      [178, 201, 113, 16],
-      [178, 291, 113, 16],
-      [178, 381, 113, 16],
-      [178, 471, 113, 16],
-      [178, 561, 113, 16],
-      [178, 651, 113, 16]
+      [106, 108, 180, 42],
+      [158, 234, 180, 42],
+      [88, 360, 180, 42],
+      [158, 486, 180, 42],
+      [92, 612, 180, 42]
     ],
-    trees: [[194, 119, 0.4], [265, 209, 0.38], [205, 299, 0.4], [204, 479, 0.4], [265, 569, 0.38]],
-    umbrellas: [[242, 119, 0.38], [252, 389, 0.38], [220, 659, 0.38]],
+    trees: [[132, 129, 0.42], [250, 129, 0.4], [196, 255, 0.42], [120, 381, 0.4], [244, 381, 0.42], [200, 507, 0.4], [130, 633, 0.42], [246, 633, 0.4]],
+    umbrellas: [[196, 129, 0.4], [268, 255, 0.38], [178, 381, 0.4], [240, 507, 0.38], [190, 633, 0.4]],
     buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
     boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
     rocks: [],
@@ -519,7 +507,8 @@ var HarborLoop = (() => {
   var TRACKS = [
     { id: "long-bay", name: "LONG BAY", build: buildLongBay, decor: LONG_BAY_DECOR },
     { id: "grand-oval", name: "GRAND OVAL", build: buildGrandOval, decor: GRAND_OVAL_DECOR },
-    { id: "delta-run", name: "DELTA RUN", build: buildDeltaRun, decor: OPEN_WATER_DECOR }
+    { id: "tide-drop", name: "TIDE DROP", build: buildTideDrop, decor: OPEN_WATER_DECOR },
+    { id: "half-moon", name: "HALF MOON", build: buildHalfMoon, decor: OPEN_WATER_DECOR }
   ];
   var BY_ID = new Map(TRACKS.map((track) => [track.id, track]));
   function trackById(id) {
@@ -1427,16 +1416,16 @@ var HarborLoop = (() => {
     timeLimit: 60,
     scoreUnit: "PASSES",
     trafficScale: 0.9,
-    trackId: "delta-run",
+    trackId: "half-moon",
     stars: [15, 28, 43],
     setup() {
       effects.dim = 0;
     },
     update(_dt, run2) {
-      const phase = run2.elapsed % CYCLE;
+      const phase2 = run2.elapsed % CYCLE;
       let dim = 0;
-      if (phase < DARK_SECONDS) {
-        const t = phase / DARK_SECONDS;
+      if (phase2 < DARK_SECONDS) {
+        const t = phase2 / DARK_SECONDS;
         const edge2 = Math.min(t, 1 - t) / (FADE / DARK_SECONDS);
         dim = Math.min(1, Math.max(0, edge2)) * 0.94;
       }
@@ -1522,7 +1511,7 @@ var HarborLoop = (() => {
     timeLimit: 90,
     scoreUnit: "POINTS",
     trafficScale: 0.85,
-    trackId: "delta-run",
+    trackId: "half-moon",
     stars: [800, 2e3, 3600],
     // Contact always destroys here, never crashes, so there's no crash to wait
     // for — the clock has to be what ends the run.
@@ -1609,6 +1598,92 @@ var HarborLoop = (() => {
       run2.bannerTimer = 1;
     }
   };
+
+  // src/controls.ts
+  var CONTROL_BAR_TOP = 722;
+  var CONTROL_H = 88;
+  var CONTROL_HIT_PADDING = 12;
+  var CONTROL_FLASH_DURATION = 0.14;
+  var STICK = { cx: 56, cy: CONTROL_BAR_TOP + CONTROL_H / 2, radius: 38 };
+  var CONTROLS = [
+    { id: "steer", kind: "steer", direction: 0, round: true, x: 18, y: 728, w: 76, h: 76 },
+    { id: "left", kind: "lane", direction: -1, round: true, x: 118, y: 740, w: 52, h: 52 },
+    { id: "right", kind: "lane", direction: 1, round: true, x: 194, y: 740, w: 52, h: 52 },
+    { id: "throttle", kind: "throttle", direction: 0, round: true, x: 298, y: 734, w: 64, h: 64 }
+  ];
+  function distanceOutside(control, x, y) {
+    if (control.round) {
+      const cx = control.x + control.w / 2;
+      const cy = control.y + control.h / 2;
+      return Math.max(0, Math.hypot(x - cx, y - cy) - control.w / 2);
+    }
+    const dx = Math.max(control.x - x, 0, x - (control.x + control.w));
+    const dy = Math.max(control.y - y, 0, y - (control.y + control.h));
+    return Math.hypot(dx, dy);
+  }
+  function controlAtDesignPoint(x, y) {
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const control of CONTROLS) {
+      const distance = distanceOutside(control, x, y);
+      if (distance === 0) return control;
+      if (distance <= CONTROL_HIT_PADDING && distance < nearestDistance) {
+        nearest = control;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+  var DEADZONE = 0.22;
+  var REPEAT_DELAY = 0.3;
+  var REPEAT_INTERVAL = 0.17;
+  var steer = {
+    /** -1, 0 or +1, in requestLaneChange's convention: +1 is the car's right. */
+    direction: 0,
+    /** Where the knob sits, -1..1, for drawing. */
+    offset: 0,
+    held: false,
+    timer: 0
+  };
+  function pressSteer(designX) {
+    const offset = Math.max(-1, Math.min(1, (designX - STICK.cx) / STICK.radius));
+    const direction = Math.abs(offset) < DEADZONE ? 0 : offset < 0 ? -1 : 1;
+    if (direction !== 0 && direction !== steer.direction) {
+      requestLaneChange(direction);
+      steer.timer = REPEAT_DELAY;
+    }
+    steer.offset = offset;
+    steer.direction = direction;
+    steer.held = true;
+  }
+  function releaseSteer() {
+    steer.held = false;
+    steer.direction = 0;
+    steer.offset = 0;
+    steer.timer = 0;
+  }
+  function updateSteer(dt) {
+    if (!steer.held) {
+      steer.offset += (0 - steer.offset) * Math.min(1, dt * 14);
+      return;
+    }
+    if (steer.direction === 0) return;
+    steer.timer -= dt;
+    if (steer.timer > 0) return;
+    steer.timer = REPEAT_INTERVAL;
+    requestLaneChange(steer.direction);
+  }
+  var laneButtonFlash = {
+    left: 0,
+    right: 0
+  };
+  function updateControlFlash(dt) {
+    laneButtonFlash.left = Math.max(0, laneButtonFlash.left - dt);
+    laneButtonFlash.right = Math.max(0, laneButtonFlash.right - dt);
+  }
+  function flashLaneButton(id) {
+    if (id === "left" || id === "right") laneButtonFlash[id] = CONTROL_FLASH_DURATION;
+  }
 
   // src/countdown.ts
   var COUNT_FROM = 3;
@@ -1871,6 +1946,7 @@ var HarborLoop = (() => {
     const target = Math.max(0, Math.min(LANE_COUNT - 1, player.lane + direction));
     if (target === player.lane) return;
     noteLaneChange();
+    flashLaneButton(direction < 0 ? "left" : "right");
     audio.playLaneChange(direction);
     player.laneFrom = player.visualLane;
     player.laneTo = target;
@@ -1973,7 +2049,7 @@ var HarborLoop = (() => {
     timeLimit: 60,
     scoreUnit: "PASSES",
     trafficScale: 1,
-    trackId: "delta-run",
+    trackId: "tide-drop",
     stars: [10, 20, 33],
     setup() {
       timer = SWITCH_SECONDS;
@@ -2012,7 +2088,7 @@ var HarborLoop = (() => {
     timeLimit: 60,
     scoreUnit: "METRES",
     trafficScale: 1,
-    trackId: "delta-run",
+    trackId: "tide-drop",
     stars: [4e3, 8200, 12500],
     setup() {
       player.heat = 0;
@@ -2104,7 +2180,7 @@ var HarborLoop = (() => {
     timeLimit: 75,
     scoreUnit: "PASSES",
     trafficScale: 0.95,
-    trackId: "delta-run",
+    trackId: "tide-drop",
     stars: [12, 24, 38],
     setup() {
       timer2 = CULL_INTERVAL;
@@ -2134,8 +2210,8 @@ var HarborLoop = (() => {
   var BAND_MAX = 430;
   var BAND_PERIOD = 13;
   var inBandSeconds = 0;
-  function paceTarget(elapsed) {
-    const t = (Math.sin(elapsed / BAND_PERIOD * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+  function paceTarget(elapsed2) {
+    const t = (Math.sin(elapsed2 / BAND_PERIOD * Math.PI * 2 - Math.PI / 2) + 1) / 2;
     return BAND_MIN + (BAND_MAX - BAND_MIN) * t;
   }
   var paceSetter = {
@@ -3060,6 +3136,630 @@ var HarborLoop = (() => {
     return { hitStop: state4.hitStop, shake: state4.shake };
   }
 
+  // src/render/sprites.ts
+  var CAR_LENGTH = 20.5;
+  var CAR_WIDTH = 10.8;
+  var SUPERSAMPLE = 10;
+  var SPRITE_W = Math.round(CAR_LENGTH * SUPERSAMPLE);
+  var SPRITE_H = Math.round(CAR_WIDTH * SUPERSAMPLE);
+  function roundedPath(ctx2, x, y, w, h, r) {
+    const radius = Math.min(r, w / 2, h / 2);
+    ctx2.beginPath();
+    ctx2.moveTo(x + radius, y);
+    ctx2.arcTo(x + w, y, x + w, y + h, radius);
+    ctx2.arcTo(x + w, y + h, x, y + h, radius);
+    ctx2.arcTo(x, y + h, x, y, radius);
+    ctx2.arcTo(x, y, x + w, y, radius);
+    ctx2.closePath();
+  }
+  function paintCar(ctx2, style) {
+    const w = SPRITE_W;
+    const h = SPRITE_H;
+    const cy = h / 2;
+    ctx2.clearRect(0, 0, w, h);
+    ctx2.fillStyle = "#14181B";
+    const wheelW = w * 0.155;
+    const wheelH = h * 0.15;
+    for (const wx2 of [w * 0.16, w * 0.66]) {
+      roundedPath(ctx2, wx2, h * 0.02, wheelW, wheelH, wheelH * 0.45);
+      ctx2.fill();
+      roundedPath(ctx2, wx2, h * 0.83, wheelW, wheelH, wheelH * 0.45);
+      ctx2.fill();
+    }
+    ctx2.save();
+    ctx2.globalAlpha = 0.32;
+    ctx2.fillStyle = "#05090C";
+    roundedPath(ctx2, w * 0.03, h * 0.16, w * 0.94, h * 0.74, h * 0.3);
+    ctx2.fill();
+    ctx2.restore();
+    const bodyGradient = ctx2.createLinearGradient(0, h * 0.1, w * 0.35, h);
+    bodyGradient.addColorStop(0, style.rim);
+    bodyGradient.addColorStop(0.28, style.body);
+    bodyGradient.addColorStop(1, style.side);
+    ctx2.fillStyle = bodyGradient;
+    roundedPath(ctx2, w * 0.02, h * 0.12, w * 0.96, h * 0.76, h * 0.28);
+    ctx2.fill();
+    const noseGradient = ctx2.createLinearGradient(w * 0.72, 0, w, 0);
+    noseGradient.addColorStop(0, "rgba(0,0,0,0)");
+    noseGradient.addColorStop(1, "rgba(0,0,0,0.28)");
+    ctx2.fillStyle = noseGradient;
+    roundedPath(ctx2, w * 0.02, h * 0.12, w * 0.96, h * 0.76, h * 0.28);
+    ctx2.fill();
+    const cabinGradient = ctx2.createLinearGradient(0, h * 0.2, 0, h * 0.8);
+    cabinGradient.addColorStop(0, style.cabin);
+    cabinGradient.addColorStop(1, style.side);
+    ctx2.fillStyle = cabinGradient;
+    roundedPath(ctx2, w * 0.3, h * 0.2, w * 0.34, h * 0.6, h * 0.2);
+    ctx2.fill();
+    const glassGradient = ctx2.createLinearGradient(w * 0.34, h * 0.26, w * 0.6, h * 0.74);
+    glassGradient.addColorStop(0, "#EAFBFF");
+    glassGradient.addColorStop(0.45, style.window);
+    glassGradient.addColorStop(1, "#40626E");
+    ctx2.fillStyle = glassGradient;
+    roundedPath(ctx2, w * 0.345, h * 0.27, w * 0.25, h * 0.46, h * 0.14);
+    ctx2.fill();
+    ctx2.save();
+    ctx2.globalAlpha = 0.55;
+    ctx2.fillStyle = "#FFFFFF";
+    ctx2.beginPath();
+    ctx2.moveTo(w * 0.37, h * 0.3);
+    ctx2.lineTo(w * 0.45, h * 0.3);
+    ctx2.lineTo(w * 0.4, h * 0.7);
+    ctx2.lineTo(w * 0.35, h * 0.7);
+    ctx2.closePath();
+    ctx2.fill();
+    ctx2.restore();
+    if (style.stripe) {
+      ctx2.save();
+      ctx2.globalAlpha = 0.9;
+      ctx2.fillStyle = style.stripe;
+      ctx2.fillRect(w * 0.06, cy - h * 0.055, w * 0.88, h * 0.11);
+      ctx2.restore();
+    }
+    ctx2.save();
+    ctx2.globalAlpha = 0.22;
+    ctx2.strokeStyle = "#05090C";
+    ctx2.lineWidth = Math.max(1, h * 0.02);
+    ctx2.beginPath();
+    ctx2.moveTo(w * 0.66, h * 0.18);
+    ctx2.lineTo(w * 0.66, h * 0.82);
+    ctx2.stroke();
+    ctx2.restore();
+    ctx2.fillStyle = style.lights;
+    roundedPath(ctx2, w * 0.9, h * 0.2, w * 0.07, h * 0.2, h * 0.06);
+    ctx2.fill();
+    roundedPath(ctx2, w * 0.9, h * 0.6, w * 0.07, h * 0.2, h * 0.06);
+    ctx2.fill();
+    ctx2.save();
+    ctx2.globalAlpha = 0.5;
+    ctx2.fillStyle = "#C4413A";
+    roundedPath(ctx2, w * 0.035, h * 0.26, w * 0.05, h * 0.16, h * 0.05);
+    ctx2.fill();
+    roundedPath(ctx2, w * 0.035, h * 0.58, w * 0.05, h * 0.16, h * 0.05);
+    ctx2.fill();
+    ctx2.restore();
+    ctx2.save();
+    ctx2.globalAlpha = 0.6;
+    ctx2.strokeStyle = style.rim;
+    ctx2.lineWidth = Math.max(1.4, h * 0.035);
+    ctx2.beginPath();
+    ctx2.moveTo(w * 0.12, h * 0.145);
+    ctx2.lineTo(w * 0.86, h * 0.145);
+    ctx2.stroke();
+    ctx2.restore();
+  }
+  function paintShadow(ctx2) {
+    const w = SPRITE_W;
+    const h = SPRITE_H;
+    ctx2.clearRect(0, 0, w, h);
+    ctx2.fillStyle = "#040A0E";
+    roundedPath(ctx2, w * 0.02, h * 0.12, w * 0.96, h * 0.76, h * 0.28);
+    ctx2.fill();
+  }
+  function build(paint) {
+    const canvas2 = createOffscreenCanvas(SPRITE_W, SPRITE_H);
+    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
+    if (!canvas2 || !ctx2) return null;
+    paint(ctx2);
+    return canvas2;
+  }
+  var cache2 = /* @__PURE__ */ new Map();
+  function vehicleSprite(key2, style) {
+    const cached = cache2.get(key2);
+    if (cached !== void 0) return cached;
+    const image = build((ctx2) => paintCar(ctx2, style));
+    const shadow = build(paintShadow);
+    const sprite = image && shadow ? { image, shadow } : null;
+    cache2.set(key2, sprite);
+    return sprite;
+  }
+  var ASPHALT_TILE = 96;
+  var asphaltPattern = null;
+  var asphaltTried = false;
+  function asphaltTexture(target) {
+    if (asphaltTried) return asphaltPattern;
+    asphaltTried = true;
+    const canvas2 = createOffscreenCanvas(ASPHALT_TILE, ASPHALT_TILE);
+    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
+    if (!canvas2 || !ctx2) return null;
+    ctx2.clearRect(0, 0, ASPHALT_TILE, ASPHALT_TILE);
+    for (let i = 0; i < 1400; i++) {
+      const x = Math.random() * ASPHALT_TILE;
+      const y = Math.random() * ASPHALT_TILE;
+      const light = Math.random() < 0.5;
+      ctx2.fillStyle = light ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.06)";
+      ctx2.fillRect(x, y, 1, 1);
+    }
+    for (let i = 0; i < 180; i++) {
+      const x = Math.random() * ASPHALT_TILE;
+      const y = Math.random() * ASPHALT_TILE;
+      ctx2.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.07)";
+      ctx2.fillRect(x, y, 2, 2);
+    }
+    try {
+      asphaltPattern = target.createPattern(canvas2, "repeat");
+    } catch (error) {
+      asphaltPattern = null;
+    }
+    return asphaltPattern;
+  }
+  var WATER_TILE = 128;
+  var waterPattern = null;
+  var waterTried = false;
+  function waterTexture(target) {
+    if (waterTried) return waterPattern;
+    waterTried = true;
+    const canvas2 = createOffscreenCanvas(WATER_TILE, WATER_TILE);
+    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
+    if (!canvas2 || !ctx2) return null;
+    ctx2.clearRect(0, 0, WATER_TILE, WATER_TILE);
+    ctx2.lineCap = "round";
+    const bands = [
+      { cycles: 3, amplitude: 3.2, spacing: 9, alpha: 0.1, width: 1.5, phase: 0 },
+      { cycles: 5, amplitude: 2, spacing: 14, alpha: 0.07, width: 1.1, phase: 1.7 },
+      { cycles: 2, amplitude: 4.4, spacing: 21, alpha: 0.06, width: 2.4, phase: 3.1 }
+    ];
+    for (const band of bands) {
+      ctx2.strokeStyle = `rgba(255,255,255,${band.alpha})`;
+      ctx2.lineWidth = band.width;
+      for (let y = 0; y < WATER_TILE; y += band.spacing) {
+        ctx2.beginPath();
+        for (let x = 0; x <= WATER_TILE; x += 4) {
+          const wave = Math.sin(x / WATER_TILE * Math.PI * 2 * band.cycles + band.phase + y * 0.11);
+          const yy = y + wave * band.amplitude;
+          if (x === 0) ctx2.moveTo(x, yy);
+          else ctx2.lineTo(x, yy);
+        }
+        ctx2.stroke();
+      }
+    }
+    for (let i = 0; i < 26; i++) {
+      const x = Math.random() * WATER_TILE;
+      const y = Math.random() * WATER_TILE;
+      ctx2.fillStyle = "rgba(255,255,255,0.16)";
+      ctx2.beginPath();
+      ctx2.ellipse(x, y, 2.6, 0.9, 0, 0, Math.PI * 2);
+      ctx2.fill();
+    }
+    try {
+      waterPattern = target.createPattern(canvas2, "repeat");
+    } catch (error) {
+      waterPattern = null;
+    }
+    return waterPattern;
+  }
+  var GRASS_TILE = 72;
+  var grassPattern = null;
+  var grassTried = false;
+  function grassTexture(target) {
+    if (grassTried) return grassPattern;
+    grassTried = true;
+    const canvas2 = createOffscreenCanvas(GRASS_TILE, GRASS_TILE);
+    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
+    if (!canvas2 || !ctx2) return null;
+    ctx2.clearRect(0, 0, GRASS_TILE, GRASS_TILE);
+    ctx2.lineCap = "round";
+    ctx2.lineWidth = 1;
+    for (let i = 0; i < 520; i++) {
+      const x = Math.random() * GRASS_TILE;
+      const y = Math.random() * GRASS_TILE;
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
+      const length = 1.6 + Math.random() * 2.4;
+      const light = Math.random() < 0.5;
+      ctx2.strokeStyle = light ? "rgba(255,255,235,0.13)" : "rgba(80,96,50,0.16)";
+      ctx2.beginPath();
+      ctx2.moveTo(x, y);
+      ctx2.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+      ctx2.stroke();
+    }
+    try {
+      grassPattern = target.createPattern(canvas2, "repeat");
+    } catch (error) {
+      grassPattern = null;
+    }
+    return grassPattern;
+  }
+
+  // src/render/primitives.ts
+  function roundRect(context3, x, y, w, h, r) {
+    const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    context3.beginPath();
+    context3.moveTo(x + radius, y);
+    context3.arcTo(x + w, y, x + w, y + h, radius);
+    context3.arcTo(x + w, y + h, x, y + h, radius);
+    context3.arcTo(x, y + h, x, y, radius);
+    context3.arcTo(x, y, x + w, y, radius);
+    context3.closePath();
+  }
+  function offsetPath(points, dx, dy) {
+    return points.map((point) => ({ x: point.x + dx, y: point.y + dy }));
+  }
+  function fillRibbon(outer, inner, fill) {
+    if (outer.length < 2 || inner.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(outer[0].x, outer[0].y);
+    for (let i = 1; i < outer.length; i++) ctx.lineTo(outer[i].x, outer[i].y);
+    for (let i = inner.length - 1; i >= 0; i--) ctx.lineTo(inner[i].x, inner[i].y);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  // src/render/scenery.ts
+  function drawTree(x, y, size = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = "rgba(13,35,30,0.22)";
+    ctx.beginPath();
+    ctx.ellipse(2, 4, 9 * size, 5 * size, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#5C7E48";
+    ctx.beginPath();
+    ctx.arc(-3 * size, 0, 6.5 * size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#739556";
+    ctx.beginPath();
+    ctx.arc(3 * size, -2 * size, 7 * size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#94AD69";
+    ctx.beginPath();
+    ctx.arc(0, -6 * size, 5.5 * size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  function drawBoat(x, y, size, angle) {
+    const length = 26 * size;
+    const beam = 8.5 * size;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = "rgba(60,80,92,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(1.5 * size, 1.8 * size, length * 0.5, beam * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#F4F3EE";
+    ctx.beginPath();
+    ctx.moveTo(length * 0.5, 0);
+    ctx.quadraticCurveTo(length * 0.12, -beam * 0.5, -length * 0.42, -beam * 0.42);
+    ctx.lineTo(-length * 0.5, -beam * 0.3);
+    ctx.lineTo(-length * 0.5, beam * 0.3);
+    ctx.lineTo(-length * 0.42, beam * 0.42);
+    ctx.quadraticCurveTo(length * 0.12, beam * 0.5, length * 0.5, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#D8DCDA";
+    ctx.beginPath();
+    ctx.moveTo(length * 0.32, 0);
+    ctx.quadraticCurveTo(length * 0.05, -beam * 0.3, -length * 0.34, -beam * 0.26);
+    ctx.lineTo(-length * 0.34, beam * 0.26);
+    ctx.quadraticCurveTo(length * 0.05, beam * 0.3, length * 0.32, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#9FB0B8";
+    ctx.fillRect(-length * 0.2, -beam * 0.2, length * 0.26, beam * 0.4);
+    ctx.fillStyle = "#5E7480";
+    ctx.fillRect(-length * 0.14, -beam * 0.12, length * 0.14, beam * 0.24);
+    ctx.restore();
+  }
+  function drawUmbrella(x, y, size = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = "rgba(7,21,28,0.20)";
+    ctx.beginPath();
+    ctx.ellipse(2, 5, 9 * size, 4 * size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#6B5140";
+    ctx.lineWidth = 1.3 * size;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 8 * size);
+    ctx.stroke();
+    const colors = ["#F2E7C9", "#E9864F", "#F2E7C9", "#E9864F"];
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = colors[i];
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, 9 * size, i * Math.PI / 2, (i + 1) * Math.PI / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawRocks(x, y, w, h, seed) {
+    const points = [];
+    const steps = 14;
+    for (let i = 0; i < steps; i++) {
+      const angle = i / steps * Math.PI * 2;
+      const wobble = 0.78 + 0.34 * Math.abs(Math.sin(seed * 2.7 + i * 1.9));
+      const px = x + w / 2 + Math.cos(angle) * (w / 2) * wobble;
+      const py = y + h / 2 + Math.sin(angle) * (h / 2) * wobble;
+      points.push(project(px, py));
+    }
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.translate(SHADOW_X * 3, SHADOW_Y * 3);
+    trace();
+    ctx.fillStyle = "rgba(48,58,64,0.35)";
+    ctx.fill();
+    ctx.restore();
+    trace();
+    ctx.fillStyle = COLORS.rock;
+    ctx.fill();
+    ctx.save();
+    trace();
+    ctx.clip();
+    ctx.fillStyle = "rgba(214,214,204,0.30)";
+    const cap = project(x + w * 0.5 - SHADOW_X * 12, y + h * 0.5 - SHADOW_Y * 12);
+    ctx.beginPath();
+    ctx.ellipse(cap.x, cap.y, w * 0.42 * cap.scale, h * 0.4 * cap.scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  function drawBuilding(x, y, w, h, angle) {
+    const corners = (dx, dy, inset) => {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const hw = w / 2 - inset;
+      const hh = h / 2 - inset;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(
+        ([ox, oy]) => project(cx + ox * cos - oy * sin + dx, cy + ox * sin + oy * cos + dy)
+      );
+    };
+    const fillQuad = (pts, color) => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    };
+    fillQuad(corners(SHADOW_X * 7, SHADOW_Y * 7, 0), "rgba(52,62,70,0.32)");
+    fillQuad(corners(SHADOW_X * 3.5, SHADOW_Y * 3.5, 0), "#8E938F");
+    fillQuad(corners(0, 0, 0), "#C9CCC5");
+    fillQuad(corners(0, 0, w * 0.16), "#AFB4AE");
+  }
+  function drawBridge(x1, y1, x2, y2, width) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = -dy / length * (width / 2);
+    const ny = dx / length * (width / 2);
+    const railA = [];
+    const railB = [];
+    const steps = 16;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      railA.push(project(x1 + dx * t + nx, y1 + dy * t + ny));
+      railB.push(project(x1 + dx * t - nx, y1 + dy * t - ny));
+    }
+    ctx.save();
+    ctx.translate(SHADOW_X * 5, SHADOW_Y * 5);
+    fillRibbon(railA, railB, "rgba(52,62,70,0.3)");
+    ctx.restore();
+    fillRibbon(railA, railB, "#E0BE63");
+    ctx.strokeStyle = "rgba(140,110,44,0.55)";
+    for (let i = 1; i < steps; i++) {
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(railA[i].x, railA[i].y);
+      ctx.lineTo(railB[i].x, railB[i].y);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = "#C9A84D";
+    ctx.lineWidth = 2.4;
+    for (const rail of [railA, railB]) {
+      ctx.beginPath();
+      ctx.moveTo(rail[0].x, rail[0].y);
+      for (let i = 1; i < rail.length; i++) ctx.lineTo(rail[i].x, rail[i].y);
+      ctx.stroke();
+    }
+  }
+  function drawChequer(x, y, w, h, angle) {
+    const cols = 8;
+    const rows = 4;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const cellW = w / cols;
+    const cellH = h / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const ox = -w / 2 + c * cellW;
+        const oy = -h / 2 + r * cellH;
+        const pts = [[ox, oy], [ox + cellW, oy], [ox + cellW, oy + cellH], [ox, oy + cellH]].map(
+          ([px, py]) => project(x + w / 2 + px * cos - py * sin, y + h / 2 + px * sin + py * cos)
+        );
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.fillStyle = (r + c) % 2 === 0 ? "#F2F0E8" : "#3B4249";
+        ctx.fill();
+      }
+    }
+  }
+  function drawBackground() {
+    const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
+    gradient.addColorStop(0, COLORS.waterDeep);
+    gradient.addColorStop(0.55, COLORS.water);
+    gradient.addColorStop(1, "#94AEBA");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+    const ripple = waterTexture(ctx);
+    if (ripple) {
+      ctx.fillStyle = ripple;
+      ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+    }
+    const decor = trackById(activeTrackId).decor;
+    const quad = (x, y, w, h, dx = 0, dy = 0) => {
+      const top = [project(x + dx, y + dy), project(x + w + dx, y + dy)];
+      const bottom = [project(x + dx, y + h + dy), project(x + w + dx, y + h + dy)];
+      fillRibbon(top, bottom, ctx.fillStyle);
+    };
+    decor.medians.forEach(([x, y, w, h], i) => {
+      ctx.fillStyle = "rgba(4,12,18,0.42)";
+      quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
+      ctx.fillStyle = "#5A7043";
+      quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH * 0.5, SHADOW_Y * ISLAND_DEPTH * 0.5);
+      ctx.fillStyle = COLORS.landDark;
+      quad(x - 4, y - 4, w + 8, h + 8);
+      ctx.fillStyle = i % 2 === 0 ? COLORS.land : COLORS.landLight;
+      quad(x, y, w, h);
+      const grass = grassTexture(ctx);
+      if (grass) {
+        ctx.fillStyle = grass;
+        quad(x, y, w, h);
+      }
+    });
+    for (const [x, y, size] of decor.trees) {
+      const p = project(x, y);
+      drawTree(p.x, p.y, size * p.scale);
+    }
+    for (const [x, y, size] of decor.umbrellas) {
+      const p = project(x, y);
+      drawUmbrella(p.x, p.y, size * p.scale);
+    }
+    for (const [x, y, w, h, seed] of decor.rocks) drawRocks(x, y, w, h, seed);
+    for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
+    for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
+    for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
+    drawVignette();
+  }
+  function drawVignette() {
+    const gradient = ctx.createRadialGradient(
+      DESIGN_W * 0.42,
+      DESIGN_H * 0.38,
+      DESIGN_H * 0.18,
+      DESIGN_W * 0.5,
+      DESIGN_H * 0.5,
+      DESIGN_H * 0.72
+    );
+    gradient.addColorStop(0, "rgba(255,255,245,0.10)");
+    gradient.addColorStop(0.55, "rgba(0,0,0,0)");
+    gradient.addColorStop(1, "rgba(40,60,72,0.32)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+  }
+
+  // src/render/livingWater.ts
+  var elapsed = 0;
+  function phase(index) {
+    const raw = Math.sin(index * 12.9898) * 43758.5453;
+    return (raw - Math.floor(raw)) * Math.PI * 2;
+  }
+  function resetLivingWater() {
+    elapsed = 0;
+  }
+  function updateLivingWater(dt) {
+    elapsed += dt;
+  }
+  function boatDrift(index) {
+    const p = phase(index);
+    return {
+      along: Math.sin(elapsed * 0.23 + p) * 7,
+      across: Math.sin(elapsed * 0.17 + p * 1.7) * 3.5,
+      heel: Math.sin(elapsed * 0.41 + p) * 0.045
+    };
+  }
+  function drawWake(x, y, size, angle, speed) {
+    const strength = Math.min(1, Math.abs(speed) * 1.4);
+    if (strength < 0.05) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = 0.3 * strength;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.moveTo(-13 * size, -3.4 * size);
+    ctx.lineTo(-13 * size - 34 * size * strength, -7 * size);
+    ctx.lineTo(-13 * size - 34 * size * strength, 7 * size);
+    ctx.lineTo(-13 * size, 3.4 * size);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  var GULLS = 2;
+  function drawGulls() {
+    for (let i = 0; i < GULLS; i++) {
+      const period = 19 + i * 7;
+      const t = (elapsed + i * 11) % period / period;
+      if (t > 0.55) continue;
+      const travel = t / 0.55;
+      const x = -30 + travel * (DESIGN_W + 60);
+      const y = DESIGN_H * (0.16 + i * 0.42) + Math.sin(elapsed * 0.9 + i) * 14;
+      const flap = Math.sin(elapsed * 7 + i * 2) * 0.5 + 0.5;
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = "#F2EFE6";
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x - 6, y + flap * 3.2);
+      ctx.quadraticCurveTo(x - 2.5, y - 1.4, x, y);
+      ctx.quadraticCurveTo(x + 2.5, y - 1.4, x + 6, y + flap * 3.2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  function drawLivingWater() {
+    const decor = trackById(activeTrackId).decor;
+    decor.boats.forEach(([x, y, size, angle], index) => {
+      const drift = boatDrift(index);
+      const point = project(
+        x + Math.cos(angle) * drift.along - Math.sin(angle) * drift.across,
+        y + Math.sin(angle) * drift.along + Math.cos(angle) * drift.across
+      );
+      const speed = Math.cos(elapsed * 0.23 + phase(index)) * 0.23 * 7;
+      drawWake(point.x, point.y, size * point.scale, angle + drift.heel, speed);
+      drawBoat(point.x, point.y, size * point.scale, angle + drift.heel);
+    });
+    decor.buoys.forEach(([x, y], index) => {
+      const p = phase(index + 97);
+      const bob = Math.sin(elapsed * 1.3 + p) * 1.6;
+      const point = project(x, y + bob * 0.4);
+      const lean = Math.sin(elapsed * 1.1 + p) * 0.22;
+      ctx.save();
+      ctx.translate(point.x, point.y);
+      ctx.rotate(lean);
+      ctx.fillStyle = "rgba(240,231,204,0.75)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.2 * point.scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(232,112,79,0.85)";
+      ctx.beginPath();
+      ctx.arc(0, -2.8 * point.scale, 1.2 * point.scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+    drawGulls();
+  }
+
   // src/run.ts
   var run = {
     modeId: MODES[0].id,
@@ -3088,6 +3788,7 @@ var HarborLoop = (() => {
     resetGame();
     resetEffects();
     resetFeel();
+    resetLivingWater();
     clearParticles();
     clearFloaters();
     resetClock();
@@ -3261,63 +3962,6 @@ var HarborLoop = (() => {
     app.screen = "RESULT";
   }
 
-  // src/controls.ts
-  var CONTROL_BAR_TOP = 752;
-  var CONTROL_H = 58;
-  var CONTROL_RADIUS = 16;
-  var CONTROL_HIT_PADDING = 14;
-  var CONTROL_FLASH_DURATION = 0.14;
-  var CONTROLS = [
-    { id: "left", kind: "lane", direction: 1, x: 20, w: 72 },
-    { id: "right", kind: "lane", direction: -1, x: 100, w: 72 },
-    { id: "throttle", kind: "throttle", direction: 0, x: 244, w: 126 }
-  ].map((control) => __spreadProps(__spreadValues({}, control), { y: CONTROL_BAR_TOP, h: CONTROL_H }));
-  function controlAtDesignPoint(x, y) {
-    for (const control of CONTROLS) {
-      if (x >= control.x - CONTROL_HIT_PADDING && x <= control.x + control.w + CONTROL_HIT_PADDING && y >= control.y - CONTROL_HIT_PADDING && y <= control.y + control.h + CONTROL_HIT_PADDING) {
-        return control;
-      }
-    }
-    return null;
-  }
-  var laneButtonFlash = {
-    left: 0,
-    right: 0
-  };
-  function updateControlFlash(dt) {
-    laneButtonFlash.left = Math.max(0, laneButtonFlash.left - dt);
-    laneButtonFlash.right = Math.max(0, laneButtonFlash.right - dt);
-  }
-  function flashLaneButton(id) {
-    if (id === "throttle") return;
-    laneButtonFlash[id] = CONTROL_FLASH_DURATION;
-  }
-
-  // src/render/primitives.ts
-  function roundRect(context3, x, y, w, h, r) {
-    const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
-    context3.beginPath();
-    context3.moveTo(x + radius, y);
-    context3.arcTo(x + w, y, x + w, y + h, radius);
-    context3.arcTo(x + w, y + h, x, y + h, radius);
-    context3.arcTo(x, y + h, x, y, radius);
-    context3.arcTo(x, y, x + w, y, radius);
-    context3.closePath();
-  }
-  function offsetPath(points, dx, dy) {
-    return points.map((point) => ({ x: point.x + dx, y: point.y + dy }));
-  }
-  function fillRibbon(outer, inner, fill) {
-    if (outer.length < 2 || inner.length < 2) return;
-    ctx.beginPath();
-    ctx.moveTo(outer[0].x, outer[0].y);
-    for (let i = 1; i < outer.length; i++) ctx.lineTo(outer[i].x, outer[i].y);
-    for (let i = inner.length - 1; i >= 0; i--) ctx.lineTo(inner[i].x, inner[i].y);
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
-  }
-
   // src/render/hud.ts
   var BACK_BUTTON = { x: DESIGN_W - 46, y: 9, w: 34, h: 34 };
   function drawComboPill() {
@@ -3438,9 +4082,9 @@ var HarborLoop = (() => {
       ctx.fillStyle = color;
       ctx.fillText(text, cx, cy + size * 0.36);
     };
-    if (hints.lane) hint("点这里换车道", 96, 738, 11, COLORS.accentLight);
-    if (hints.throttle) hint("按住加速", 307, 738, 11, COLORS.accentLight);
-    if (hints.lane || hints.throttle) hint("超车加 Combo · 撞车清零", DESIGN_W / 2, 708, 10, COLORS.text);
+    if (hints.lane) hint("摇杆推住连续变道", 96, 706, 11, COLORS.accentLight);
+    if (hints.throttle) hint("按住加速", 311, 706, 11, COLORS.accentLight);
+    if (hints.lane || hints.throttle) hint("超车加 Combo · 撞车清零", DESIGN_W / 2, 678, 10, COLORS.text);
     ctx.restore();
   }
   function drawHud() {
@@ -3453,51 +4097,166 @@ var HarborLoop = (() => {
     drawOnboarding();
     drawCountdown();
   }
-  function drawLaneArrow(cx, cy, direction, color) {
-    const tip = direction > 0 ? -15 : 15;
+  function roundButton(cx, cy, radius, active) {
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(cx + tip, cy);
-    ctx.lineTo(cx - tip * 0.6, cy - 15);
-    ctx.lineTo(cx - tip * 0.6, cy + 15);
-    ctx.closePath();
-    ctx.fillStyle = color;
+    ctx.arc(cx, cy + 6, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(3,8,13,0.42)";
     ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy + 3.5, radius, 0, Math.PI * 2);
+    ctx.fillStyle = active ? "#0E4B50" : "#0B141C";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    const face = ctx.createLinearGradient(0, cy - radius, 0, cy + radius);
+    if (active) {
+      face.addColorStop(0, "#8AF0E6");
+      face.addColorStop(1, "#2B9AA2");
+    } else {
+      face.addColorStop(0, "#31485C");
+      face.addColorStop(1, "#131F2A");
+    }
+    ctx.fillStyle = face;
+    ctx.fill();
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = active ? "rgba(214,255,250,0.9)" : "rgba(247,244,234,0.3)";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.68, 0, Math.PI * 2);
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = active ? "rgba(255,255,255,0.34)" : "rgba(247,244,234,0.12)";
+    ctx.stroke();
+    ctx.restore();
+  }
+  function drawChevron(cx, cy, direction, size, color, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = size * 0.3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const tip = direction < 0 ? -size * 0.5 : size * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - tip, cy - size * 0.72);
+    ctx.lineTo(cx + tip, cy);
+    ctx.lineTo(cx - tip, cy + size * 0.72);
+    ctx.stroke();
+    ctx.restore();
+  }
+  function drawStick() {
+    const { cx, cy, radius } = STICK;
+    const lean = steer.offset;
+    const pushed = steer.direction !== 0;
+    const dishRY = radius * 0.52;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 9, radius, dishRY, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(3,8,13,0.5)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 5, radius, dishRY, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#0C1620";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, radius, dishRY, 0, 0, Math.PI * 2);
+    const face = ctx.createLinearGradient(0, cy - dishRY, 0, cy + dishRY);
+    face.addColorStop(0, "#2C4255");
+    face.addColorStop(1, "#101D28");
+    ctx.fillStyle = face;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(247,244,234,0.26)";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 1, radius * 0.4, dishRY * 0.4, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(2,6,10,0.6)";
+    ctx.fill();
+    const ballR = radius * 0.5;
+    const ballX = cx + lean * (radius * 0.66);
+    const ballY = cy - (ballR + 6) + Math.abs(lean) * 7;
+    const baseX = cx + lean * (radius * 0.2);
+    ctx.beginPath();
+    ctx.ellipse(ballX + 5, cy + 4, ballR * 0.82, ballR * 0.34, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(2,6,10,0.45)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(baseX - 8.5, cy + 2);
+    ctx.lineTo(ballX - ballR * 0.34, ballY);
+    ctx.lineTo(ballX + ballR * 0.34, ballY);
+    ctx.lineTo(baseX + 8.5, cy + 2);
+    ctx.closePath();
+    const shaft = ctx.createLinearGradient(baseX - 9, 0, baseX + 9, 0);
+    shaft.addColorStop(0, "#4A545B");
+    shaft.addColorStop(0.4, "#D2D8DA");
+    shaft.addColorStop(1, "#4A545B");
+    ctx.fillStyle = shaft;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+    const ball = ctx.createRadialGradient(
+      ballX - ballR * 0.4,
+      ballY - ballR * 0.45,
+      ballR * 0.1,
+      ballX,
+      ballY,
+      ballR
+    );
+    if (pushed) {
+      ball.addColorStop(0, "#F2FFFD");
+      ball.addColorStop(0.45, "#7BE0DA");
+      ball.addColorStop(1, "#16646B");
+    } else {
+      ball.addColorStop(0, "#FFFEF8");
+      ball.addColorStop(0.45, "#DAD4C6");
+      ball.addColorStop(1, "#5C615E");
+    }
+    ctx.fillStyle = ball;
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.arc(ballX + ballR * 0.3, ballY + ballR * 0.42, ballR, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(4,10,16,0.28)";
+    ctx.fill();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(ballX - ballR * 0.33, ballY - ballR * 0.4, ballR * 0.22, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.fill();
+    ctx.restore();
   }
   function drawControls() {
+    drawStick();
     for (const control of CONTROLS) {
-      const active = control.kind === "throttle" ? inputState.throttle : laneButtonFlash[control.id] > 0;
+      if (control.kind === "steer") continue;
       const cx = control.x + control.w * 0.5;
       const cy = control.y + control.h * 0.5;
-      roundRect(ctx, control.x, control.y, control.w, control.h, CONTROL_RADIUS);
-      ctx.fillStyle = COLORS.button;
-      ctx.fill();
-      if (active) {
-        ctx.fillStyle = COLORS.buttonActive;
-        ctx.fill();
-      }
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = active ? COLORS.accentLight : COLORS.buttonEdge;
-      ctx.stroke();
-      const glyph = active ? COLORS.accentLight : COLORS.text;
+      const radius = control.w * 0.5;
+      const active = control.kind === "throttle" ? inputState.throttle : laneButtonFlash[control.id] > 0;
+      roundButton(cx, cy, radius, active);
       if (control.kind === "lane") {
-        drawLaneArrow(cx, cy, control.direction, glyph);
-      } else {
-        if (player.heat > 0) {
-          const heatH = (control.h - 8) * Math.min(1, player.heat);
-          roundRect(ctx, control.x + 4, control.y + control.h - 4 - heatH, control.w - 8, heatH, 12);
-          ctx.fillStyle = player.heat > 0.75 ? "rgba(255,110,90,0.42)" : "rgba(255,181,90,0.26)";
-          ctx.fill();
-        }
+        drawChevron(
+          cx,
+          cy,
+          control.direction,
+          15,
+          active ? "#08323A" : COLORS.text,
+          active ? 0.9 : 0.78
+        );
+        continue;
+      }
+      if (player.heat > 0) {
+        ctx.save();
         ctx.beginPath();
-        ctx.moveTo(cx, cy - 19);
-        ctx.lineTo(cx - 15, cy);
-        ctx.lineTo(cx + 15, cy);
-        ctx.closePath();
-        ctx.fillStyle = glyph;
-        ctx.fill();
-        ctx.font = "900 13px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("GAS", cx, cy + 21);
+        ctx.arc(cx, cy, radius - 2, 0, Math.PI * 2);
+        ctx.clip();
+        const heatH = radius * 2 * Math.min(1, player.heat);
+        ctx.fillStyle = player.heat > 0.75 ? "rgba(255,110,90,0.5)" : "rgba(255,181,90,0.32)";
+        ctx.fillRect(cx - radius, cy + radius - heatH, radius * 2, heatH);
+        ctx.restore();
       }
     }
   }
@@ -4079,10 +4838,14 @@ var HarborLoop = (() => {
     }
     setThrottle(held);
   }
-  function pressControl(control) {
-    if (control.kind === "throttle") return;
-    flashLaneButton(control.id);
-    requestLaneChange(control.direction);
+  function anyPointerOnSteer() {
+    for (const assignment of activePointers.values()) {
+      if (assignment === "steer") return true;
+    }
+    return false;
+  }
+  function refreshSteerFromPointers() {
+    if (!anyPointerOnSteer()) releaseSteer();
   }
   function pointerDown(pointerId, screenX, screenY) {
     const x = screenToDesignX(screenX);
@@ -4107,13 +4870,14 @@ var HarborLoop = (() => {
     const control = controlAtDesignPoint(x, y);
     if (control) {
       activePointers.set(pointerId, control.id);
-      if (control.kind === "throttle") audio.ensureStarted();
-      pressControl(control);
+      audio.ensureStarted();
+      if (control.kind === "steer") pressSteer(x);
+      else if (control.kind === "lane") requestLaneChange(control.direction);
       refreshThrottleFromPointers();
       return;
     }
     activePointers.set(pointerId, "track");
-    requestLaneChange(x < DESIGN_W * 0.5 ? 1 : -1);
+    requestLaneChange(x < DESIGN_W * 0.5 ? -1 : 1);
   }
   function pointerMove(pointerId, screenX, screenY) {
     if (app.screen !== "PLAYING") return;
@@ -4123,18 +4887,24 @@ var HarborLoop = (() => {
     if (control && control.kind === "throttle") {
       if (previous !== "throttle") audio.ensureStarted();
       activePointers.set(pointerId, "throttle");
-    } else if (previous === "throttle") {
+    } else if (control && control.kind === "steer") {
+      activePointers.set(pointerId, "steer");
+      pressSteer(screenToDesignX(screenX));
+    } else if (previous === "throttle" || previous === "steer") {
       activePointers.set(pointerId, "none");
     }
     refreshThrottleFromPointers();
+    refreshSteerFromPointers();
   }
   function pointerUp(pointerId) {
     if (!activePointers.delete(pointerId)) return;
     refreshThrottleFromPointers();
+    refreshSteerFromPointers();
   }
   function releaseAllPointers() {
     activePointers.clear();
     setThrottle(false);
+    releaseSteer();
   }
   function isThrottleKey(event) {
     const key2 = String(event.key || "").toLowerCase();
@@ -4149,10 +4919,10 @@ var HarborLoop = (() => {
     const keyCode = Number(event.keyCode || event.which || 0);
     let handled = false;
     if (key2 === "arrowleft" || key2 === "left" || key2 === "a" || code === "ArrowLeft" || code === "KeyA" || keyCode === 37 || keyCode === 65) {
-      requestLaneChange(1);
+      requestLaneChange(-1);
       handled = true;
     } else if (key2 === "arrowright" || key2 === "right" || key2 === "d" || code === "ArrowRight" || code === "KeyD" || keyCode === 39 || keyCode === 68) {
-      requestLaneChange(-1);
+      requestLaneChange(1);
       handled = true;
     } else if (isThrottleKey(event)) {
       setThrottle(true);
@@ -4309,250 +5079,6 @@ var HarborLoop = (() => {
     ctx.restore();
   }
 
-  // src/render/sprites.ts
-  var CAR_LENGTH = 20.5;
-  var CAR_WIDTH = 10.8;
-  var SUPERSAMPLE = 10;
-  var SPRITE_W = Math.round(CAR_LENGTH * SUPERSAMPLE);
-  var SPRITE_H = Math.round(CAR_WIDTH * SUPERSAMPLE);
-  function roundedPath(ctx2, x, y, w, h, r) {
-    const radius = Math.min(r, w / 2, h / 2);
-    ctx2.beginPath();
-    ctx2.moveTo(x + radius, y);
-    ctx2.arcTo(x + w, y, x + w, y + h, radius);
-    ctx2.arcTo(x + w, y + h, x, y + h, radius);
-    ctx2.arcTo(x, y + h, x, y, radius);
-    ctx2.arcTo(x, y, x + w, y, radius);
-    ctx2.closePath();
-  }
-  function paintCar(ctx2, style) {
-    const w = SPRITE_W;
-    const h = SPRITE_H;
-    const cy = h / 2;
-    ctx2.clearRect(0, 0, w, h);
-    ctx2.fillStyle = "#14181B";
-    const wheelW = w * 0.155;
-    const wheelH = h * 0.15;
-    for (const wx2 of [w * 0.16, w * 0.66]) {
-      roundedPath(ctx2, wx2, h * 0.02, wheelW, wheelH, wheelH * 0.45);
-      ctx2.fill();
-      roundedPath(ctx2, wx2, h * 0.83, wheelW, wheelH, wheelH * 0.45);
-      ctx2.fill();
-    }
-    ctx2.save();
-    ctx2.globalAlpha = 0.32;
-    ctx2.fillStyle = "#05090C";
-    roundedPath(ctx2, w * 0.03, h * 0.16, w * 0.94, h * 0.74, h * 0.3);
-    ctx2.fill();
-    ctx2.restore();
-    const bodyGradient = ctx2.createLinearGradient(0, h * 0.1, w * 0.35, h);
-    bodyGradient.addColorStop(0, style.rim);
-    bodyGradient.addColorStop(0.28, style.body);
-    bodyGradient.addColorStop(1, style.side);
-    ctx2.fillStyle = bodyGradient;
-    roundedPath(ctx2, w * 0.02, h * 0.12, w * 0.96, h * 0.76, h * 0.28);
-    ctx2.fill();
-    const noseGradient = ctx2.createLinearGradient(w * 0.72, 0, w, 0);
-    noseGradient.addColorStop(0, "rgba(0,0,0,0)");
-    noseGradient.addColorStop(1, "rgba(0,0,0,0.28)");
-    ctx2.fillStyle = noseGradient;
-    roundedPath(ctx2, w * 0.02, h * 0.12, w * 0.96, h * 0.76, h * 0.28);
-    ctx2.fill();
-    const cabinGradient = ctx2.createLinearGradient(0, h * 0.2, 0, h * 0.8);
-    cabinGradient.addColorStop(0, style.cabin);
-    cabinGradient.addColorStop(1, style.side);
-    ctx2.fillStyle = cabinGradient;
-    roundedPath(ctx2, w * 0.3, h * 0.2, w * 0.34, h * 0.6, h * 0.2);
-    ctx2.fill();
-    const glassGradient = ctx2.createLinearGradient(w * 0.34, h * 0.26, w * 0.6, h * 0.74);
-    glassGradient.addColorStop(0, "#EAFBFF");
-    glassGradient.addColorStop(0.45, style.window);
-    glassGradient.addColorStop(1, "#40626E");
-    ctx2.fillStyle = glassGradient;
-    roundedPath(ctx2, w * 0.345, h * 0.27, w * 0.25, h * 0.46, h * 0.14);
-    ctx2.fill();
-    ctx2.save();
-    ctx2.globalAlpha = 0.55;
-    ctx2.fillStyle = "#FFFFFF";
-    ctx2.beginPath();
-    ctx2.moveTo(w * 0.37, h * 0.3);
-    ctx2.lineTo(w * 0.45, h * 0.3);
-    ctx2.lineTo(w * 0.4, h * 0.7);
-    ctx2.lineTo(w * 0.35, h * 0.7);
-    ctx2.closePath();
-    ctx2.fill();
-    ctx2.restore();
-    if (style.stripe) {
-      ctx2.save();
-      ctx2.globalAlpha = 0.9;
-      ctx2.fillStyle = style.stripe;
-      ctx2.fillRect(w * 0.06, cy - h * 0.055, w * 0.88, h * 0.11);
-      ctx2.restore();
-    }
-    ctx2.save();
-    ctx2.globalAlpha = 0.22;
-    ctx2.strokeStyle = "#05090C";
-    ctx2.lineWidth = Math.max(1, h * 0.02);
-    ctx2.beginPath();
-    ctx2.moveTo(w * 0.66, h * 0.18);
-    ctx2.lineTo(w * 0.66, h * 0.82);
-    ctx2.stroke();
-    ctx2.restore();
-    ctx2.fillStyle = style.lights;
-    roundedPath(ctx2, w * 0.9, h * 0.2, w * 0.07, h * 0.2, h * 0.06);
-    ctx2.fill();
-    roundedPath(ctx2, w * 0.9, h * 0.6, w * 0.07, h * 0.2, h * 0.06);
-    ctx2.fill();
-    ctx2.save();
-    ctx2.globalAlpha = 0.5;
-    ctx2.fillStyle = "#C4413A";
-    roundedPath(ctx2, w * 0.035, h * 0.26, w * 0.05, h * 0.16, h * 0.05);
-    ctx2.fill();
-    roundedPath(ctx2, w * 0.035, h * 0.58, w * 0.05, h * 0.16, h * 0.05);
-    ctx2.fill();
-    ctx2.restore();
-    ctx2.save();
-    ctx2.globalAlpha = 0.6;
-    ctx2.strokeStyle = style.rim;
-    ctx2.lineWidth = Math.max(1.4, h * 0.035);
-    ctx2.beginPath();
-    ctx2.moveTo(w * 0.12, h * 0.145);
-    ctx2.lineTo(w * 0.86, h * 0.145);
-    ctx2.stroke();
-    ctx2.restore();
-  }
-  function paintShadow(ctx2) {
-    const w = SPRITE_W;
-    const h = SPRITE_H;
-    ctx2.clearRect(0, 0, w, h);
-    ctx2.fillStyle = "#040A0E";
-    roundedPath(ctx2, w * 0.02, h * 0.12, w * 0.96, h * 0.76, h * 0.28);
-    ctx2.fill();
-  }
-  function build(paint) {
-    const canvas2 = createOffscreenCanvas(SPRITE_W, SPRITE_H);
-    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
-    if (!canvas2 || !ctx2) return null;
-    paint(ctx2);
-    return canvas2;
-  }
-  var cache2 = /* @__PURE__ */ new Map();
-  function vehicleSprite(key2, style) {
-    const cached = cache2.get(key2);
-    if (cached !== void 0) return cached;
-    const image = build((ctx2) => paintCar(ctx2, style));
-    const shadow = build(paintShadow);
-    const sprite = image && shadow ? { image, shadow } : null;
-    cache2.set(key2, sprite);
-    return sprite;
-  }
-  var ASPHALT_TILE = 96;
-  var asphaltPattern = null;
-  var asphaltTried = false;
-  function asphaltTexture(target) {
-    if (asphaltTried) return asphaltPattern;
-    asphaltTried = true;
-    const canvas2 = createOffscreenCanvas(ASPHALT_TILE, ASPHALT_TILE);
-    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
-    if (!canvas2 || !ctx2) return null;
-    ctx2.clearRect(0, 0, ASPHALT_TILE, ASPHALT_TILE);
-    for (let i = 0; i < 1400; i++) {
-      const x = Math.random() * ASPHALT_TILE;
-      const y = Math.random() * ASPHALT_TILE;
-      const light = Math.random() < 0.5;
-      ctx2.fillStyle = light ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.06)";
-      ctx2.fillRect(x, y, 1, 1);
-    }
-    for (let i = 0; i < 180; i++) {
-      const x = Math.random() * ASPHALT_TILE;
-      const y = Math.random() * ASPHALT_TILE;
-      ctx2.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.07)";
-      ctx2.fillRect(x, y, 2, 2);
-    }
-    try {
-      asphaltPattern = target.createPattern(canvas2, "repeat");
-    } catch (error) {
-      asphaltPattern = null;
-    }
-    return asphaltPattern;
-  }
-  var WATER_TILE = 128;
-  var waterPattern = null;
-  var waterTried = false;
-  function waterTexture(target) {
-    if (waterTried) return waterPattern;
-    waterTried = true;
-    const canvas2 = createOffscreenCanvas(WATER_TILE, WATER_TILE);
-    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
-    if (!canvas2 || !ctx2) return null;
-    ctx2.clearRect(0, 0, WATER_TILE, WATER_TILE);
-    ctx2.lineCap = "round";
-    const bands = [
-      { cycles: 3, amplitude: 3.2, spacing: 9, alpha: 0.1, width: 1.5, phase: 0 },
-      { cycles: 5, amplitude: 2, spacing: 14, alpha: 0.07, width: 1.1, phase: 1.7 },
-      { cycles: 2, amplitude: 4.4, spacing: 21, alpha: 0.06, width: 2.4, phase: 3.1 }
-    ];
-    for (const band of bands) {
-      ctx2.strokeStyle = `rgba(255,255,255,${band.alpha})`;
-      ctx2.lineWidth = band.width;
-      for (let y = 0; y < WATER_TILE; y += band.spacing) {
-        ctx2.beginPath();
-        for (let x = 0; x <= WATER_TILE; x += 4) {
-          const wave = Math.sin(x / WATER_TILE * Math.PI * 2 * band.cycles + band.phase + y * 0.11);
-          const yy = y + wave * band.amplitude;
-          if (x === 0) ctx2.moveTo(x, yy);
-          else ctx2.lineTo(x, yy);
-        }
-        ctx2.stroke();
-      }
-    }
-    for (let i = 0; i < 26; i++) {
-      const x = Math.random() * WATER_TILE;
-      const y = Math.random() * WATER_TILE;
-      ctx2.fillStyle = "rgba(255,255,255,0.16)";
-      ctx2.beginPath();
-      ctx2.ellipse(x, y, 2.6, 0.9, 0, 0, Math.PI * 2);
-      ctx2.fill();
-    }
-    try {
-      waterPattern = target.createPattern(canvas2, "repeat");
-    } catch (error) {
-      waterPattern = null;
-    }
-    return waterPattern;
-  }
-  var GRASS_TILE = 72;
-  var grassPattern = null;
-  var grassTried = false;
-  function grassTexture(target) {
-    if (grassTried) return grassPattern;
-    grassTried = true;
-    const canvas2 = createOffscreenCanvas(GRASS_TILE, GRASS_TILE);
-    const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
-    if (!canvas2 || !ctx2) return null;
-    ctx2.clearRect(0, 0, GRASS_TILE, GRASS_TILE);
-    ctx2.lineCap = "round";
-    ctx2.lineWidth = 1;
-    for (let i = 0; i < 520; i++) {
-      const x = Math.random() * GRASS_TILE;
-      const y = Math.random() * GRASS_TILE;
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
-      const length = 1.6 + Math.random() * 2.4;
-      const light = Math.random() < 0.5;
-      ctx2.strokeStyle = light ? "rgba(255,255,235,0.13)" : "rgba(80,96,50,0.16)";
-      ctx2.beginPath();
-      ctx2.moveTo(x, y);
-      ctx2.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-      ctx2.stroke();
-    }
-    try {
-      grassPattern = target.createPattern(canvas2, "repeat");
-    } catch (error) {
-      grassPattern = null;
-    }
-    return grassPattern;
-  }
-
   // src/render/road.ts
   function edge(offset) {
     return projectPath(pathAtOffset(offset));
@@ -4652,283 +5178,6 @@ var HarborLoop = (() => {
       ctx.fillRect(0, i * cell, cell, cell);
     }
     ctx.restore();
-  }
-
-  // src/render/scenery.ts
-  function drawTree(x, y, size = 1) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.fillStyle = "rgba(13,35,30,0.22)";
-    ctx.beginPath();
-    ctx.ellipse(2, 4, 9 * size, 5 * size, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#5C7E48";
-    ctx.beginPath();
-    ctx.arc(-3 * size, 0, 6.5 * size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#739556";
-    ctx.beginPath();
-    ctx.arc(3 * size, -2 * size, 7 * size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#94AD69";
-    ctx.beginPath();
-    ctx.arc(0, -6 * size, 5.5 * size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  function drawBoat(x, y, size, angle) {
-    const length = 26 * size;
-    const beam = 8.5 * size;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.fillStyle = "rgba(60,80,92,0.28)";
-    ctx.beginPath();
-    ctx.ellipse(1.5 * size, 1.8 * size, length * 0.5, beam * 0.55, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#F4F3EE";
-    ctx.beginPath();
-    ctx.moveTo(length * 0.5, 0);
-    ctx.quadraticCurveTo(length * 0.12, -beam * 0.5, -length * 0.42, -beam * 0.42);
-    ctx.lineTo(-length * 0.5, -beam * 0.3);
-    ctx.lineTo(-length * 0.5, beam * 0.3);
-    ctx.lineTo(-length * 0.42, beam * 0.42);
-    ctx.quadraticCurveTo(length * 0.12, beam * 0.5, length * 0.5, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#D8DCDA";
-    ctx.beginPath();
-    ctx.moveTo(length * 0.32, 0);
-    ctx.quadraticCurveTo(length * 0.05, -beam * 0.3, -length * 0.34, -beam * 0.26);
-    ctx.lineTo(-length * 0.34, beam * 0.26);
-    ctx.quadraticCurveTo(length * 0.05, beam * 0.3, length * 0.32, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#9FB0B8";
-    ctx.fillRect(-length * 0.2, -beam * 0.2, length * 0.26, beam * 0.4);
-    ctx.fillStyle = "#5E7480";
-    ctx.fillRect(-length * 0.14, -beam * 0.12, length * 0.14, beam * 0.24);
-    ctx.restore();
-  }
-  function drawUmbrella(x, y, size = 1) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.fillStyle = "rgba(7,21,28,0.20)";
-    ctx.beginPath();
-    ctx.ellipse(2, 5, 9 * size, 4 * size, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#6B5140";
-    ctx.lineWidth = 1.3 * size;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, 8 * size);
-    ctx.stroke();
-    const colors = ["#F2E7C9", "#E9864F", "#F2E7C9", "#E9864F"];
-    for (let i = 0; i < 4; i++) {
-      ctx.fillStyle = colors[i];
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, 9 * size, i * Math.PI / 2, (i + 1) * Math.PI / 2);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-  function drawRocks(x, y, w, h, seed) {
-    const points = [];
-    const steps = 14;
-    for (let i = 0; i < steps; i++) {
-      const angle = i / steps * Math.PI * 2;
-      const wobble = 0.78 + 0.34 * Math.abs(Math.sin(seed * 2.7 + i * 1.9));
-      const px = x + w / 2 + Math.cos(angle) * (w / 2) * wobble;
-      const py = y + h / 2 + Math.sin(angle) * (h / 2) * wobble;
-      points.push(project(px, py));
-    }
-    const trace = () => {
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-      ctx.closePath();
-    };
-    ctx.save();
-    ctx.translate(SHADOW_X * 3, SHADOW_Y * 3);
-    trace();
-    ctx.fillStyle = "rgba(48,58,64,0.35)";
-    ctx.fill();
-    ctx.restore();
-    trace();
-    ctx.fillStyle = COLORS.rock;
-    ctx.fill();
-    ctx.save();
-    trace();
-    ctx.clip();
-    ctx.fillStyle = "rgba(214,214,204,0.30)";
-    const cap = project(x + w * 0.5 - SHADOW_X * 12, y + h * 0.5 - SHADOW_Y * 12);
-    ctx.beginPath();
-    ctx.ellipse(cap.x, cap.y, w * 0.42 * cap.scale, h * 0.4 * cap.scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  function drawBuilding(x, y, w, h, angle) {
-    const corners = (dx, dy, inset) => {
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      const hw = w / 2 - inset;
-      const hh = h / 2 - inset;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(
-        ([ox, oy]) => project(cx + ox * cos - oy * sin + dx, cy + ox * sin + oy * cos + dy)
-      );
-    };
-    const fillQuad = (pts, color) => {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.closePath();
-      ctx.fillStyle = color;
-      ctx.fill();
-    };
-    fillQuad(corners(SHADOW_X * 7, SHADOW_Y * 7, 0), "rgba(52,62,70,0.32)");
-    fillQuad(corners(SHADOW_X * 3.5, SHADOW_Y * 3.5, 0), "#8E938F");
-    fillQuad(corners(0, 0, 0), "#C9CCC5");
-    fillQuad(corners(0, 0, w * 0.16), "#AFB4AE");
-  }
-  function drawBridge(x1, y1, x2, y2, width) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const length = Math.hypot(dx, dy) || 1;
-    const nx = -dy / length * (width / 2);
-    const ny = dx / length * (width / 2);
-    const railA = [];
-    const railB = [];
-    const steps = 16;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      railA.push(project(x1 + dx * t + nx, y1 + dy * t + ny));
-      railB.push(project(x1 + dx * t - nx, y1 + dy * t - ny));
-    }
-    ctx.save();
-    ctx.translate(SHADOW_X * 5, SHADOW_Y * 5);
-    fillRibbon(railA, railB, "rgba(52,62,70,0.3)");
-    ctx.restore();
-    fillRibbon(railA, railB, "#E0BE63");
-    ctx.strokeStyle = "rgba(140,110,44,0.55)";
-    for (let i = 1; i < steps; i++) {
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(railA[i].x, railA[i].y);
-      ctx.lineTo(railB[i].x, railB[i].y);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = "#C9A84D";
-    ctx.lineWidth = 2.4;
-    for (const rail of [railA, railB]) {
-      ctx.beginPath();
-      ctx.moveTo(rail[0].x, rail[0].y);
-      for (let i = 1; i < rail.length; i++) ctx.lineTo(rail[i].x, rail[i].y);
-      ctx.stroke();
-    }
-  }
-  function drawChequer(x, y, w, h, angle) {
-    const cols = 8;
-    const rows = 4;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const cellW = w / cols;
-    const cellH = h / rows;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const ox = -w / 2 + c * cellW;
-        const oy = -h / 2 + r * cellH;
-        const pts = [[ox, oy], [ox + cellW, oy], [ox + cellW, oy + cellH], [ox, oy + cellH]].map(
-          ([px, py]) => project(x + w / 2 + px * cos - py * sin, y + h / 2 + px * sin + py * cos)
-        );
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-        ctx.closePath();
-        ctx.fillStyle = (r + c) % 2 === 0 ? "#F2F0E8" : "#3B4249";
-        ctx.fill();
-      }
-    }
-  }
-  function drawBackground() {
-    const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
-    gradient.addColorStop(0, COLORS.waterDeep);
-    gradient.addColorStop(0.55, COLORS.water);
-    gradient.addColorStop(1, "#94AEBA");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
-    const ripple = waterTexture(ctx);
-    if (ripple) {
-      ctx.fillStyle = ripple;
-      ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
-    }
-    const decor = trackById(activeTrackId).decor;
-    const quad = (x, y, w, h, dx = 0, dy = 0) => {
-      const top = [project(x + dx, y + dy), project(x + w + dx, y + dy)];
-      const bottom = [project(x + dx, y + h + dy), project(x + w + dx, y + h + dy)];
-      fillRibbon(top, bottom, ctx.fillStyle);
-    };
-    decor.medians.forEach(([x, y, w, h], i) => {
-      ctx.fillStyle = "rgba(4,12,18,0.42)";
-      quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH, SHADOW_Y * ISLAND_DEPTH);
-      ctx.fillStyle = "#5A7043";
-      quad(x - 4, y - 4, w + 8, h + 8, SHADOW_X * ISLAND_DEPTH * 0.5, SHADOW_Y * ISLAND_DEPTH * 0.5);
-      ctx.fillStyle = COLORS.landDark;
-      quad(x - 4, y - 4, w + 8, h + 8);
-      ctx.fillStyle = i % 2 === 0 ? COLORS.land : COLORS.landLight;
-      quad(x, y, w, h);
-      const grass = grassTexture(ctx);
-      if (grass) {
-        ctx.fillStyle = grass;
-        quad(x, y, w, h);
-      }
-    });
-    for (const [x, y, size] of decor.trees) {
-      const p = project(x, y);
-      drawTree(p.x, p.y, size * p.scale);
-    }
-    for (const [x, y, size] of decor.umbrellas) {
-      const p = project(x, y);
-      drawUmbrella(p.x, p.y, size * p.scale);
-    }
-    for (const [x, y, w, h, seed] of decor.rocks) drawRocks(x, y, w, h, seed);
-    for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
-    for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
-    for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
-    for (const [x, y, size, angle] of decor.boats) {
-      const p = project(x, y);
-      drawBoat(p.x, p.y, size * p.scale, angle);
-    }
-    for (const [x, y] of decor.buoys) {
-      const p = project(x, y);
-      ctx.fillStyle = "rgba(240,231,204,0.75)";
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 2.2 * p.scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(232,112,79,0.85)";
-      ctx.beginPath();
-      ctx.arc(p.x, p.y - 2.8 * p.scale, 1.2 * p.scale, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    drawVignette();
-  }
-  function drawVignette() {
-    const gradient = ctx.createRadialGradient(
-      DESIGN_W * 0.42,
-      DESIGN_H * 0.38,
-      DESIGN_H * 0.18,
-      DESIGN_W * 0.5,
-      DESIGN_H * 0.5,
-      DESIGN_H * 0.72
-    );
-    gradient.addColorStop(0, "rgba(255,255,245,0.10)");
-    gradient.addColorStop(0.55, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(40,60,72,0.32)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
   }
 
   // src/render/staticLayer.ts
@@ -5413,6 +5662,8 @@ var HarborLoop = (() => {
   // src/main.ts
   function stepRace(dt) {
     updateControlFlash(dt);
+    updateSteer(dt);
+    updateLivingWater(dt);
     if (updateCountdown(dt)) return;
     updateOnboarding(dt);
     updateFeel(dt);
@@ -5429,6 +5680,11 @@ var HarborLoop = (() => {
   }
   function drawRace() {
     drawStaticScene();
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+    drawLivingWater();
+    ctx.restore();
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);

@@ -19,7 +19,7 @@ export const blackout: ModeDefinition = {
   timeLimit: 60,
   scoreUnit: 'PASSES',
   trafficScale: 0.9,
-  trackId: 'delta-run',
+  trackId: 'half-moon',
   stars: [15, 28, 43],
 
   setup() {

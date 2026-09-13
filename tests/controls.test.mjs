@@ -78,9 +78,14 @@ const fire = (name, touches) => { if (handlers[name]) handlers[name]({ changedTo
 
 // At 390x844 the design scale is 1 and both offsets are 0, so design coordinates
 // and screen coordinates are the same. Buttons span y = 738..810.
-const THROTTLE = touch(1, 303, 774);
-const LEFT_BTN = touch(2, 58, 774);
-const RIGHT_BTN = touch(3, 142, 774);
+const THROTTLE = touch(1, 330, 766);
+const LEFT_BTN = touch(2, 144, 766);
+const RIGHT_BTN = touch(3, 220, 766);
+// The stick is round and centred at (58, 766) with a radius of 40. Its middle
+// is a deadzone, so these push well off centre.
+const STICK_LEFT = touch(4, 26, 766);
+const STICK_RIGHT = touch(5, 88, 766);
+const STICK_CENTRE = touch(6, 56, 766);
 const TRACK_POINT = touch(4, 100, 300);
 
 // These tests drive modes that have not shipped yet.
@@ -136,7 +141,7 @@ resetWithoutTraffic();
 const startLane = game.player.lane;
 fire('start', [LEFT_BTN]);
 fire('end', [LEFT_BTN]);
-check('left button moves one lane left', game.player.lane === startLane + 1, `${startLane} -> ${game.player.lane}`);
+check('left button moves one lane left', game.player.lane === startLane - 1, `${startLane} -> ${game.player.lane}`);
 fire('start', [RIGHT_BTN]);
 fire('end', [RIGHT_BTN]);
 check('right button moves back', game.player.lane === startLane, `-> ${game.player.lane}`);
@@ -152,7 +157,7 @@ fire('start', [THROTTLE]);
 step(0.1);
 fire('start', [LEFT_BTN]);
 fire('end', [LEFT_BTN]);
-check('lane tap while holding throttle changes lane', game.player.lane === multiTouchStartLane + 1);
+check('lane tap while holding throttle changes lane', game.player.lane === multiTouchStartLane - 1);
 check('throttle survives a lane tap', game.inputState.throttle === true);
 step(0.1);
 fire('start', [RIGHT_BTN]);
@@ -185,7 +190,7 @@ resetWithoutTraffic();
 const trackStartLane = game.player.lane;
 fire('start', [TRACK_POINT]);
 fire('end', [TRACK_POINT]);
-check('tapping the track still changes lane', game.player.lane === trackStartLane + 1, `${trackStartLane} -> ${game.player.lane}`);
+check('tapping the track still changes lane', game.player.lane === trackStartLane - 1, `${trackStartLane} -> ${game.player.lane}`);
 check('tapping the track never engages the throttle', game.inputState.throttle === false);
 
 // --- robustness -----------------------------------------------------------
@@ -208,6 +213,104 @@ try {
 check('30s of play with 18 AI cars runs clean', threw === null, threw ? String(threw) : '');
 check('combo advanced while driving', game.player.totalPasses > 0, `passes=${game.player.totalPasses}`);
 check('render loop still scheduled', pendingFrame !== null);
+
+
+// --- the stick --------------------------------------------------------------
+// Buttons and stick do different jobs: a button is one tap one lane, the stick
+// keeps going while it is held. Both have to stay true at once.
+function stickTrial(label, pad, seconds) {
+  game.setUnlockOverride(true);
+  game.startMode('combo-racers');
+  game.clearCountdown();
+  game.player.lane = 2;
+  game.player.visualLane = 2;
+  fire('start', [pad]);
+  for (let t = 0; t < seconds; t += 1 / 60) step(1 / 60);
+  fire('end', [pad]);
+  for (let i = 0; i < 30; i++) step(1 / 60);
+  return { label, moved: game.player.lane - 2 };
+}
+
+const flick = stickTrial('flick', STICK_LEFT, 0.05);
+check('a flick of the stick moves exactly one lane', flick.moved === -1, `moved ${flick.moved}`);
+
+const held = stickTrial('held', STICK_LEFT, 0.8);
+check('holding the stick keeps stepping', held.moved <= -2, `moved ${held.moved}`);
+
+const other = stickTrial('held right', STICK_RIGHT, 0.8);
+check('the stick steers the other way too', other.moved >= 2, `moved ${other.moved}`);
+
+// A thumb aimed at the left arrow but landing just short of its body must go to
+// the arrow, not to the stick — it used to reach the stick, which drove it to
+// full deflection the other way. The arrow's body starts at x=124.
+const NEAR_LEFT_ARROW = touch(7, 110, 766);
+const stolen = stickTrial('near miss on the left arrow', NEAR_LEFT_ARROW, 0.6);
+check('a near miss on the left arrow never steers right', stolen.moved <= 0,
+  `moved ${stolen.moved}`);
+
+const dead = stickTrial('centre', STICK_CENTRE, 0.8);
+check('the middle of the stick is a deadzone', dead.moved === 0, `moved ${dead.moved}`);
+
+// Releasing must stop it; a stick that keeps repeating after the thumb lifts
+// would walk the car off the road on its own.
+game.setUnlockOverride(true);
+game.startMode('combo-racers');
+game.clearCountdown();
+game.player.lane = 2;
+game.player.visualLane = 2;
+fire('start', [STICK_LEFT]);
+for (let t = 0; t < 0.8; t += 1 / 60) step(1 / 60);
+fire('end', [STICK_LEFT]);
+const atRelease = game.player.lane;
+for (let t = 0; t < 1.5; t += 1 / 60) step(1 / 60);
+check('releasing the stick stops it', game.player.lane === atRelease,
+  `${atRelease} -> ${game.player.lane}`);
+
+// --- left really is left ----------------------------------------------------
+// Lane offsets run along the normal (-dy, dx), and with screen y pointing down
+// that is the RIGHT-hand side of the direction of travel. So a higher lane index
+// is the car's right, and the left control must lower the index. The controls
+// shipped asserting the opposite for a long time, which made the left button
+// drive the car right; this pins the mapping to the geometry rather than to a
+// comment.
+function carsOwnLeftIsLowerLane() {
+  const pts = game.TRACKS.find((t) => t.id === 'long-bay').build();
+  const n = pts.length;
+  let agree = 0;
+  for (let k = 0; k < 8; k++) {
+    const i = Math.floor((n * k) / 8);
+    const prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
+    const dx = next.x - prev.x, dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    // The offset normal the track builder uses, against the car's own left.
+    const dot = (-dy / len) * (dy / len) + (dx / len) * (-dx / len);
+    if (dot < 0) agree++;
+  }
+  return agree === 8;
+}
+check('a higher lane index is the car\'s right, on every sampled corner',
+  carsOwnLeftIsLowerLane());
+
+game.setUnlockOverride(true);
+game.startMode('combo-racers');
+game.clearCountdown();
+game.player.lane = 2;
+game.player.visualLane = 2;
+fire('start', [LEFT_BTN]);
+fire('end', [LEFT_BTN]);
+check('the left button lowers the lane index', game.player.lane === 1, `lane ${game.player.lane}`);
+
+game.player.lane = 2;
+game.player.visualLane = 2;
+fire('start', [RIGHT_BTN]);
+fire('end', [RIGHT_BTN]);
+check('the right button raises it', game.player.lane === 3, `lane ${game.player.lane}`);
+
+game.player.lane = 2;
+game.player.visualLane = 2;
+fire('start', [STICK_LEFT]);
+fire('end', [STICK_LEFT]);
+check('the stick agrees with the buttons', game.player.lane === 1, `lane ${game.player.lane}`);
 
 let failed = 0;
 for (const result of results) {

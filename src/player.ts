@@ -1,6 +1,7 @@
 /** Red car behaviour: lane changes, throttle and the speed-tier curve. */
 
 import { audio } from './audio';
+import { flashLaneButton } from './controls';
 import {
   CHANGE_DURATION,
   LANE_COUNT,
@@ -28,6 +29,9 @@ export function requestLaneChange(direction: number): void {
   if (target === player.lane) return;
 
   noteLaneChange();
+  // The pad lights whichever side was used, however the change was asked for —
+  // pad, track tap or keyboard.
+  flashLaneButton(direction < 0 ? 'left' : 'right');
   audio.playLaneChange(direction);
   player.laneFrom = player.visualLane;
   player.laneTo = target;

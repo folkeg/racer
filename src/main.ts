@@ -20,7 +20,7 @@ import { updateAi } from './ai';
 import { app, finishRun } from './app';
 import { audio } from './audio';
 import { frameDelta } from './clock';
-import { updateControlFlash } from './controls';
+import { updateControlFlash, updateSteer } from './controls';
 import { updateCountdown } from './countdown';
 import { consumeHitStop, updateFeel } from './feel';
 import { installInput, releaseAllPointers } from './input';
@@ -31,6 +31,7 @@ import { drawControls, drawHud } from './render/hud';
 import { drawBlackout, drawHazardLane } from './render/overlays';
 import { drawFloaters, drawParticles, updateFloaters, updateParticles } from './render/particles';
 import { drawSpeedLines } from './render/speedLines';
+import { drawLivingWater, updateLivingWater } from './render/livingWater';
 import { drawStaticScene } from './render/staticLayer';
 import { drawCars } from './render/vehicles';
 import { runIsOver, updateRun } from './run';
@@ -44,6 +45,14 @@ import { loadMuted } from './storage';
 
 function stepRace(dt: number): void {
   updateControlFlash(dt);
+  // Hold-to-repeat on the steering pad. Runs before the countdown check so the
+  // knob still springs back while the lights are out.
+  updateSteer(dt);
+
+  // The harbour keeps moving through the countdown and through hit-stop. It is
+  // scenery, not simulation: freezing it with the world is what would make the
+  // pause read as the game having locked up rather than as a held breath.
+  updateLivingWater(dt);
 
   // Nothing moves until the lights go out.
   if (updateCountdown(dt)) return;
@@ -71,6 +80,13 @@ function stepRace(dt: number): void {
 /** The static scene is blitted first, then only the moving parts are drawn. */
 function drawRace(): void {
   drawStaticScene();
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
+  // Between the blitted scene and the cars: on the water, under the traffic.
+  drawLivingWater();
+  ctx.restore();
 
   ctx.save();
   // No shake here. An impact used to displace every car, particle and speed line
@@ -158,7 +174,7 @@ export { run } from './run';
 export { trackLength, trackScreenBounds } from './track';
 export { currentCruiseSpeed, cruiseSpeedForCombo } from './state';
 export { MODES, RELEASED_MODES } from './modes';
-export { laneButtonFlash } from './controls';
+export { laneButtonFlash, steer } from './controls';
 export { debugPointerCount } from './input';
 export { feelState } from './feel';
 export { activeParticles } from './render/particles';
