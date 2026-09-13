@@ -9,6 +9,7 @@ import { project } from './camera';
 import { ISLAND_DEPTH, ISLAND_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
 import { fillNearFaces, fillRibbon } from './primitives';
 import type { Vec2 } from '../types';
+import { drawShore } from './shore';
 
 function drawTree(x: number, y: number, size = 1): void {
   ctx.save();
@@ -550,6 +551,8 @@ function drawBush(x: number, y: number, size = 1): void {
 }
 
 export function drawBackground(): void {
+  drawShore();
+
   // Decor follows the circuit: each track declares where its dry land is, so
   // islands never end up drawn across the road.
   const decor = trackById(activeTrackId).decor;
@@ -625,7 +628,7 @@ export function drawSceneLight(): void {
     DESIGN_W * 0.5, DESIGN_H * 0.46, DESIGN_H * 0.78
   );
   vignette.addColorStop(0, 'rgba(6,16,26,0)');
-  vignette.addColorStop(1, 'rgba(6,16,26,0.34)');
+  vignette.addColorStop(1, 'rgba(6,16,26,0.24)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
 }

@@ -15,7 +15,7 @@ import { ctx } from '../platform';
 import { COLORS } from '../theme';
 import { pathAtOffset, pathForLane, sampleAtDistance } from '../track';
 import { ROAD_DEPTH, ROAD_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
-import { fillNearFaces, fillRibbon, offsetPath } from './primitives';
+import { fillNearFaces, fillRibbon, offsetPath, strokeClosedPath } from './primitives';
 import { project, projectPath, projectedHeading } from './camera';
 import { asphaltTexture } from './sprites';
 
@@ -64,6 +64,16 @@ export function drawTrack(): void {
   // red-and-white blocks read as a race kerb, which this harbour road is not.
   fillRibbon(outerKerb, outerRoad, COLORS.curbLight);
   fillRibbon(innerRoad, innerKerb, COLORS.curbLight);
+
+  // The kerb stands proud of the deck rather than being painted on it. Same
+  // rule as the deck wall: its outer face shows wherever that edge turns
+  // towards the camera. The pale line along the inner boundary is the top
+  // arris catching the light, which is what gives a 2px band a top and a side.
+  const KERB_HEIGHT = 3.0;
+  fillNearFaces(outerKerb, outerRoad, KERB_HEIGHT, '#8E7C57');
+  fillNearFaces(innerKerb, innerRoad, KERB_HEIGHT, '#8E7C57');
+  strokeClosedPath(outerRoad, 0.9, 'rgba(255,248,226,0.30)');
+  strokeClosedPath(innerRoad, 0.9, 'rgba(255,248,226,0.30)');
 
   // Lanes are shaded alternately rather than separated by dashed lines. Solid
   // bands read as five distinct channels at a glance, where dashes read as

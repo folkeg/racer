@@ -85,6 +85,39 @@ function drawWake(x: number, y: number, size: number, angle: number, speed: numb
 }
 
 /**
+ * Harbour traffic.
+ *
+ * Widening the camera's top margin for the far shore left a channel of open
+ * water between the coast and the circuit, and a channel is a thing boats go
+ * along. These cross the whole frame on a loop, in opposite directions, at
+ * different speeds — the only motion on the board besides the cars that travels
+ * rather than bobs in place, and being in the clear band above the track it is
+ * the one piece of scenery that is never behind anything.
+ *
+ * Drawn in design space rather than through the camera, like the shore they
+ * belong to: they are part of the frame, not of the circuit.
+ */
+const FERRIES: Array<[number, number, number]> = [
+  // [y, speed in units per second, size]
+  [86, 16, 0.62],
+  [97, -11.5, 0.48]
+];
+
+function drawFerries(): void {
+  FERRIES.forEach(([y, speed, size], index) => {
+    const span = DESIGN_W + 90;
+    const travelled = (elapsed * Math.abs(speed) + index * 190) % span;
+    const x = speed > 0 ? travelled - 45 : DESIGN_W + 45 - travelled;
+    const angle = speed > 0 ? 0 : Math.PI;
+    const bob = Math.sin(elapsed * 1.6 + phase(index + 41)) * 0.7;
+    const heel = Math.sin(elapsed * 1.1 + phase(index + 41)) * 0.03;
+
+    drawWake(x, y + bob, size, angle + heel, 0.42);
+    drawBoat(x, y + bob, size, angle + heel);
+  });
+}
+
+/**
  * Gulls.
  *
  * Two of them, crossing on long independent periods. They are the only thing
@@ -164,5 +197,6 @@ export function drawLivingWater(): void {
     ctx.restore();
   });
 
+  drawFerries();
   drawGulls();
 }

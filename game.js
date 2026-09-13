@@ -249,7 +249,7 @@ var HarborLoop = (() => {
   var MID_DEPTH = (NEAR + DESIGN_H / 2) * cosPitch + HEIGHT * sinPitch;
   var MID_SCALE = FOCAL / MID_DEPTH;
   var SAFE_MARGIN = 26;
-  var SAFE_TOP = 64;
+  var SAFE_TOP = 104;
   var SAFE_BOTTOM = 700;
   var MAX_VERTICAL_STRETCH = 1.22;
   var fitScale = 1;
@@ -489,8 +489,16 @@ var HarborLoop = (() => {
     // coordinates that used to be here did every time the geometry changed.
     trees: [],
     umbrellas: [],
-    buoys: [[26, 128], [365, 250], [25, 628], [366, 650]],
-    boats: [[371, 165, 0.62, 1.57], [12, 335, 0.6, 1.57], [372, 455, 0.58, 1.57], [12, 585, 0.62, 1.57]],
+    buoys: [[26, 128], [365, 250], [25, 628], [366, 650], [24, 380], [367, 420], [27, 512], [364, 150]],
+    boats: [
+      [371, 165, 0.62, 1.57],
+      [12, 335, 0.6, 1.57],
+      [372, 455, 0.58, 1.57],
+      [12, 585, 0.62, 1.57],
+      [13, 225, 0.52, 1.57],
+      [370, 570, 0.54, 1.57],
+      [14, 680, 0.5, 1.57]
+    ],
     rocks: [],
     buildings: [],
     bridges: [[358, 150, 388, 150, 13], [4, 320, 32, 320, 13], [358, 440, 388, 440, 13], [4, 570, 32, 570, 13]],
@@ -500,8 +508,14 @@ var HarborLoop = (() => {
     medians: [[170, 216, 50, 356]],
     trees: [],
     umbrellas: [],
-    buoys: [[40, 150], [352, 210], [40, 640], [352, 620]],
-    boats: [[52, 300, 0.78, 1.57], [338, 400, 0.78, 1.57], [52, 540, 0.72, 1.57]],
+    buoys: [[40, 150], [352, 210], [40, 640], [352, 620], [38, 400], [354, 430], [42, 520]],
+    boats: [
+      [52, 300, 0.78, 1.57],
+      [338, 400, 0.78, 1.57],
+      [52, 540, 0.72, 1.57],
+      [340, 250, 0.62, 1.57],
+      [50, 660, 0.6, 1.57]
+    ],
     rocks: [],
     buildings: [],
     bridges: [[36, 286, 70, 286, 14], [322, 386, 356, 386, 14], [36, 526, 70, 526, 14]],
@@ -511,8 +525,14 @@ var HarborLoop = (() => {
     medians: [],
     trees: [],
     umbrellas: [],
-    buoys: [[20, 120], [372, 200], [20, 560], [372, 660], [18, 380]],
-    boats: [[12, 250, 0.6, 1.57], [376, 340, 0.6, 1.57], [12, 620, 0.58, 1.57]],
+    buoys: [[20, 120], [372, 200], [20, 560], [372, 660], [18, 380], [374, 430], [22, 300], [370, 520]],
+    boats: [
+      [12, 250, 0.6, 1.57],
+      [376, 340, 0.6, 1.57],
+      [12, 620, 0.58, 1.57],
+      [378, 560, 0.54, 1.57],
+      [14, 430, 0.56, 1.57]
+    ],
     rocks: [],
     buildings: [],
     bridges: [[2, 236, 30, 236, 12], [360, 326, 388, 326, 12], [2, 606, 30, 606, 12]],
@@ -3395,6 +3415,20 @@ var HarborLoop = (() => {
   }
 
   // src/render/primitives.ts
+  function strokeClosedPath(points, width, color, dash = []) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.closePath();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash);
+    ctx.stroke();
+    ctx.restore();
+  }
   function roundRect(context3, x, y, w, h, r) {
     const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
     context3.beginPath();
@@ -3452,6 +3486,178 @@ var HarborLoop = (() => {
       });
     }
     flush();
+  }
+
+  // src/render/shore.ts
+  var COAST = 66;
+  function coastY(x) {
+    return COAST + Math.sin(x * 0.0195) * 6.5 + Math.sin(x * 0.0464 + 1.3) * 3.2 + Math.sin(x * 0.0107 + 0.6) * 4.5;
+  }
+  function coastline() {
+    const points = [];
+    for (let x = -6; x <= DESIGN_W + 6; x += 6) points.push({ x, y: coastY(x) });
+    return points;
+  }
+  var BUILDINGS = [
+    [-8, 46, 30, 0],
+    [44, 26, 20, 1],
+    [74, 34, 38, 2],
+    [116, 40, 24, 0],
+    [162, 22, 32, 1],
+    [190, 52, 28, 0],
+    [248, 30, 36, 2],
+    [284, 24, 22, 1],
+    [312, 44, 30, 0],
+    [360, 38, 26, 0]
+  ];
+  var JETTIES = [[36, 26], [148, 20], [268, 30], [344, 18]];
+  var BUILDING_TONES = ["#59636E", "#4C5660", "#646E77"];
+  var CONTAINERS = [
+    [20, -14, 13, "#9C5442"],
+    [34, -14, 13, "#3F6E74"],
+    [20, -21, 13, "#A8843C"],
+    [130, -13, 12, "#3F6E74"],
+    [143, -13, 12, "#9C5442"],
+    [296, -14, 13, "#A8843C"],
+    [310, -14, 13, "#5A6E44"],
+    [303, -21, 13, "#9C5442"],
+    [196, -12, 11, "#3F6E74"],
+    [208, -12, 11, "#A8843C"]
+  ];
+  function drawContainers() {
+    for (const [x, dy, width, colour] of CONTAINERS) {
+      const y = coastY(x + width / 2) - 8 + dy;
+      ctx.fillStyle = "rgba(16,26,36,0.30)";
+      ctx.fillRect(x + 2, y + 2, width, 6);
+      ctx.fillStyle = colour;
+      ctx.fillRect(x, y, width, 6);
+      ctx.fillStyle = "rgba(255,250,238,0.20)";
+      ctx.fillRect(x, y, width, 1.4);
+    }
+  }
+  function drawBuilding(x, width, height, kind, index) {
+    const base = coastY(x + width / 2) - 6;
+    const top = base - height;
+    ctx.fillStyle = "rgba(18,30,42,0.28)";
+    ctx.fillRect(x + 3, base - 3, width, 5);
+    ctx.fillStyle = BUILDING_TONES[index % BUILDING_TONES.length];
+    ctx.fillRect(x, top, width, height);
+    ctx.fillStyle = "rgba(186,198,206,0.30)";
+    ctx.fillRect(x, top, width, Math.min(6, height * 0.3));
+    ctx.fillStyle = "rgba(28,40,52,0.34)";
+    ctx.fillRect(x, base - 5, width, 5);
+    ctx.fillStyle = "rgba(255,247,228,0.22)";
+    ctx.fillRect(x, top, width, 2);
+    if (kind === 1) {
+      ctx.fillStyle = "#6B7480";
+      ctx.beginPath();
+      ctx.moveTo(x - 2, top + 2);
+      ctx.lineTo(x + width / 2, top - 6);
+      ctx.lineTo(x + width + 2, top + 2);
+      ctx.closePath();
+      ctx.fill();
+    } else if (kind === 2) {
+      for (let i = 0; i < 3; i++) {
+        const cx = x + 6 + i * ((width - 12) / 2);
+        ctx.fillStyle = "#909AA2";
+        ctx.beginPath();
+        ctx.arc(cx, top + 4, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,250,236,0.18)";
+        ctx.beginPath();
+        ctx.arc(cx - 1.4, top + 2.6, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = "rgba(226,238,246,0.16)";
+      for (let i = 0; i < 3; i++) {
+        const wy = top + 6 + i * 7;
+        if (wy > base - 8) break;
+        ctx.fillRect(x + 3, wy, width - 6, 2.2);
+      }
+    }
+  }
+  function drawCrane(x) {
+    const base = coastY(x) - 4;
+    ctx.strokeStyle = "#9AA3A8";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - 9, base);
+    ctx.lineTo(x - 4, base - 30);
+    ctx.moveTo(x + 9, base);
+    ctx.lineTo(x + 4, base - 30);
+    ctx.stroke();
+    ctx.fillStyle = "#C8A44E";
+    ctx.fillRect(x - 22, base - 36, 46, 5);
+    ctx.strokeStyle = "rgba(200,164,78,0.8)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - 16, base - 31);
+    ctx.lineTo(x - 16, base - 20);
+    ctx.stroke();
+  }
+  function drawJetty(x, reach) {
+    const base = coastY(x);
+    const HALF = 7;
+    ctx.fillStyle = "rgba(16,28,40,0.32)";
+    ctx.fillRect(x - HALF + 2, base + 3, HALF * 2, reach);
+    ctx.fillStyle = "#9A8968";
+    ctx.fillRect(x - HALF, base, HALF * 2, reach);
+    ctx.fillStyle = "rgba(58,48,34,0.30)";
+    for (let py = base + 3; py < base + reach; py += 4) ctx.fillRect(x - HALF, py, HALF * 2, 1);
+    ctx.fillStyle = "rgba(255,246,224,0.22)";
+    ctx.fillRect(x - HALF, base, HALF * 2, 1.6);
+    ctx.fillStyle = "#443B2E";
+    ctx.fillRect(x - HALF, base + reach, HALF * 2, 2.2);
+    for (let i = 1; i <= 2; i++) {
+      const py = base + reach / 2.4 * i;
+      ctx.fillRect(x - HALF - 1.6, py, 1.6, 2.8);
+      ctx.fillRect(x + HALF, py, 1.6, 2.8);
+    }
+  }
+  function drawShore() {
+    const coast = coastline();
+    ctx.beginPath();
+    ctx.moveTo(-6, -4);
+    for (const point of coast) ctx.lineTo(point.x, point.y);
+    ctx.lineTo(DESIGN_W + 6, -4);
+    ctx.closePath();
+    ctx.fillStyle = "#6C7368";
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    BUILDINGS.forEach(([x, width, height, kind], index) => drawBuilding(x, width, height, kind, index));
+    drawCrane(224);
+    drawContainers();
+    ctx.restore();
+    ctx.beginPath();
+    for (let i = 0; i < coast.length; i++) {
+      const point = coast[i];
+      if (i === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    }
+    for (let i = coast.length - 1; i >= 0; i--) ctx.lineTo(coast[i].x, coast[i].y + 6);
+    ctx.closePath();
+    ctx.fillStyle = "#3A4550";
+    ctx.fill();
+    ctx.beginPath();
+    for (let i = 0; i < coast.length; i++) {
+      const point = coast[i];
+      if (i === 0) ctx.moveTo(point.x, point.y + 6);
+      else ctx.lineTo(point.x, point.y + 6);
+    }
+    ctx.strokeStyle = "rgba(232,244,248,0.55)";
+    ctx.lineWidth = 1.4;
+    ctx.lineCap = "round";
+    ctx.stroke();
+    for (const [x, reach] of JETTIES) drawJetty(x, reach);
+    const haze = ctx.createLinearGradient(0, 0, 0, COAST + 16);
+    haze.addColorStop(0, "rgba(132,162,182,0.26)");
+    haze.addColorStop(0.7, "rgba(132,162,182,0.09)");
+    haze.addColorStop(1, "rgba(126,156,176,0)");
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, DESIGN_W, COAST + 16);
   }
 
   // src/render/scenery.ts
@@ -3569,7 +3775,7 @@ var HarborLoop = (() => {
     ctx.fill();
     ctx.restore();
   }
-  function drawBuilding(x, y, w, h, angle) {
+  function drawBuilding2(x, y, w, h, angle) {
     const corners = (dx, dy, inset) => {
       const cx = x + w / 2;
       const cy = y + h / 2;
@@ -3853,6 +4059,7 @@ var HarborLoop = (() => {
     ctx.restore();
   }
   function drawBackground() {
+    drawShore();
     const decor = trackById(activeTrackId).decor;
     decor.medians.forEach(([x, y, w, h], i) => drawIsland(x, y, w, h, i));
     for (const [x, y, size] of decor.trees) {
@@ -3866,7 +4073,7 @@ var HarborLoop = (() => {
     for (const [x, y, w, h, seed] of decor.rocks) drawRocks(x, y, w, h, seed);
     for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
     for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
-    for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
+    for (const [x, y, w, h, angle] of decor.buildings) drawBuilding2(x, y, w, h, angle);
     drawVignette();
   }
   function drawVignette() {
@@ -3907,7 +4114,7 @@ var HarborLoop = (() => {
       DESIGN_H * 0.78
     );
     vignette.addColorStop(0, "rgba(6,16,26,0)");
-    vignette.addColorStop(1, "rgba(6,16,26,0.34)");
+    vignette.addColorStop(1, "rgba(6,16,26,0.24)");
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
   }
@@ -3948,6 +4155,23 @@ var HarborLoop = (() => {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+  }
+  var FERRIES = [
+    // [y, speed in units per second, size]
+    [86, 16, 0.62],
+    [97, -11.5, 0.48]
+  ];
+  function drawFerries() {
+    FERRIES.forEach(([y, speed, size], index) => {
+      const span = DESIGN_W + 90;
+      const travelled = (elapsed * Math.abs(speed) + index * 190) % span;
+      const x = speed > 0 ? travelled - 45 : DESIGN_W + 45 - travelled;
+      const angle = speed > 0 ? 0 : Math.PI;
+      const bob = Math.sin(elapsed * 1.6 + phase(index + 41)) * 0.7;
+      const heel = Math.sin(elapsed * 1.1 + phase(index + 41)) * 0.03;
+      drawWake(x, y + bob, size, angle + heel, 0.42);
+      drawBoat(x, y + bob, size, angle + heel);
+    });
   }
   var GULLS = 2;
   function drawGulls() {
@@ -4005,6 +4229,7 @@ var HarborLoop = (() => {
       ctx.fill();
       ctx.restore();
     });
+    drawFerries();
     drawGulls();
   }
 
@@ -5357,6 +5582,11 @@ var HarborLoop = (() => {
     const innerKerb = edge(-ROAD_HALF_WIDTH);
     fillRibbon(outerKerb, outerRoad, COLORS.curbLight);
     fillRibbon(innerRoad, innerKerb, COLORS.curbLight);
+    const KERB_HEIGHT = 3;
+    fillNearFaces(outerKerb, outerRoad, KERB_HEIGHT, "#8E7C57");
+    fillNearFaces(innerKerb, innerRoad, KERB_HEIGHT, "#8E7C57");
+    strokeClosedPath(outerRoad, 0.9, "rgba(255,248,226,0.30)");
+    strokeClosedPath(innerRoad, 0.9, "rgba(255,248,226,0.30)");
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const laneOuter = projectPath(pathForLane(lane - 0.5));
       const laneInner = projectPath(pathForLane(lane + 0.5));

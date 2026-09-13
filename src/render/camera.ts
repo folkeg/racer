@@ -171,7 +171,21 @@ const MID_SCALE = FOCAL / MID_DEPTH;
  * scarce axis in the first place and is still what the fit fights for.
  */
 const SAFE_MARGIN = 26;
-const SAFE_TOP = 64;
+/**
+ * The top margin is where the far shore lives.
+ *
+ * It was 64, which left a strip of water above the circuit too thin to put
+ * anything in — and with nothing at the top of the frame the sea had no edge,
+ * so there was no way to read the blue as water rather than as a backdrop. The
+ * far side of the plane is exactly where a coastline belongs.
+ *
+ * Measured across the circuits, raising it to 104 and leaving the side margin
+ * alone costs nothing at all on width for the three that are width-bound, and
+ * 6.3% of height everywhere. Height is the axis the fit was stretching to fill
+ * in the first place, so what is given up is stretch, which makes this the
+ * cheapest 40px on the screen.
+ */
+const SAFE_TOP = 104;
 const SAFE_BOTTOM = 700;
 
 /**
