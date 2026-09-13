@@ -15,24 +15,53 @@
  * this can be added without touching a single test.
  */
 
-const ART_PATH = 'assets/water-tile.png';
+const loaded: Record<string, WxImage | null> = {
+  water: null,
+  concrete: null,
+  grass: null
+};
 
-let water: WxImage | null = null;
+/**
+ * Called when a tile arrives.
+ *
+ * The road and the islands live in the layer that is rendered once per circuit,
+ * so a tile that lands after that render would never be seen — the cache would
+ * hold the generated texture for the rest of the run. Whoever owns that cache
+ * hands us a way to drop it.
+ */
+let onLoaded: (() => void) | null = null;
 
-export function loadArt(): void {
+export function setArtListener(listener: () => void): void {
+  onLoaded = listener;
+}
+
+function load(name: string): void {
   const image = wx.createImage?.();
   if (!image) return;
   image.onload = () => {
     // A zero-sized image is a failed decode dressed as a success.
-    if (image.width > 0 && image.height > 0) water = image;
+    if (image.width > 0 && image.height > 0) {
+      loaded[name] = image;
+      onLoaded?.();
+    }
   };
   image.onerror = () => {
-    water = null;
+    loaded[name] = null;
   };
-  image.src = ART_PATH;
+  image.src = `assets/${name}-tile.png`;
 }
 
-/** The water tile, or null while it is still loading or unavailable. */
+export function loadArt(): void {
+  for (const name of Object.keys(loaded)) load(name);
+}
+
+/** A tile, or null while it is still loading or unavailable. */
 export function waterArt(): WxImage | null {
-  return water;
+  return loaded.water;
+}
+export function concreteArt(): WxImage | null {
+  return loaded.concrete;
+}
+export function grassArt(): WxImage | null {
+  return loaded.grass;
 }

@@ -14,7 +14,7 @@
 
 import { createOffscreenCanvas } from '../platform';
 import type { VehicleStyle } from '../types';
-import { waterArt } from '../assets';
+import { concreteArt, grassArt, waterArt } from '../assets';
 
 /**
  * Design-space footprint of a car. Sprites are drawn to this shape.
@@ -233,6 +233,9 @@ let asphaltTried = false;
  * the road itself.
  */
 export function asphaltTexture(target: CanvasRenderingContext2D): CanvasPattern | null {
+  const painted = paintedPattern(target, 'concrete', concreteArt());
+  if (painted) return painted;
+
   if (asphaltTried) return asphaltPattern;
   asphaltTried = true;
 
@@ -268,20 +271,46 @@ export function asphaltTexture(target: CanvasRenderingContext2D): CanvasPattern 
 export const WATER_TILE = 128;
 
 /**
- * Pattern built from the painted tile, once it has loaded.
+ * Patterns built from the painted tiles, once they have loaded.
  *
- * The image is 512 square and wants to be seen at half that, and the first way
- * of getting there was to scale the context before filling. That works, but it
- * makes every fill a resampling job. Scaling it once into an offscreen tile
- * instead means the per-frame fill is an unscaled pattern, which is the path
- * the canvas is fast at.
+ * Each is scaled once into an offscreen tile at the size it should be seen, so
+ * the per-frame fill is an unscaled pattern. The first version scaled the
+ * context before filling instead, which works but makes every fill a resampling
+ * job — and on a desktop-sized canvas that was measurable.
+ *
+ * The sizes are in design units and are chosen per surface: the sea is read as
+ * a whole so its waves want to be large, while the deck and the grass are only
+ * ever seen in strips a few tens of units across and want fine detail.
  */
-const WATER_ART_TILE = 256;
-let artPattern: CanvasPattern | null = null;
+const ART_TILE_SIZE: Record<string, number> = { water: 256, concrete: 128, grass: 96 };
+const artPatterns: Record<string, CanvasPattern | null> = {};
 
-/** Side of the tile currently in use, in design units. */
+function paintedPattern(
+  target: CanvasRenderingContext2D,
+  name: string,
+  image: WxImage | null
+): CanvasPattern | null {
+  if (!image) return null;
+  const existing = artPatterns[name];
+  if (existing) return existing;
+
+  const size = ART_TILE_SIZE[name];
+  try {
+    const scaled = createOffscreenCanvas(size, size);
+    const scaledCtx = scaled ? scaled.getContext('2d') : null;
+    if (scaled && scaledCtx) {
+      scaledCtx.drawImage(image as unknown as CanvasImageSource, 0, 0, size, size);
+      artPatterns[name] = target.createPattern(scaled as unknown as CanvasImageSource, 'repeat');
+    }
+  } catch (error) {
+    artPatterns[name] = null;
+  }
+  return artPatterns[name] ?? null;
+}
+
+/** Side of the water tile currently in use, in design units. */
 export function waterTileSize(): number {
-  return artPattern ? WATER_ART_TILE : WATER_TILE;
+  return artPatterns.water ? ART_TILE_SIZE.water : WATER_TILE;
 }
 
 let waterPattern: CanvasPattern | null = null;
@@ -298,24 +327,8 @@ let waterTried = false;
 export function waterTexture(target: CanvasRenderingContext2D): CanvasPattern | null {
   // Painted tile if it has arrived, generated one otherwise. The art loads
   // asynchronously, so this has to keep asking rather than deciding once.
-  const art = waterArt();
-  if (art) {
-    if (!artPattern) {
-      try {
-        const scaled = createOffscreenCanvas(WATER_ART_TILE, WATER_ART_TILE);
-        const scaledCtx = scaled ? scaled.getContext('2d') : null;
-        if (scaled && scaledCtx) {
-          scaledCtx.drawImage(
-            art as unknown as CanvasImageSource, 0, 0, WATER_ART_TILE, WATER_ART_TILE
-          );
-          artPattern = target.createPattern(scaled as unknown as CanvasImageSource, 'repeat');
-        }
-      } catch (error) {
-        artPattern = null;
-      }
-    }
-    if (artPattern) return artPattern;
-  }
+  const painted = paintedPattern(target, 'water', waterArt());
+  if (painted) return painted;
 
   if (waterTried) return waterPattern;
   waterTried = true;
@@ -379,6 +392,9 @@ let grassTried = false;
  * for that to matter.
  */
 export function grassTexture(target: CanvasRenderingContext2D): CanvasPattern | null {
+  const painted = paintedPattern(target, 'grass', grassArt());
+  if (painted) return painted;
+
   if (grassTried) return grassPattern;
   grassTried = true;
 

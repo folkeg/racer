@@ -31,10 +31,10 @@ import { drawControls, drawHud } from './render/hud';
 import { drawBlackout, drawHazardLane } from './render/overlays';
 import { drawFloaters, drawParticles, updateFloaters, updateParticles } from './render/particles';
 import { drawSpeedLines } from './render/speedLines';
-import { loadArt } from './assets';
+import { loadArt, setArtListener } from './assets';
 import { drawLivingWater, drawSeaLayer, updateLivingWater } from './render/livingWater';
 import { drawSceneLight } from './render/scenery';
-import { drawStaticScene } from './render/staticLayer';
+import { drawStaticScene, invalidateStaticLayer } from './render/staticLayer';
 import { drawCars } from './render/vehicles';
 import { runIsOver, updateRun } from './run';
 import { drawMenu, updateMenu } from './screens/menu';
@@ -167,7 +167,9 @@ function frame(nowValue?: number): void {
 
 audio.setMuted(loadMuted());
 // Art loads in the background; the scene renders from the moment it opens and
-// picks the tile up whenever it arrives.
+// picks each tile up whenever it arrives. The road and the islands are cached
+// per circuit, so that cache has to be dropped when one lands.
+setArtListener(invalidateStaticLayer);
 loadArt();
 installInput();
 installShareMenu();
