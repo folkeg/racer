@@ -215,7 +215,7 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'dune',
     props: ['rock', 'tuft', 'parasol'],
     propDensity: 1,
-    structures: ['pavilion', 'dome']
+    structures: ['lagoon', 'pavilion', 'dome']
   },
 
   city: {
@@ -256,7 +256,7 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'stand',
     props: ['barrier', 'lamp', 'cone'],
     propDensity: 1.1,
-    structures: ['hall', 'dome', 'hall']
+    structures: ['lawn', 'hall', 'dome']
   },
 
   industrial: {
@@ -293,7 +293,7 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'shed',
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
-    structures: ['hall', 'tank', 'tank']
+    structures: ['containers', 'hall', 'tank']
   },
 
   meadow: {
@@ -329,7 +329,7 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'stand',
     props: ['tree', 'bush', 'rock'],
     propDensity: 1,
-    structures: ['pavilion']
+    structures: ['lagoon', 'pavilion']
   }
 };
 

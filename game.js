@@ -3532,7 +3532,7 @@ var HarborLoop = (() => {
       boundary: "dune",
       props: ["rock", "tuft", "parasol"],
       propDensity: 1,
-      structures: ["pavilion", "dome"]
+      structures: ["lagoon", "pavilion", "dome"]
     },
     city: {
       // Night-ish tarmac yard. The ground is the same asphalt as the road, one
@@ -3572,7 +3572,7 @@ var HarborLoop = (() => {
       boundary: "stand",
       props: ["barrier", "lamp", "cone"],
       propDensity: 1.1,
-      structures: ["hall", "dome", "hall"]
+      structures: ["lawn", "hall", "dome"]
     },
     industrial: {
       // A works yard: stained concrete, rust, and nothing growing.
@@ -3608,7 +3608,7 @@ var HarborLoop = (() => {
       boundary: "shed",
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
-      structures: ["hall", "tank", "tank"]
+      structures: ["containers", "hall", "tank"]
     },
     meadow: {
       tile: "grass",
@@ -3643,7 +3643,7 @@ var HarborLoop = (() => {
       boundary: "stand",
       props: ["tree", "bush", "rock"],
       propDensity: 1,
-      structures: ["pavilion"]
+      structures: ["lagoon", "pavilion"]
     }
   };
   var TRACK_SURFACE = {
@@ -3870,6 +3870,7 @@ var HarborLoop = (() => {
   }
 
   // src/render/infield.ts
+  var GROUND_KINDS = ["lagoon", "lawn"];
   var MIN_REACH = 26;
   var MIN_ROOM = 10;
   var cachedTrack2 = null;
@@ -3948,6 +3949,7 @@ var HarborLoop = (() => {
     }
     const squared = !surfaceFor(activeTrackId).island.planted;
     for (const structure of placed) {
+      if (GROUND_KINDS.includes(structure.kind)) continue;
       const p = project(structure.x, structure.y);
       const r = structure.reach * lateralUnit();
       const w = r * 1.12;
@@ -3989,7 +3991,7 @@ var HarborLoop = (() => {
     const y = p.y;
     switch (structure.kind) {
       case "dome": {
-        shade(x, y, r * 1.05, r * 0.62, 0.34);
+        shade(x, y + r * 0.3, r * 1.05, r * 0.5, 0.34);
         const sphere = ctx.createRadialGradient(x - r * 0.34, y - r * 0.34, r * 0.1, x, y, r);
         sphere.addColorStop(0, "#F4F1E8");
         sphere.addColorStop(0.65, "#CFCCC2");
@@ -4003,6 +4005,14 @@ var HarborLoop = (() => {
         ctx.beginPath();
         ctx.arc(x, y, r * 1.06, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.fillStyle = "rgba(108,114,120,0.9)";
+        ctx.beginPath();
+        ctx.moveTo(x - r * 0.94, y + r * 0.34);
+        ctx.lineTo(x - r * 0.94, y + r * 0.46);
+        ctx.arc(x, y + r * 0.46, r * 0.94, Math.PI, 0, true);
+        ctx.lineTo(x + r * 0.94, y + r * 0.34);
+        ctx.closePath();
+        ctx.fill();
         break;
       }
       case "hall": {
@@ -4024,20 +4034,85 @@ var HarborLoop = (() => {
         break;
       }
       case "tank": {
-        shade(x, y, r * 0.9, r * 0.5, 0.34);
-        const barrel = ctx.createLinearGradient(x - r * 0.7, y, x + r * 0.7, y);
-        barrel.addColorStop(0, "#6E6A5E");
-        barrel.addColorStop(0.35, "#A8A296");
-        barrel.addColorStop(1, "#5E5A50");
-        ctx.fillStyle = barrel;
+        const rr = r * 0.66;
+        const wall = rr * 0.62;
+        shade(x, y + wall, rr * 0.95, rr * 0.42, 0.34);
+        const side = ctx.createLinearGradient(x - rr, y, x + rr, y);
+        side.addColorStop(0, "#4E4A42");
+        side.addColorStop(0.4, "#7A7468");
+        side.addColorStop(1, "#3E3A34");
+        ctx.fillStyle = side;
         ctx.beginPath();
-        ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
+        ctx.moveTo(x - rr, y);
+        ctx.lineTo(x - rr, y + wall);
+        ctx.arc(x, y + wall, rr, Math.PI, 0, true);
+        ctx.lineTo(x + rr, y);
+        ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = "rgba(220,214,200,0.5)";
-        ctx.lineWidth = r * 0.06;
+        const top = ctx.createLinearGradient(x - rr, y - rr, x + rr, y + rr);
+        top.addColorStop(0, "#C2BCAE");
+        top.addColorStop(0.55, "#9A9488");
+        top.addColorStop(1, "#6E685E");
+        ctx.fillStyle = top;
         ctx.beginPath();
-        ctx.arc(x, y, r * 0.44, 0, Math.PI * 2);
+        ctx.ellipse(x, y, rr, rr * 0.82, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(228,222,208,0.45)";
+        ctx.lineWidth = rr * 0.08;
+        ctx.beginPath();
+        ctx.ellipse(x, y, rr * 0.62, rr * 0.5, 0, 0, Math.PI * 2);
         ctx.stroke();
+        break;
+      }
+      case "lagoon": {
+        const pool2 = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * 1.15);
+        pool2.addColorStop(0, "#4FC3C8");
+        pool2.addColorStop(0.6, "#2E9AA6");
+        pool2.addColorStop(1, "#1E6E80");
+        ctx.fillStyle = "#E6D6A8";
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * 1.3, r * 0.92, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = pool2;
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case "lawn": {
+        ctx.fillStyle = "#7FB23F";
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * 1.25, r * 0.88, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(160,206,92,0.5)";
+        ctx.beginPath();
+        ctx.ellipse(x - r * 0.2, y - r * 0.2, r * 0.7, r * 0.46, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "containers": {
+        const hues = ["#B4573A", "#2F7E86", "#B8912F", "#4E6E3A"];
+        const cols = 4;
+        const rows = 3;
+        const cw = r * 1.9 / cols;
+        const ch = r * 1 / rows;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const cx = x - r * 0.95 + col * cw;
+            const cy = y - r * 0.5 + row * ch;
+            ctx.fillStyle = "rgba(10,14,18,0.30)";
+            ctx.fillRect(cx + 1.5, cy + 2, cw * 0.86, ch * 0.76);
+            ctx.fillStyle = hues[(row * cols + col) % hues.length];
+            ctx.fillRect(cx, cy, cw * 0.86, ch * 0.76);
+            ctx.fillStyle = "rgba(255,250,238,0.22)";
+            ctx.fillRect(cx, cy, cw * 0.86, ch * 0.2);
+          }
+        }
         break;
       }
       case "pavilion": {

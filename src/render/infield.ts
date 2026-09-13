@@ -28,7 +28,13 @@ import { freeGround } from './props';
 import { groundTexture } from './sprites';
 import { surfaceFor } from './surface';
 
-export type StructureKind = 'hall' | 'dome' | 'tank' | 'pavilion';
+export type StructureKind = 'hall' | 'dome' | 'tank' | 'pavilion' | 'lagoon' | 'containers' | 'lawn';
+
+/**
+ * The ones that are ground rather than building, and so get no hardstanding
+ * under them. A lagoon on a concrete pad would be a swimming pool.
+ */
+const GROUND_KINDS: StructureKind[] = ['lagoon', 'lawn'];
 
 interface Structure {
   x: number;
@@ -148,6 +154,7 @@ function drawServiceRoad(placed: Structure[]): void {
   // hardstanding in an industrial site looks as wrong as a rectangular dune.
   const squared = !surfaceFor(activeTrackId).island.planted;
   for (const structure of placed) {
+    if (GROUND_KINDS.includes(structure.kind)) continue;
     const p = project(structure.x, structure.y);
     const r = structure.reach * lateralUnit();
     const w = r * 1.12;
@@ -194,7 +201,7 @@ function drawStructure(structure: Structure): void {
 
   switch (structure.kind) {
     case 'dome': {
-      shade(x, y, r * 1.05, r * 0.62, 0.34);
+      shade(x, y + r * 0.3, r * 1.05, r * 0.5, 0.34);
       const sphere = ctx.createRadialGradient(x - r * 0.34, y - r * 0.34, r * 0.1, x, y, r);
       sphere.addColorStop(0, '#F4F1E8');
       sphere.addColorStop(0.65, '#CFCCC2');
@@ -203,12 +210,24 @@ function drawStructure(structure: Structure): void {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
-      // The ring it stands in, which is what makes it a building and not a ball.
+      // A skirt below it and a ring around it: the two things that stop a lit
+      // sphere from reading as a ball dropped on the ground.
       ctx.strokeStyle = 'rgba(58,72,86,0.55)';
       ctx.lineWidth = r * 0.13;
       ctx.beginPath();
       ctx.arc(x, y, r * 1.06, 0, Math.PI * 2);
       ctx.stroke();
+      // A shallow plinth, not a bowl. At 0.3 of the radius and 55% black it
+      // swallowed the bottom of the sphere and the whole thing read as a ball
+      // half sunk in mud; a building's base is a course you can see the top of.
+      ctx.fillStyle = 'rgba(108,114,120,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.94, y + r * 0.34);
+      ctx.lineTo(x - r * 0.94, y + r * 0.46);
+      ctx.arc(x, y + r * 0.46, r * 0.94, Math.PI, 0, true);
+      ctx.lineTo(x + r * 0.94, y + r * 0.34);
+      ctx.closePath();
+      ctx.fill();
       break;
     }
     case 'hall': {
@@ -231,20 +250,103 @@ function drawStructure(structure: Structure): void {
       break;
     }
     case 'tank': {
-      shade(x, y, r * 0.9, r * 0.5, 0.34);
-      const barrel = ctx.createLinearGradient(x - r * 0.7, y, x + r * 0.7, y);
-      barrel.addColorStop(0, '#6E6A5E');
-      barrel.addColorStop(0.35, '#A8A296');
-      barrel.addColorStop(1, '#5E5A50');
-      ctx.fillStyle = barrel;
+      // A cylinder, not a disc.
+      //
+      // Drawn as a top face with a wall below it rather than as one circle: from
+      // this angle a tall tank shows its side, and without that side it reads as
+      // a grey coin lying on the ground. The wall is the same trick the deck and
+      // the islands use — extrude towards the camera, shade away from the light.
+      const rr = r * 0.66;
+      const wall = rr * 0.62;
+      shade(x, y + wall, rr * 0.95, rr * 0.42, 0.34);
+
+      const side = ctx.createLinearGradient(x - rr, y, x + rr, y);
+      side.addColorStop(0, '#4E4A42');
+      side.addColorStop(0.4, '#7A7468');
+      side.addColorStop(1, '#3E3A34');
+      ctx.fillStyle = side;
       ctx.beginPath();
-      ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
+      ctx.moveTo(x - rr, y);
+      ctx.lineTo(x - rr, y + wall);
+      ctx.arc(x, y + wall, rr, Math.PI, 0, true);
+      ctx.lineTo(x + rr, y);
+      ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = 'rgba(220,214,200,0.5)';
-      ctx.lineWidth = r * 0.06;
+
+      const top = ctx.createLinearGradient(x - rr, y - rr, x + rr, y + rr);
+      top.addColorStop(0, '#C2BCAE');
+      top.addColorStop(0.55, '#9A9488');
+      top.addColorStop(1, '#6E685E');
+      ctx.fillStyle = top;
       ctx.beginPath();
-      ctx.arc(x, y, r * 0.44, 0, Math.PI * 2);
+      ctx.ellipse(x, y, rr, rr * 0.82, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(228,222,208,0.45)';
+      ctx.lineWidth = rr * 0.08;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rr * 0.62, rr * 0.5, 0, 0, Math.PI * 2);
       ctx.stroke();
+      break;
+    }
+    case 'lagoon': {
+      // The saturated anchor.
+      //
+      // Every world came out monochrome — the beach was eleven shades of sand
+      // and the works yard eleven of grey — and the reference's boards are held
+      // together by one big high-chroma shape, the acid-green infield grass. One
+      // strongly coloured area does more for a picture than any amount of
+      // additional grey detail, and it has to be large: a small bright thing is
+      // an accent, a large one is the thing the eye hangs the scene on.
+      const pool = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * 1.15);
+      pool.addColorStop(0, '#4FC3C8');
+      pool.addColorStop(0.6, '#2E9AA6');
+      pool.addColorStop(1, '#1E6E80');
+      ctx.fillStyle = '#E6D6A8';
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 1.3, r * 0.92, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = pool;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 1.12, r * 0.76, 0.2, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+    case 'lawn': {
+      ctx.fillStyle = '#7FB23F';
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 1.25, r * 0.88, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(160,206,92,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.2, y - r * 0.2, r * 0.7, r * 0.46, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'containers': {
+      // Rows, because a works yard is set out with a rule — and because the
+      // colours are the point, four saturated ones against all that grey.
+      const hues = ['#B4573A', '#2F7E86', '#B8912F', '#4E6E3A'];
+      const cols = 4;
+      const rows = 3;
+      const cw = (r * 1.9) / cols;
+      const ch = (r * 1.0) / rows;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const cx = x - r * 0.95 + col * cw;
+          const cy = y - r * 0.5 + row * ch;
+          ctx.fillStyle = 'rgba(10,14,18,0.30)';
+          ctx.fillRect(cx + 1.5, cy + 2, cw * 0.86, ch * 0.76);
+          ctx.fillStyle = hues[(row * cols + col) % hues.length];
+          ctx.fillRect(cx, cy, cw * 0.86, ch * 0.76);
+          ctx.fillStyle = 'rgba(255,250,238,0.22)';
+          ctx.fillRect(cx, cy, cw * 0.86, ch * 0.2);
+        }
+      }
       break;
     }
     case 'pavilion': {
