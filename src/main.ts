@@ -32,7 +32,7 @@ import { drawBlackout, drawHazardLane } from './render/overlays';
 import { drawFloaters, drawParticles, updateFloaters, updateParticles } from './render/particles';
 import { drawSpeedLines } from './render/speedLines';
 import { loadArt, setArtListener } from './assets';
-import { drawLivingWater, drawSeaLayer, updateLivingWater } from './render/livingWater';
+import { drawGroundLayer, drawLivingWater, updateLivingWater } from './render/livingWater';
 import { drawSceneLight } from './render/scenery';
 import { drawStaticScene, invalidateStaticLayer } from './render/staticLayer';
 import { drawCars } from './render/vehicles';
@@ -88,7 +88,7 @@ function drawRace(): void {
   ctx.save();
   ctx.translate(offsetX, offsetY);
   ctx.scale(scale, scale);
-  drawSeaLayer();
+  drawGroundLayer();
   ctx.restore();
 
   drawStaticScene();

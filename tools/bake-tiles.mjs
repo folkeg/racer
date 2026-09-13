@@ -152,6 +152,39 @@ function grass(size) {
   });
 }
 
+/**
+ * Sand: wind ripples.
+ *
+ * Almost free, because wind ripples and water waves are the same kind of field —
+ * a travelling train with noise riding on it — and the only differences are that
+ * sand has one dominant direction instead of two crossing ones, a shorter
+ * wavelength, and far less contrast. Same function, different numbers, which is
+ * the argument for baking these ourselves rather than hunting for them: a new
+ * ground is a parameter change, not a shopping trip.
+ */
+function sand(size) {
+  const warp = noise(size, 4, 6, 37);
+  const drift = noise(size, 8, 12, 83);
+  const grain = noise(size, 96, 96, 113);
+  const fine = noise(size, 224, 224, 157);
+  const h = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      // One train, 9 ridges across the tile, leaning slightly so the ripples do
+      // not run square to the screen.
+      const ridge = Math.sin(TAU * ((y * 9 + x * 2) / size) + (warp[i] - 0.5) * 5.0);
+      // Ripples are sharp on the crest and flat in the trough, unlike a wave.
+      const shaped = Math.sign(ridge) * Math.pow(Math.abs(ridge), 0.7);
+      h[i] = 0.50 * shaped + 0.20 * (drift[i] - 0.5) * 2
+        + 0.20 * (grain[i] - 0.5) * 2 + 0.10 * (fine[i] - 0.5) * 2;
+    }
+  }
+  return shade(size, h, {
+    gain: 22, hi: [255, 246, 222], lo: [92, 62, 34], hiAlpha: 96, loAlpha: 104
+  });
+}
+
 // --- PNG ------------------------------------------------------------------
 const CRC = (() => {
   const t = new Int32Array(256);
@@ -194,7 +227,7 @@ function writePng(path, size, rgba) {
 const out = process.argv[2] || 'assets';
 // Water is seen largest, so it is worth the most pixels; the other two are
 // never seen at anything like this scale.
-for (const [name, size, make] of [['water', 512, water], ['concrete', 256, concrete], ['grass', 256, grass]]) {
+for (const [name, size, make] of [['water', 512, water], ['sand', 512, sand], ['concrete', 256, concrete], ['grass', 256, grass]]) {
   const path = `${out}/${name}-tile.png`;
   const bytes = writePng(path, size, make(size));
   console.log(`${path}  ${size}x${size}  ${(bytes / 1024).toFixed(0)}KB`);

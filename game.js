@@ -3161,6 +3161,7 @@ var HarborLoop = (() => {
   // src/assets.ts
   var loaded = {
     water: null,
+    sand: null,
     concrete: null,
     grass: null
   };
@@ -3185,6 +3186,10 @@ var HarborLoop = (() => {
   }
   function loadArt() {
     for (const name of Object.keys(loaded)) load(name);
+  }
+  function tileArt(name) {
+    var _a;
+    return (_a = loaded[name]) != null ? _a : null;
   }
   function waterArt() {
     return loaded.water;
@@ -3366,7 +3371,7 @@ var HarborLoop = (() => {
     return asphaltPattern;
   }
   var WATER_TILE = 128;
-  var ART_TILE_SIZE = { water: 256, concrete: 128, grass: 96 };
+  var ART_TILE_SIZE = { water: 256, sand: 232, concrete: 128, grass: 96 };
   var artPatterns = {};
   function paintedPattern(target, name, image) {
     var _a;
@@ -3386,8 +3391,13 @@ var HarborLoop = (() => {
     }
     return (_a = artPatterns[name]) != null ? _a : null;
   }
-  function waterTileSize() {
-    return artPatterns.water ? ART_TILE_SIZE.water : WATER_TILE;
+  function groundTileSize(name) {
+    return artPatterns[name] ? ART_TILE_SIZE[name] : WATER_TILE;
+  }
+  function groundTexture(target, name) {
+    const painted = paintedPattern(target, name, tileArt(name));
+    if (painted) return painted;
+    return name === "water" ? waterTexture(target) : null;
   }
   var waterPattern = null;
   var waterTried = false;
@@ -3467,6 +3477,61 @@ var HarborLoop = (() => {
       grassPattern = null;
     }
     return grassPattern;
+  }
+
+  // src/render/surface.ts
+  var SURFACES = {
+    harbour: {
+      tile: "water",
+      far: "#16324A",
+      mid: "#6E8C9C",
+      near: "#94AEBA",
+      mottle: 1,
+      drift: [[4.2, 2.2, 0.34], [-2.6, 3.6, 0.18]],
+      afloat: true,
+      road: {
+        surface: "#D9D9D2",
+        alt: "#C4C4BC",
+        kerb: "#CFCABC",
+        kerbFace: "#8A8478",
+        edge: "#B9B9B1",
+        wall: "#161F28",
+        waterline: "rgba(232,244,248,0.8)"
+      }
+    },
+    beach: {
+      // Wind ripples fall out of the same wave field as water with different
+      // numbers, so this ground cost a parameter change rather than a new
+      // pipeline. It holds still, which is the other half of reading as sand.
+      tile: "sand",
+      far: "#8A7147",
+      mid: "#C4A971",
+      near: "#E4CE9A",
+      mottle: 0.55,
+      drift: [[0, 0, 0.42]],
+      afloat: false,
+      road: {
+        // Sun-bleached concrete, warmer than the harbour's and lighter against
+        // the sand it sits on.
+        surface: "#EFE7D2",
+        alt: "#DED4BC",
+        kerb: "#E7DCC2",
+        kerbFace: "#A3957A",
+        edge: "#CFC3A6",
+        wall: "#3A3226",
+        waterline: "rgba(255,248,228,0.7)"
+      }
+    }
+  };
+  var TRACK_SURFACE = {
+    "long-bay": "harbour",
+    "grand-oval": "harbour",
+    "tide-drop": "harbour",
+    "half-moon": "beach"
+  };
+  function surfaceFor(track) {
+    var _a;
+    return (_a = SURFACES[TRACK_SURFACE[track]]) != null ? _a : SURFACES.harbour;
   }
 
   // src/render/primitives.ts
@@ -3743,38 +3808,36 @@ var HarborLoop = (() => {
     ctx.fillRect(0, BOARD_TOP - 2, DESIGN_W, 2);
     ctx.fillRect(0, BOARD_BOTTOM, DESIGN_W, 2);
   }
-  function drawWaterSurface(elapsed2) {
+  function drawGroundSurface(elapsed2) {
+    const surface = surfaceFor(activeTrackId);
     const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
-    gradient.addColorStop(0, COLORS.waterDeep);
-    gradient.addColorStop(0.55, COLORS.water);
-    gradient.addColorStop(1, "#94AEBA");
+    gradient.addColorStop(0, surface.far);
+    gradient.addColorStop(0.55, surface.mid);
+    gradient.addColorStop(1, surface.near);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
-    for (const [cx, cy, r, tint, alpha] of WATER_PATCHES) {
-      const patch = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      patch.addColorStop(0, `rgba(${tint},${alpha})`);
-      patch.addColorStop(1, `rgba(${tint},0)`);
-      ctx.fillStyle = patch;
-      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    if (surface.mottle > 0) {
+      for (const [cx, cy, r, tint, alpha] of GROUND_PATCHES) {
+        const patch = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        patch.addColorStop(0, `rgba(${tint},${(alpha * surface.mottle).toFixed(3)})`);
+        patch.addColorStop(1, `rgba(${tint},0)`);
+        ctx.fillStyle = patch;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
     }
-    const ripple = waterTexture(ctx);
+    const ripple = groundTexture(ctx, surface.tile);
     if (!ripple) return;
-    const tile = waterTileSize();
-    const painted = tile > 128;
-    const drift = (speedX, speedY, alpha) => {
+    const tile = groundTileSize(surface.tile);
+    for (const [speedX, speedY, alpha] of surface.drift) {
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.translate(elapsed2 * speedX % tile - tile, elapsed2 * speedY % tile - tile);
       ctx.fillStyle = ripple;
       ctx.fillRect(0, 0, DESIGN_W + tile * 2, DESIGN_H + tile * 2);
       ctx.restore();
-    };
-    const strong = painted ? 0.34 : 0.85;
-    const weak = painted ? 0.18 : 0.55;
-    drift(4.2, 2.2, strong);
-    drift(-2.6, 3.6, weak);
+    }
   }
-  var WATER_PATCHES = [
+  var GROUND_PATCHES = [
     [40, 120, 190, "16,42,66", 0.3],
     [352, 250, 210, "16,42,66", 0.22],
     [24, 470, 170, "150,186,198", 0.16],
@@ -4007,11 +4070,15 @@ var HarborLoop = (() => {
       ctx.restore();
     }
   }
-  function drawSeaLayer() {
+  function drawGroundLayer() {
     drawBoardGround();
     ctx.save();
     clipToBoard();
-    drawWaterSurface(elapsed);
+    drawGroundSurface(elapsed);
+    if (!surfaceFor(activeTrackId).afloat) {
+      ctx.restore();
+      return;
+    }
     const decor = trackById(activeTrackId).decor;
     decor.boats.forEach(([x, y, size, angle], index) => {
       const travelled = elapsed * BOAT_SPEEDS[index % BOAT_SPEEDS.length];
@@ -4045,6 +4112,7 @@ var HarborLoop = (() => {
     ctx.restore();
   }
   function drawLivingWater() {
+    if (!surfaceFor(activeTrackId).afloat) return;
     ctx.save();
     clipToBoard();
     drawGulls();
@@ -5384,6 +5452,7 @@ var HarborLoop = (() => {
     return projectPath(pathAtOffset(offset));
   }
   function drawTrack() {
+    const paint = surfaceFor(activeTrackId).road;
     const outerShadow = projectPath(
       offsetPath(pathAtOffset(ROAD_HALF_WIDTH + 7), SHADOW_X * ROAD_DEPTH, SHADOW_Y * ROAD_DEPTH)
     );
@@ -5402,24 +5471,24 @@ var HarborLoop = (() => {
     const outerLipIn = edge(ROAD_HALF_WIDTH + 1);
     const innerLip = edge(-ROAD_HALF_WIDTH - 4);
     const innerLipIn = edge(-ROAD_HALF_WIDTH - 1);
-    fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, "#161F28");
-    fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, "#161F28");
+    fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, paint.wall);
+    fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, paint.wall);
     const WET = ROAD_WALL_HEIGHT * 0.68;
-    fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, "#2B3A44", "rgba(232,244,248,0.8)", WET);
-    fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, "#2B3A44", "rgba(232,244,248,0.8)", WET);
+    fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, "#2B3A44", paint.waterline, WET);
+    fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, "#2B3A44", paint.waterline, WET);
     const outerEdge = edge(ROAD_HALF_WIDTH + 4);
     const innerEdge = edge(-ROAD_HALF_WIDTH - 4);
-    fillRibbon(outerEdge, innerEdge, COLORS.roadEdge);
+    fillRibbon(outerEdge, innerEdge, paint.edge);
     const outerKerb = edge(ROAD_HALF_WIDTH);
     const outerRoad = edge(ROAD_HALF_WIDTH - KERB_WIDTH);
     const innerRoad = edge(-ROAD_HALF_WIDTH + KERB_WIDTH);
     const innerKerb = edge(-ROAD_HALF_WIDTH);
-    fillRibbon(outerKerb, outerRoad, COLORS.curbLight);
-    fillRibbon(innerRoad, innerKerb, COLORS.curbLight);
+    fillRibbon(outerKerb, outerRoad, paint.kerb);
+    fillRibbon(innerRoad, innerKerb, paint.kerb);
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const laneOuter = projectPath(pathForLane(lane - 0.5));
       const laneInner = projectPath(pathForLane(lane + 0.5));
-      fillRibbon(laneOuter, laneInner, lane % 2 === 0 ? COLORS.road : COLORS.roadAlt);
+      fillRibbon(laneOuter, laneInner, lane % 2 === 0 ? paint.surface : paint.alt);
     }
     const grain = asphaltTexture(ctx);
     if (grain) fillRibbon(outerRoad, innerRoad, grain);
@@ -5994,7 +6063,7 @@ var HarborLoop = (() => {
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
-    drawSeaLayer();
+    drawGroundLayer();
     ctx.restore();
     drawStaticScene();
     ctx.save();

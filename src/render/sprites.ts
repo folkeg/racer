@@ -14,7 +14,7 @@
 
 import { createOffscreenCanvas } from '../platform';
 import type { VehicleStyle } from '../types';
-import { concreteArt, grassArt, waterArt } from '../assets';
+import { concreteArt, grassArt, tileArt, waterArt } from '../assets';
 
 /**
  * Design-space footprint of a car. Sprites are drawn to this shape.
@@ -282,7 +282,7 @@ export const WATER_TILE = 128;
  * a whole so its waves want to be large, while the deck and the grass are only
  * ever seen in strips a few tens of units across and want fine detail.
  */
-const ART_TILE_SIZE: Record<string, number> = { water: 256, concrete: 128, grass: 96 };
+const ART_TILE_SIZE: Record<string, number> = { water: 256, sand: 232, concrete: 128, grass: 96 };
 const artPatterns: Record<string, CanvasPattern | null> = {};
 
 function paintedPattern(
@@ -308,9 +308,25 @@ function paintedPattern(
   return artPatterns[name] ?? null;
 }
 
-/** Side of the water tile currently in use, in design units. */
-export function waterTileSize(): number {
-  return artPatterns.water ? ART_TILE_SIZE.water : WATER_TILE;
+/** Side of the ground tile currently in use, in design units. */
+export function groundTileSize(name: string): number {
+  return artPatterns[name] ? ART_TILE_SIZE[name] : WATER_TILE;
+}
+
+/**
+ * The ground tile for a surface.
+ *
+ * Only water has a generated fallback, because only water existed before the
+ * art did. A ground whose tile has not loaded shows its gradient and mottling,
+ * which is plain but never wrong.
+ */
+export function groundTexture(
+  target: CanvasRenderingContext2D,
+  name: string
+): CanvasPattern | null {
+  const painted = paintedPattern(target, name, tileArt(name));
+  if (painted) return painted;
+  return name === 'water' ? waterTexture(target) : null;
 }
 
 let waterPattern: CanvasPattern | null = null;

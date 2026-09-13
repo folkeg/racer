@@ -17,6 +17,7 @@
 
 const loaded: Record<string, WxImage | null> = {
   water: null,
+  sand: null,
   concrete: null,
   grass: null
 };
@@ -55,7 +56,10 @@ export function loadArt(): void {
   for (const name of Object.keys(loaded)) load(name);
 }
 
-/** A tile, or null while it is still loading or unavailable. */
+/** A tile by name, or null while it is still loading or unavailable. */
+export function tileArt(name: string): WxImage | null {
+  return loaded[name] ?? null;
+}
 export function waterArt(): WxImage | null {
   return loaded.water;
 }

@@ -4,7 +4,9 @@ import { ctx, DESIGN_H, DESIGN_W } from '../platform';
 import { CONTROL_BAR_TOP } from '../controls';
 import { COLORS } from '../theme';
 import { activeTrackId } from '../track';
-import { grassTexture, waterTexture, waterTileSize } from './sprites';
+import { grassTexture, groundTexture, groundTileSize } from './sprites';
+import { surfaceFor } from './surface';
+import { activeTrackId as currentTrack } from '../track';
 import { trackById } from '../tracks';
 import { project } from './camera';
 import { ISLAND_DEPTH, ISLAND_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
@@ -287,66 +289,56 @@ export function drawBoardGround(): void {
   ctx.fillRect(0, BOARD_BOTTOM, DESIGN_W, 2);
 }
 
-export function drawWaterSurface(elapsed: number): void {
-  // The drifting layers are filled a whole tile past each edge so the scroll
-  // always has somewhere to come from. Nothing clipped that, and the ripple got
-  // painted 256 units outside the design area on every side — past the end of
-  // the gradient, outside the vignette, onto bare canvas — which framed the
-  // board in a second, darker sea and cost 3.72x the fill for pixels nobody can
-  // see. The caller's board clip is what keeps both in hand.
+/**
+ * The ground the circuit stands on, whatever that is on this track.
+ *
+ * This was drawWaterSurface, and the harbour was the only thing it could draw.
+ * Everything that made it a sea — the blues, the two crossing scroll layers, the
+ * boats — now comes from the surface table, so the same code renders still sand
+ * or a concrete yard without knowing anything about them.
+ */
+export function drawGroundSurface(elapsed: number): void {
+  const surface = surfaceFor(currentTrack);
+
   const gradient = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
-  gradient.addColorStop(0, COLORS.waterDeep);
-  gradient.addColorStop(0.55, COLORS.water);
-  gradient.addColorStop(1, '#94AEBA');
+  gradient.addColorStop(0, surface.far);
+  gradient.addColorStop(0.55, surface.mid);
+  gradient.addColorStop(1, surface.near);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
 
-  // Depth mottling. A pure vertical ramp is the flattest thing a screen can
-  // show; these are broad, soft and fixed, and they are what keeps the open
-  // water on a circuit like Half Moon from being one field of flat blue.
-  for (const [cx, cy, r, tint, alpha] of WATER_PATCHES) {
-    const patch = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    patch.addColorStop(0, `rgba(${tint},${alpha})`);
-    patch.addColorStop(1, `rgba(${tint},0)`);
-    ctx.fillStyle = patch;
-    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  // Broad fixed patches. A pure vertical ramp is the flattest thing a screen can
+  // show; these are what keep a big open ground from being one field of colour.
+  if (surface.mottle > 0) {
+    for (const [cx, cy, r, tint, alpha] of GROUND_PATCHES) {
+      const patch = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      patch.addColorStop(0, `rgba(${tint},${(alpha * surface.mottle).toFixed(3)})`);
+      patch.addColorStop(1, `rgba(${tint},0)`);
+      ctx.fillStyle = patch;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
   }
 
-  const ripple = waterTexture(ctx);
+  const ripple = groundTexture(ctx, surface.tile);
   if (!ripple) return;
-  const tile = waterTileSize();
-  const painted = tile > 128;
+  const tile = groundTileSize(surface.tile);
 
-  // Two copies of the tile crossing at different speeds. Offsets wrap on the
-  // tile, so the scroll never accumulates into a big translate and the seams
-  // stay where the tile put them.
-  //
-  // This is all the motion the water gets now. It briefly had travelling swell
-  // crests and flaring sun glints on top, which did make the movement obvious —
-  // measured, they doubled how much of the surface changed per second. They also
-  // looked like scribble: white sine curves drawn over flat blue read as pencil
-  // marks on paper, not as a sea, and the more of the frame the water filled the
-  // worse it got. Subtle and honest beats obvious and fake. Real waves want a
-  // painted tile or a shader, not more strokes.
-  const drift = (speedX: number, speedY: number, alpha: number): void => {
+  // Each layer is filled a whole tile past every edge so a scroll always has
+  // somewhere to come from. The caller's board clip is what keeps that overhang
+  // from painting past the end of the gradient — and from costing 3.72x the fill
+  // for pixels nobody can see.
+  for (const [speedX, speedY, alpha] of surface.drift) {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(((elapsed * speedX) % tile) - tile, ((elapsed * speedY) % tile) - tile);
     ctx.fillStyle = ripple;
     ctx.fillRect(0, 0, DESIGN_W + tile * 2, DESIGN_H + tile * 2);
     ctx.restore();
-  };
-  // The painted tile carries far more contrast than the generated one, so it is
-  // laid on much more lightly. These two numbers are the only knob between
-  // "there is a sea there" and "there is a photograph of a sea there".
-  const strong = painted ? 0.34 : 0.85;
-  const weak = painted ? 0.18 : 0.55;
-  drift(4.2, 2.2, strong);
-  drift(-2.6, 3.6, weak);
+  }
 }
 
-/** Fixed shallows and deeps: [x, y, radius, "r,g,b", alpha]. */
-const WATER_PATCHES: Array<[number, number, number, string, number]> = [
+/** Fixed high and low ground: [x, y, radius, "r,g,b", alpha]. */
+const GROUND_PATCHES: Array<[number, number, number, string, number]> = [
   [40, 120, 190, '16,42,66', 0.30],
   [352, 250, 210, '16,42,66', 0.22],
   [24, 470, 170, '150,186,198', 0.16],

@@ -12,8 +12,8 @@
 
 import { KERB_WIDTH, LANE_COUNT, ROAD_HALF_WIDTH } from '../config';
 import { ctx } from '../platform';
-import { COLORS } from '../theme';
-import { pathAtOffset, pathForLane, sampleAtDistance } from '../track';
+import { activeTrackId, pathAtOffset, pathForLane, sampleAtDistance } from '../track';
+import { surfaceFor } from './surface';
 import { ROAD_DEPTH, ROAD_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
 import { fillNearFaces, fillRibbon, offsetPath } from './primitives';
 import { project, projectPath, projectedHeading } from './camera';
@@ -25,6 +25,12 @@ function edge(offset: number): ReturnType<typeof projectPath> {
 }
 
 export function drawTrack(): void {
+  // The paving belongs to the world the circuit is laid in, not to the game.
+  // Because the baked tile stores lighting over transparency, these colours are
+  // the whole difference between a pale harbour deck and black city asphalt —
+  // a new road style costs a row in the surface table and nothing else.
+  const paint = surfaceFor(activeTrackId).road;
+
   const outerShadow = projectPath(
     offsetPath(pathAtOffset(ROAD_HALF_WIDTH + 7), SHADOW_X * ROAD_DEPTH, SHADOW_Y * ROAD_DEPTH)
   );
@@ -52,18 +58,18 @@ export function drawTrack(): void {
   const outerLipIn = edge(ROAD_HALF_WIDTH + 1);
   const innerLip = edge(-ROAD_HALF_WIDTH - 4);
   const innerLipIn = edge(-ROAD_HALF_WIDTH - 1);
-  fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, '#161F28');
-  fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, '#161F28');
+  fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, paint.wall);
+  fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, paint.wall);
   // The wet course at the bottom of the wall, and the foam where it meets the
   // water. The foam is the line that actually sells the deck as standing in the
   // sea rather than being painted on it.
   const WET = ROAD_WALL_HEIGHT * 0.68;
-  fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, '#2B3A44', 'rgba(232,244,248,0.8)', WET);
-  fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, '#2B3A44', 'rgba(232,244,248,0.8)', WET);
+  fillNearFaces(outerLip, outerLipIn, ROAD_WALL_HEIGHT, '#2B3A44', paint.waterline, WET);
+  fillNearFaces(innerLip, innerLipIn, ROAD_WALL_HEIGHT, '#2B3A44', paint.waterline, WET);
 
   const outerEdge = edge(ROAD_HALF_WIDTH + 4);
   const innerEdge = edge(-ROAD_HALF_WIDTH - 4);
-  fillRibbon(outerEdge, innerEdge, COLORS.roadEdge);
+  fillRibbon(outerEdge, innerEdge, paint.edge);
 
   const outerKerb = edge(ROAD_HALF_WIDTH);
   const outerRoad = edge(ROAD_HALF_WIDTH - KERB_WIDTH);
@@ -72,8 +78,8 @@ export function drawTrack(): void {
 
   // Continuous stone kerbs down both sides; the red-and-white blocks read as a
   // race kerb, which this harbour road is not.
-  fillRibbon(outerKerb, outerRoad, COLORS.curbLight);
-  fillRibbon(innerRoad, innerKerb, COLORS.curbLight);
+  fillRibbon(outerKerb, outerRoad, paint.kerb);
+  fillRibbon(innerRoad, innerKerb, paint.kerb);
 
   // Lanes are shaded alternately rather than separated by dashed lines. Solid
   // bands read as five distinct channels at a glance, where dashes read as
@@ -81,7 +87,7 @@ export function drawTrack(): void {
   for (let lane = 0; lane < LANE_COUNT; lane++) {
     const laneOuter = projectPath(pathForLane(lane - 0.5));
     const laneInner = projectPath(pathForLane(lane + 0.5));
-    fillRibbon(laneOuter, laneInner, lane % 2 === 0 ? COLORS.road : COLORS.roadAlt);
+    fillRibbon(laneOuter, laneInner, lane % 2 === 0 ? paint.surface : paint.alt);
   }
 
   const grain = asphaltTexture(ctx);

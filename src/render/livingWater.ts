@@ -22,7 +22,8 @@ import { DESIGN_H, DESIGN_W, ctx } from '../platform';
 import { activeTrackId } from '../track';
 import { trackById } from '../tracks';
 import { project } from './camera';
-import { clipToBoard, drawBoardGround, drawBoat, drawWaterSurface } from './scenery';
+import { clipToBoard, drawBoardGround, drawBoat, drawGroundSurface } from './scenery';
+import { surfaceFor } from './surface';
 
 /** Seconds since the circuit loaded. Drives every phase below. */
 let elapsed = 0;
@@ -126,7 +127,7 @@ function drawGulls(): void {
 }
 
 /**
- * The sea and everything floating on it, drawn *under* the cached layer.
+ * The ground and everything resting on it, drawn *under* the cached layer.
  *
  * The boats go under it rather than over it now that they travel. A moored boat
  * could be parked in a gap and left there; one that crosses the whole board will
@@ -136,12 +137,21 @@ function drawGulls(): void {
  * passing behind the causeway, and needs no routing, no per-track clearance and
  * no special cases.
  */
-export function drawSeaLayer(): void {
+export function drawGroundLayer(): void {
   drawBoardGround();
 
   ctx.save();
   clipToBoard();
-  drawWaterSurface(elapsed);
+  drawGroundSurface(elapsed);
+
+  // Boats and buoys belong to a sea. On sand they would be absurd, so a surface
+  // that is not afloat simply gets none — the decor stays declared per track and
+  // is ignored, which means a circuit can be moved between worlds without
+  // rewriting its scenery.
+  if (!surfaceFor(activeTrackId).afloat) {
+    ctx.restore();
+    return;
+  }
 
   const decor = trackById(activeTrackId).decor;
 
@@ -182,6 +192,7 @@ export function drawSeaLayer(): void {
 
 /** What flies over the top of the scene rather than floating in it. */
 export function drawLivingWater(): void {
+  if (!surfaceFor(activeTrackId).afloat) return;
   ctx.save();
   clipToBoard();
   drawGulls();
