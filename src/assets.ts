@@ -50,6 +50,45 @@ const PROP_NAMES = [
 const props: Record<string, WxImage | null> = {};
 
 /**
+ * Sprites rendered from 3D, all under one camera and one light.
+ *
+ * These are the things nobody could identify when they were drawn by hand — a
+ * factory, a storage tank, a chimney, a container — and the reason is not that
+ * the drawing was poor. Nobody knows the silhouette of "a works building seen
+ * from above", so there is nothing for a viewer to recognise it against. A
+ * render of an actual model has that silhouette by construction.
+ *
+ * Kenney's City Kit (Industrial), CC0, put through tools/render-sprites.py with
+ * an orthographic top-down camera and a sun at the project's own LIGHT_ANGLE.
+ * The manifest beside them carries each model's true size, so the game scales
+ * them from measurements rather than from whatever looked right.
+ */
+const RENDERED = [
+  'factory', 'works', 'shed', 'chimney', 'tank', 'tank-small', 'container', 'water-tower'
+];
+
+/**
+ * Design units per model unit.
+ *
+ * Calibrated so a works building comes out three to four car lengths across,
+ * which is the scale hierarchy the board has never had: until now nothing on it
+ * was bigger than a car.
+ */
+export const MODEL_SCALE = 40;
+
+/** True size of each rendered model, in model units. */
+export const MODEL_SIZE: Record<string, { w: number; d: number; framed: number }> = {
+  factory: { w: 1.684, d: 1.29, framed: 1.818 },
+  works: { w: 2.084, d: 1.87, framed: 2.25 },
+  shed: { w: 2.484, d: 1.272, framed: 2.682 },
+  chimney: { w: 1.08, d: 1.08, framed: 1.166 },
+  tank: { w: 1.508, d: 1.648, framed: 1.78 },
+  'tank-small': { w: 0.848, d: 0.515, framed: 0.916 },
+  container: { w: 0.373, d: 0.823, framed: 0.888 },
+  'water-tower': { w: 0.852, d: 0.832, framed: 0.92 }
+};
+
+/**
  * Called when a tile arrives.
  *
  * The road and the islands live in the layer that is rendered once per circuit,
@@ -117,9 +156,38 @@ function loadProp(name: string): void {
   image.src = `assets/props/${name}.png`;
 }
 
+function loadRendered(name: string): void {
+  const image = wx.createImage?.();
+  if (!image) return;
+  image.onload = () => {
+    if (image.width > 0 && image.height > 0) {
+      props[name] = image;
+      onLoaded?.();
+    }
+  };
+  image.onerror = () => {
+    props[name] = null;
+    warn(`assets/props3d/${name}.png`);
+  };
+  image.src = `assets/props3d/${name}.png`;
+}
+
 export function loadArt(): void {
   for (const name of Object.keys(loaded)) load(name);
   for (const name of PROP_NAMES) loadProp(name);
+  for (const name of RENDERED) loadRendered(name);
+}
+
+/**
+ * How wide a rendered model should be drawn, in design units.
+ *
+ * The sprite is framed to the model's bounding box with a small margin, so the
+ * image is wider than the model itself — drawing at the model's width would
+ * shrink everything by that margin. This returns the width of the *image*.
+ */
+export function modelWidth(name: string): number {
+  const size = MODEL_SIZE[name];
+  return size ? size.framed * MODEL_SCALE : 40;
 }
 
 /** A drawn object, or null while it is loading or unavailable. */

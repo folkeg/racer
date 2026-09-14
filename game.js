@@ -3194,6 +3194,27 @@ var HarborLoop = (() => {
     "cone"
   ];
   var props = {};
+  var RENDERED = [
+    "factory",
+    "works",
+    "shed",
+    "chimney",
+    "tank",
+    "tank-small",
+    "container",
+    "water-tower"
+  ];
+  var MODEL_SCALE = 40;
+  var MODEL_SIZE = {
+    factory: { w: 1.684, d: 1.29, framed: 1.818 },
+    works: { w: 2.084, d: 1.87, framed: 2.25 },
+    shed: { w: 2.484, d: 1.272, framed: 2.682 },
+    chimney: { w: 1.08, d: 1.08, framed: 1.166 },
+    tank: { w: 1.508, d: 1.648, framed: 1.78 },
+    "tank-small": { w: 0.848, d: 0.515, framed: 0.916 },
+    container: { w: 0.373, d: 0.823, framed: 0.888 },
+    "water-tower": { w: 0.852, d: 0.832, framed: 0.92 }
+  };
   var onLoaded = null;
   var missing = 0;
   function warn(path) {
@@ -3240,9 +3261,30 @@ var HarborLoop = (() => {
     };
     image.src = `assets/props/${name}.png`;
   }
+  function loadRendered(name) {
+    var _a;
+    const image = (_a = wx.createImage) == null ? void 0 : _a.call(wx);
+    if (!image) return;
+    image.onload = () => {
+      if (image.width > 0 && image.height > 0) {
+        props[name] = image;
+        onLoaded == null ? void 0 : onLoaded();
+      }
+    };
+    image.onerror = () => {
+      props[name] = null;
+      warn(`assets/props3d/${name}.png`);
+    };
+    image.src = `assets/props3d/${name}.png`;
+  }
   function loadArt() {
     for (const name of Object.keys(loaded)) load(name);
     for (const name of PROP_NAMES) loadProp(name);
+    for (const name of RENDERED) loadRendered(name);
+  }
+  function modelWidth(name) {
+    const size = MODEL_SIZE[name];
+    return size ? size.framed * MODEL_SCALE : 40;
   }
   function propArt(name) {
     var _a;
@@ -3637,8 +3679,8 @@ var HarborLoop = (() => {
       boundary: "none",
       props: ["tree"],
       propDensity: 0.35,
-      structures: ["pavilion"],
-      outfield: ["pavilion"]
+      structures: ["works", "shed", "pavilion"],
+      outfield: ["factory", "shed"]
     },
     industrial: {
       // A works yard: stained concrete, rust, and nothing growing.
@@ -3680,8 +3722,8 @@ var HarborLoop = (() => {
       // clusters turns the accent colour into noise — the containers were meant
       // to be the one thing the eye goes to.
       propDensity: 0.3,
-      structures: ["pavilion"],
-      outfield: ["pavilion"]
+      structures: ["factory", "tanks", "shed"],
+      outfield: ["works", "tower"]
     },
     meadow: {
       tile: "grass",
@@ -4269,11 +4311,29 @@ var HarborLoop = (() => {
     ctx.ellipse(x + SHADOW_X * w * 0.42, y + SHADOW_Y * w * 0.42, w, h, 0, 0, Math.PI * 2);
     ctx.fill();
   }
+  var MODEL_FOR = {
+    factory: "factory",
+    works: "works",
+    shed: "shed",
+    tower: "water-tower",
+    tanks: "tank"
+  };
   function drawStructure(structure) {
     const p = project(structure.x, structure.y);
     const r = structure.reach * lateralUnit();
     const x = p.x;
     const y = p.y;
+    const model = MODEL_FOR[structure.kind];
+    if (model) {
+      const world = surfaceFor(activeTrackId);
+      const width = modelWidth(model) * lateralUnit();
+      if (drawArt(model, x, y, width, {
+        shadow: 0.32,
+        tint: world.artTint,
+        tintStrength: 0.12,
+        desaturate: 0
+      })) return;
+    }
     switch (structure.kind) {
       case "dome": {
         shade(x, y + r * 0.26, r * 1.02, r * 0.5, 0.34);

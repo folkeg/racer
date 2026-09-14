@@ -24,13 +24,16 @@ import { activeTrackId, pathAtOffset } from '../track';
 import type { TrackId } from '../tracks';
 import { lateralUnit, project } from './camera';
 import { drawArt } from './art';
+import { modelWidth } from '../assets';
 import { SHADOW_X, SHADOW_Y } from './light';
 import { claimGround, freeGround, releaseGround } from './props';
 import { BOARD_BOTTOM, BOARD_TOP } from './scenery';
 import { groundTexture } from './sprites';
 import { surfaceFor } from './surface';
 
-export type StructureKind = 'hall' | 'dome' | 'tank' | 'pavilion' | 'lagoon' | 'containers' | 'lawn';
+export type StructureKind =
+  | 'hall' | 'dome' | 'tank' | 'pavilion' | 'lagoon' | 'containers' | 'lawn'
+  | 'factory' | 'works' | 'shed' | 'tower' | 'tanks';
 
 /**
  * The ones that are ground rather than building, and so get no hardstanding
@@ -339,11 +342,34 @@ function shade(x: number, y: number, w: number, h: number, alpha: number): void 
   ctx.fill();
 }
 
+/** The rendered models, and which structure kind draws each. */
+const MODEL_FOR: Partial<Record<StructureKind, string>> = {
+  factory: 'factory',
+  works: 'works',
+  shed: 'shed',
+  tower: 'water-tower',
+  tanks: 'tank'
+};
+
 function drawStructure(structure: Structure): void {
   const p = project(structure.x, structure.y);
   const r = structure.reach * lateralUnit();
   const x = p.x;
   const y = p.y;
+
+  // A rendered model is drawn at the size it actually is, not at the size the
+  // spot happens to allow — that is the whole point of carrying the manifest.
+  const model = MODEL_FOR[structure.kind];
+  if (model) {
+    const world = surfaceFor(activeTrackId);
+    const width = modelWidth(model) * lateralUnit();
+    if (drawArt(model, x, y, width, {
+      shadow: 0.32,
+      tint: world.artTint,
+      tintStrength: 0.12,
+      desaturate: 0
+    })) return;
+  }
 
   switch (structure.kind) {
     case 'dome': {

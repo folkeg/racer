@@ -296,8 +296,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'none',
     props: ['tree'],
     propDensity: 0.35,
-    structures: ['pavilion'],
-    outfield: ['pavilion']
+    structures: ['works', 'shed', 'pavilion'],
+    outfield: ['factory', 'shed']
   },
 
   industrial: {
@@ -340,8 +340,8 @@ export const SURFACES: Record<string, Surface> = {
     // clusters turns the accent colour into noise — the containers were meant
     // to be the one thing the eye goes to.
     propDensity: 0.3,
-    structures: ['pavilion'],
-    outfield: ['pavilion']
+    structures: ['factory', 'tanks', 'shed'],
+    outfield: ['works', 'tower']
   },
 
   meadow: {
