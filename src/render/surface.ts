@@ -188,7 +188,7 @@ export const SURFACES: Record<string, Surface> = {
       planted: true
     },
     artTint: '#7C9AA8',
-    artTintStrength: 0.34,
+    artTintStrength: 0.16,
     boundary: 'none',
     props: [],
     propDensity: 0,
@@ -232,7 +232,7 @@ export const SURFACES: Record<string, Surface> = {
       planted: true
     },
     artTint: '#C4A971',
-    artTintStrength: 0.38,
+    artTintStrength: 0.18,
     boundary: 'none',
     props: ['rock', 'tuft'],
     propDensity: 1,
@@ -279,7 +279,7 @@ export const SURFACES: Record<string, Surface> = {
       planted: false
     },
     artTint: '#3C444C',
-    artTintStrength: 0.42,
+    artTintStrength: 0.20,
     boundary: 'none',
     props: ['barrier', 'lamp', 'cone'],
     propDensity: 1.1,
@@ -319,7 +319,7 @@ export const SURFACES: Record<string, Surface> = {
       planted: false
     },
     artTint: '#5E5A51',
-    artTintStrength: 0.40,
+    artTintStrength: 0.19,
     boundary: 'none',
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
@@ -358,7 +358,7 @@ export const SURFACES: Record<string, Surface> = {
       planted: true
     },
     artTint: '#5E7F45',
-    artTintStrength: 0.34,
+    artTintStrength: 0.16,
     boundary: 'none',
     props: ['tree', 'bush', 'rock'],
     propDensity: 1,

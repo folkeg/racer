@@ -3195,6 +3195,16 @@ var HarborLoop = (() => {
   ];
   var props = {};
   var onLoaded = null;
+  var missing = 0;
+  function warn(path) {
+    var _a;
+    missing += 1;
+    const console = globalThis.console;
+    (_a = console == null ? void 0 : console.warn) == null ? void 0 : _a.call(
+      console,
+      `[art] ${path} did not load (${missing} so far). Falling back to the drawn shape. Serving the game over http:// rather than opening the file directly usually fixes this.`
+    );
+  }
   function setArtListener(listener) {
     onLoaded = listener;
   }
@@ -3210,6 +3220,7 @@ var HarborLoop = (() => {
     };
     image.onerror = () => {
       loaded[name] = null;
+      warn(`assets/${name}-tile.png`);
     };
     image.src = `assets/${name}-tile.png`;
   }
@@ -3225,6 +3236,7 @@ var HarborLoop = (() => {
     };
     image.onerror = () => {
       props[name] = null;
+      warn(`assets/props/${name}.png`);
     };
     image.src = `assets/props/${name}.png`;
   }
@@ -3532,7 +3544,7 @@ var HarborLoop = (() => {
         planted: true
       },
       artTint: "#7C9AA8",
-      artTintStrength: 0.34,
+      artTintStrength: 0.16,
       boundary: "none",
       props: [],
       propDensity: 0,
@@ -3575,7 +3587,7 @@ var HarborLoop = (() => {
         planted: true
       },
       artTint: "#C4A971",
-      artTintStrength: 0.38,
+      artTintStrength: 0.18,
       boundary: "none",
       props: ["rock", "tuft"],
       propDensity: 1,
@@ -3621,7 +3633,7 @@ var HarborLoop = (() => {
         planted: false
       },
       artTint: "#3C444C",
-      artTintStrength: 0.42,
+      artTintStrength: 0.2,
       boundary: "none",
       props: ["barrier", "lamp", "cone"],
       propDensity: 1.1,
@@ -3660,7 +3672,7 @@ var HarborLoop = (() => {
         planted: false
       },
       artTint: "#5E5A51",
-      artTintStrength: 0.4,
+      artTintStrength: 0.19,
       boundary: "none",
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
@@ -3698,7 +3710,7 @@ var HarborLoop = (() => {
         planted: true
       },
       artTint: "#5E7F45",
-      artTintStrength: 0.34,
+      artTintStrength: 0.16,
       boundary: "none",
       props: ["tree", "bush", "rock"],
       propDensity: 1,
@@ -3729,9 +3741,9 @@ var HarborLoop = (() => {
     const source = image;
     target.drawImage(source, 0, 0);
     const light = target.createLinearGradient(0, 0, image.width, image.height);
-    light.addColorStop(0, "rgb(255,252,244)");
-    light.addColorStop(0.5, "rgb(206,204,198)");
-    light.addColorStop(1, "rgb(150,150,148)");
+    light.addColorStop(0, "rgb(255,253,248)");
+    light.addColorStop(0.5, "rgb(232,230,226)");
+    light.addColorStop(1, "rgb(202,202,200)");
     target.globalCompositeOperation = "multiply";
     target.fillStyle = light;
     target.fillRect(0, 0, image.width, image.height);
@@ -3747,7 +3759,7 @@ var HarborLoop = (() => {
     target.globalAlpha = 1;
     const grain = groundTexture(target, "concrete");
     if (grain) {
-      target.globalAlpha = 0.3;
+      target.globalAlpha = 0.12;
       target.fillStyle = grain;
       target.fillRect(0, 0, image.width, image.height);
       target.globalAlpha = 1;
@@ -3780,7 +3792,7 @@ var HarborLoop = (() => {
       ctx.fill();
       ctx.restore();
     }
-    const toned = options.tint ? harmonise(name, image, options.tint, (_b = options.tintStrength) != null ? _b : 0.3, (_c = options.desaturate) != null ? _c : 0.22) : null;
+    const toned = options.tint ? harmonise(name, image, options.tint, (_b = options.tintStrength) != null ? _b : 0.3, (_c = options.desaturate) != null ? _c : 0.09) : null;
     ctx.save();
     if (options.alpha !== void 0) ctx.globalAlpha = options.alpha;
     ctx.translate(x, y);
@@ -6650,11 +6662,58 @@ var HarborLoop = (() => {
           const end = Math.min(b + KERB_BLOCK + 1, i);
           if (end - b < 2) continue;
           const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
-          const colour = red ? "#B8453A" : "#EDE7DA";
+          const colour = red ? "#C6392C" : "#FFFFFF";
           fillRibbon(outerReach.slice(b, end), outerRoad.slice(b, end), colour);
           fillRibbon(innerRoad.slice(b, end), innerReach.slice(b, end), colour);
         }
         start = null;
+      }
+    }
+  }
+  var SIDE_SPACING = 9;
+  function drawTrackSide() {
+    var _a, _b;
+    const path = pathAtOffset(0);
+    const signed = signedCurvature();
+    const peak = signed.reduce((most, v) => Math.max(most, Math.abs(v)), 0) || 1;
+    const surface = surfaceFor(activeTrackId);
+    const groups = [];
+    let runStart = null;
+    for (let i = 0; i <= path.length; i++) {
+      const sharpness = i < path.length ? Math.abs((_a = signed[i]) != null ? _a : 0) / peak : 0;
+      const turning = sharpness > 0.4;
+      if (turning && runStart === null) runStart = i;
+      if (!turning && runStart !== null) {
+        const span = i - runStart;
+        if (span > 26) groups.push(runStart + Math.floor(span / 2));
+        runStart = null;
+      }
+    }
+    for (const centre of groups) {
+      for (let n = -1; n <= 1; n++) {
+        const i = (centre + n * SIDE_SPACING + path.length) % path.length;
+        const k = (_b = signed[i]) != null ? _b : 0;
+        const a = path[(i - 1 + path.length) % path.length];
+        const b = path[(i + 1) % path.length];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const side = k < 0 ? 1 : -1;
+        const offset = (ROAD_HALF_WIDTH + APRON_WIDTH + 10) * side;
+        const p = project(
+          path[i].x + -dy / length * offset,
+          path[i].y + dx / length * offset
+        );
+        const ends = Math.abs(n) === 1;
+        drawArt(ends ? "barrier" : "tyres", p.x, p.y, (ends ? 30 : 19) * p.scale, {
+          angle: Math.atan2(dy, dx),
+          tint: surface.artTint,
+          // Barely tinted, and not desaturated: a tyre wall that has been pulled
+          // towards the ground colour is a row of grey washers.
+          tintStrength: 0.1,
+          desaturate: 0,
+          shadow: 0.3
+        });
       }
     }
   }
@@ -6708,6 +6767,7 @@ var HarborLoop = (() => {
     if (paint.seams) drawSlabSeams(outerRoad, innerRoad);
     drawEdgeGrime();
     drawStartLine();
+    drawTrackSide();
   }
   var SEAM_SPACING = 6;
   function drawSlabVariation(outer, inner) {

@@ -80,10 +80,15 @@ function harmonise(
   target.drawImage(source, 0, 0);
 
   // Lit from up and left, in the direction every shadow on this board agrees on.
+  // Gentle. The first version ran from white to rgb(150) across every sprite,
+  // which is a heavier gradient than any object on this board actually carries —
+  // it flattened the artwork until a tyre stack was an anonymous ring and the
+  // point of buying art was lost. Unifying the light must not cost the drawing
+  // its own modelling.
   const light = target.createLinearGradient(0, 0, image.width, image.height);
-  light.addColorStop(0, 'rgb(255,252,244)');
-  light.addColorStop(0.5, 'rgb(206,204,198)');
-  light.addColorStop(1, 'rgb(150,150,148)');
+  light.addColorStop(0, 'rgb(255,253,248)');
+  light.addColorStop(0.5, 'rgb(232,230,226)');
+  light.addColorStop(1, 'rgb(202,202,200)');
   target.globalCompositeOperation = 'multiply';
   target.fillStyle = light;
   target.fillRect(0, 0, image.width, image.height);
@@ -109,7 +114,7 @@ function harmonise(
   // a tent and the sand it stands on are made of the same stuff.
   const grain = groundTexture(target, 'concrete');
   if (grain) {
-    target.globalAlpha = 0.3;
+    target.globalAlpha = 0.12;
     target.fillStyle = grain;
     target.fillRect(0, 0, image.width, image.height);
     target.globalAlpha = 1;
@@ -173,7 +178,7 @@ export function drawArt(
   }
 
   const toned = options.tint
-    ? harmonise(name, image, options.tint, options.tintStrength ?? 0.3, options.desaturate ?? 0.22)
+    ? harmonise(name, image, options.tint, options.tintStrength ?? 0.3, options.desaturate ?? 0.09)
     : null;
 
   ctx.save();

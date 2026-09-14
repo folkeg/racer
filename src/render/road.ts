@@ -17,6 +17,7 @@ import { surfaceFor } from './surface';
 import { ROAD_DEPTH, ROAD_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
 import { fillNearFaces, fillRibbon, offsetPath } from './primitives';
 import { lateralUnit, project, projectPath, projectedHeading } from './camera';
+import { drawArt } from './art';
 import { groundTexture } from './sprites';
 
 /**
@@ -283,12 +284,93 @@ function drawCornerKerbs(
       for (let b = start; b < i; b += KERB_BLOCK) {
         const end = Math.min(b + KERB_BLOCK + 1, i);
         if (end - b < 2) continue;
+        // The pale block has to be paler than the kerb it sits on, or it
+        // disappears into it and the whole thing reads as a row of red dashes
+        // rather than as a kerb. '#EDE7DA' against a stone kerb was invisible.
         const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
-        const colour = red ? '#B8453A' : '#EDE7DA';
+        const colour = red ? '#C6392C' : '#FFFFFF';
         fillRibbon(outerReach.slice(b, end), outerRoad.slice(b, end), colour);
         fillRibbon(innerRoad.slice(b, end), innerReach.slice(b, end), colour);
       }
       start = null;
+    }
+  }
+}
+
+/**
+ * Tyre stacks and barriers on the outside of the corners.
+ *
+ * The densest, most purposeful scenery in the reference is not scattered on the
+ * open ground at all — it is lined up where a car would leave the track. That is
+ * why it reads as a circuit rather than as a field with objects in it: every
+ * piece is there for a reason a driver understands.
+ *
+ * It also puts the objects where the eye already is. Scattering more things into
+ * the middle of a sand flat adds density nobody looks at; a stack of tyres at a
+ * corner exit is in frame every single lap.
+ */
+const SIDE_SPACING = 9;
+
+function drawTrackSide(): void {
+  const path = pathAtOffset(0);
+  const signed = signedCurvature();
+  const peak = signed.reduce((most, v) => Math.max(most, Math.abs(v)), 0) || 1;
+  const surface = surfaceFor(activeTrackId);
+
+  // Grouped at a few points, not strung evenly round the bend.
+  //
+  // Spacing them uniformly along every corner produced a necklace of identical
+  // dots — the same even-spacing signature that has made every generated thing
+  // in this project look generated. A real circuit stacks tyres in a few walls
+  // where cars actually leave the road, with long clear stretches between, so
+  // the placement is clustered: find the middle of each turning stretch, and put
+  // one group there.
+  const groups: number[] = [];
+  let runStart: number | null = null;
+  for (let i = 0; i <= path.length; i++) {
+    const sharpness = i < path.length ? Math.abs(signed[i] ?? 0) / peak : 0;
+    const turning = sharpness > 0.4;
+    if (turning && runStart === null) runStart = i;
+    if (!turning && runStart !== null) {
+      const span = i - runStart;
+      // A long corner earns two walls, a short one earns one.
+      // One wall per corner, however long the corner is.
+      //
+      // Two on a long bend put ten stacks round the outside of it, which is
+      // back to a necklace of evenly spaced objects — the thing this clustering
+      // was introduced to avoid.
+      if (span > 26) groups.push(runStart + Math.floor(span / 2));
+      runStart = null;
+    }
+  }
+
+  for (const centre of groups) {
+    // A wall is a short row of stacks with a barrier at each end.
+    for (let n = -1; n <= 1; n++) {
+      const i = (centre + n * SIDE_SPACING + path.length) % path.length;
+      const k = signed[i] ?? 0;
+      const a = path[(i - 1 + path.length) % path.length];
+      const b = path[(i + 1) % path.length];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const side = k < 0 ? 1 : -1;
+      const offset = (ROAD_HALF_WIDTH + APRON_WIDTH + 10) * side;
+      const p = project(
+        path[i].x + (-dy / length) * offset,
+        path[i].y + (dx / length) * offset
+      );
+
+      const ends = Math.abs(n) === 1;
+      drawArt(ends ? 'barrier' : 'tyres', p.x, p.y, (ends ? 30 : 19) * p.scale, {
+        angle: Math.atan2(dy, dx),
+        tint: surface.artTint,
+        // Barely tinted, and not desaturated: a tyre wall that has been pulled
+        // towards the ground colour is a row of grey washers.
+        tintStrength: 0.1,
+        desaturate: 0,
+        shadow: 0.3
+      });
     }
   }
 }
@@ -380,6 +462,7 @@ export function drawTrack(): void {
   if (paint.seams) drawSlabSeams(outerRoad, innerRoad);
   drawEdgeGrime();
   drawStartLine();
+  drawTrackSide();
 }
 
 /**

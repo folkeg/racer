@@ -59,6 +59,27 @@ const props: Record<string, WxImage | null> = {};
  */
 let onLoaded: (() => void) | null = null;
 
+/**
+ * Says so when a piece of art does not arrive.
+ *
+ * Every draw falls back to a hand-coded shape when its image is missing, which
+ * is the right behaviour and was also the cause of two long confusions: an
+ * asphalt tile that was never added to the loader and went unnoticed for days,
+ * and a whole sprite set failing to load under file:// while the game quietly
+ * drew the old shapes and looked exactly as it had before. A silent fallback
+ * hides the difference between "this is how it looks" and "this never loaded".
+ */
+let missing = 0;
+
+function warn(path: string): void {
+  missing += 1;
+  const console = (globalThis as { console?: { warn?: (...args: unknown[]) => void } }).console;
+  console?.warn?.(
+    `[art] ${path} did not load (${missing} so far). Falling back to the drawn shape.` +
+    ' Serving the game over http:// rather than opening the file directly usually fixes this.'
+  );
+}
+
 export function setArtListener(listener: () => void): void {
   onLoaded = listener;
 }
@@ -75,6 +96,7 @@ function load(name: string): void {
   };
   image.onerror = () => {
     loaded[name] = null;
+    warn(`assets/${name}-tile.png`);
   };
   image.src = `assets/${name}-tile.png`;
 }
@@ -90,6 +112,7 @@ function loadProp(name: string): void {
   };
   image.onerror = () => {
     props[name] = null;
+    warn(`assets/props/${name}.png`);
   };
   image.src = `assets/props/${name}.png`;
 }
