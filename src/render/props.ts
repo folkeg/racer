@@ -135,13 +135,18 @@ function buildProps(track: TrackId): Prop[] {
   const free = freeGround();
   if (free.length === 0) return [];
 
-  // Sparse, and spaced.
+  // Sparse, and clustered rather than evenly spaced.
   //
-  // The first pass took a sixth of every free grid point with no spacing rule
-  // and the beach came out looking like a jumble sale — scattered objects need
-  // to be scattered, and a clump of five reads as debris rather than as scenery.
-  // Two rules fix it: take few, and never take one within SPACING of one already
-  // taken.
+  // The first pass took a sixth of every free grid point with no spacing rule at
+  // all and the beach came out a jumble sale. The fix was a minimum separation,
+  // which solved that and introduced a subtler problem: everything ended up the
+  // same distance from everything else, and even spacing is the signature of a
+  // machine. Nothing in a natural landscape is evenly spaced — rocks come in
+  // drifts with bare ground between them.
+  //
+  // So most props keep their distance and some deliberately do not: roughly one
+  // in three is allowed to sit close to the one before it, which produces
+  // clumps and gaps instead of a lattice.
   const wanted = Math.min(free.length, Math.round(free.length * 0.045 * surface.propDensity));
   const props: Prop[] = [];
   const taken = new Set<number>();
@@ -150,11 +155,13 @@ function buildProps(track: TrackId): Prop[] {
     if (taken.has(index)) continue;
     taken.add(index);
     const spot = free[index];
+    const huddles = hash(n * 11.3 + 5) < 0.34;
+    const keepOut = huddles ? SPACING * 0.34 : SPACING;
     let crowded = false;
     for (const other of props) {
       const dx = other.x - spot.x;
       const dy = other.y - spot.y;
-      if (dx * dx + dy * dy < SPACING * SPACING) { crowded = true; break; }
+      if (dx * dx + dy * dy < keepOut * keepOut) { crowded = true; break; }
     }
     if (crowded) continue;
     if (!groundIsFree(spot.x, spot.y, 8)) continue;
@@ -164,7 +171,9 @@ function buildProps(track: TrackId): Prop[] {
       x: spot.x + (hash(index) - 0.5) * 11,
       y: spot.y + (hash(index * 2.1) - 0.5) * 11,
       kind: surface.props[Math.floor(roll * surface.props.length) % surface.props.length],
-      size: 0.8 + hash(index * 7.9) * 0.5
+      // A wide spread of sizes, because a stand of identically sized rocks is
+      // as obviously generated as an evenly spaced one.
+      size: 0.55 + Math.pow(hash(index * 7.9), 1.8) * 1.25
     });
   }
   // Far things first, so near ones overlap them.
@@ -224,7 +233,11 @@ function drawProp(prop: Prop): void {
   // what keeps this working while the images are in flight and on any platform
   // that cannot fetch them.
   const art = ART[prop.kind];
-  if (art && drawArt(art.name, x, y, art.width * prop.size * p.scale)) return;
+  const surface = surfaceFor(activeTrackId);
+  if (art && drawArt(art.name, x, y, art.width * prop.size * p.scale, {
+    tint: surface.artTint,
+    tintStrength: surface.artTintStrength
+  })) return;
 
   switch (prop.kind) {
     case 'rock': {

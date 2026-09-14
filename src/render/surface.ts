@@ -53,7 +53,7 @@ export interface Surface {
    * harbour has boats and gulls, the beach has crabs bolting across the sand,
    * the works yard has chimneys going. Same job, different animal.
    */
-  life: 'harbour' | 'crabs' | 'smoke' | 'none';
+  life: 'harbour' | 'crabs' | 'smoke' | 'birds' | 'none';
   /** The paving. */
   road: {
     /** Which baked tile the surface grain comes from. */
@@ -128,6 +128,12 @@ export interface Surface {
    * trade, not a bug, and not one to make silently.
    */
   boundary: import('./boundary').BoundaryKind;
+  /**
+   * What bought art is pulled towards, so it belongs to this world rather than
+   * to the pack it came from.
+   */
+  artTint: string;
+  artTintStrength: number;
   /** What stands about on the open ground, and how densely. */
   props: PropKind[];
   propDensity: number;
@@ -181,6 +187,8 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#9C8F62',
       planted: true
     },
+    artTint: '#7C9AA8',
+    artTintStrength: 0.34,
     boundary: 'none',
     props: [],
     propDensity: 0,
@@ -223,6 +231,8 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#D8C79A',
       planted: true
     },
+    artTint: '#C4A971',
+    artTintStrength: 0.38,
     boundary: 'none',
     props: ['rock', 'tuft'],
     propDensity: 1,
@@ -243,7 +253,7 @@ export const SURFACES: Record<string, Surface> = {
     mottle: 0.7,
     drift: [],
     afloat: false,
-    life: 'none',
+    life: 'birds',
     road: {
       tile: 'asphalt',
       surface: '#5A636C',
@@ -268,6 +278,8 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#6E767E',
       planted: false
     },
+    artTint: '#3C444C',
+    artTintStrength: 0.42,
     boundary: 'none',
     props: ['barrier', 'lamp', 'cone'],
     propDensity: 1.1,
@@ -306,6 +318,8 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#7A7264',
       planted: false
     },
+    artTint: '#5E5A51',
+    artTintStrength: 0.40,
     boundary: 'none',
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
@@ -321,7 +335,7 @@ export const SURFACES: Record<string, Surface> = {
     mottle: 0.8,
     drift: [],
     afloat: false,
-    life: 'none',
+    life: 'birds',
     road: {
       tile: 'concrete',
       surface: '#CFCBBE',
@@ -343,6 +357,8 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#A29A72',
       planted: true
     },
+    artTint: '#5E7F45',
+    artTintStrength: 0.34,
     boundary: 'none',
     props: ['tree', 'bush', 'rock'],
     propDensity: 1,

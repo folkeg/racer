@@ -6,14 +6,17 @@ import { PLAYER_MAX_SPEED } from '../config';
 import { tuning } from '../difficulty';
 import { aiCars, baseCruiseSpeed, player } from '../state';
 import { COLORS } from '../theme';
-import { forwardPathDistance, sampleAtDistance } from '../track';
+import { activeTrackId, forwardPathDistance, sampleAtDistance } from '../track';
 import type { AiCar, VehicleStyle } from '../types';
 import { CAR_BODY_DEPTH, CAR_SHADOW_DISTANCE, SHADOW_X, SHADOW_Y, localLight } from './light';
 import { roundRect } from './primitives';
 import { CAR_LENGTH, CAR_WIDTH, vehicleSprite } from './sprites';
 import { project, projectedHeading } from './camera';
+import { drawArt } from './art';
+import { surfaceFor } from './surface';
 
 const PLAYER_STYLE: VehicleStyle = {
+  art: 'car-player',
   body: COLORS.player,
   cabin: COLORS.playerLight,
   window: COLORS.window,
@@ -24,6 +27,7 @@ const PLAYER_STYLE: VehicleStyle = {
 };
 
 const AI_STYLE: VehicleStyle = {
+  art: 'car-blue',
   body: COLORS.ai,
   cabin: COLORS.aiLight,
   window: COLORS.aiWindow,
@@ -141,6 +145,14 @@ function drawVehicle(
   ctx.restore();
 }
 
+/**
+ * Which drawing each car uses.
+ *
+ * The cars were the last thing on the board still drawn by hand, and they are
+ * the object a player looks at most — so as long as they were in their own
+ * visual language nothing else could make the picture cohere. These are from the
+ * same pack as everything else standing on the board.
+ */
 /** Sprite playback: one shadow blit, one body blit, plus any indicator. */
 function drawSpriteVehicle(
   p: { x: number; y: number; angle: number },
@@ -167,7 +179,23 @@ function drawSpriteVehicle(
   ctx.globalAlpha = alpha;
   ctx.translate(p.x, p.y);
   ctx.rotate(p.angle);
-  ctx.drawImage(sprite.image as unknown as CanvasImageSource, -halfL, -halfW, length, width);
+  // The drawing if it is there, the hand-built sprite otherwise. The artwork
+  // points north and the car's own space runs along +x, so it turns a quarter.
+  const artName = style.art ?? '';
+  // Cars take the lighting pass like everything else, but almost none of the
+  // tint: the player's car is the one thing on the board that has to stay
+  // instantly findable, and a field of traffic that has been pulled towards the
+  // ground colour is a field of traffic you cannot count.
+  const world = surfaceFor(activeTrackId);
+  if (!artName || !drawArt(artName, 0, 0, width, {
+    angle: Math.PI / 2,
+    shadow: 0,
+    tint: world.artTint,
+    tintStrength: 0.08,
+    desaturate: 0
+  })) {
+    ctx.drawImage(sprite.image as unknown as CanvasImageSource, -halfL, -halfW, length, width);
+  }
 
   if (indicatorDirection !== 0 && indicatorOn) {
     ctx.fillStyle = '#FFD55C';

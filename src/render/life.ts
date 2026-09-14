@@ -314,6 +314,10 @@ export function drawLivingWater(): void {
   clipToBoard();
   if (life === 'harbour') drawGulls();
   else if (life === 'crabs') drawCrabs();
-  else if (life === 'smoke') drawSmoke();
+  else if (life === 'birds') drawGulls();
+  else if (life === 'smoke') {
+    drawSmoke();
+    drawGulls();
+  }
   ctx.restore();
 }

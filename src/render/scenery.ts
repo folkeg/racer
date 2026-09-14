@@ -647,6 +647,22 @@ export function drawSceneLight(): void {
   ctx.fillStyle = sun;
   ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
 
+  // One grain over everything.
+  //
+  // This is the pass that makes a frame read as one image rather than as parts
+  // assembled: ground, paving, water, bought sprites and hand-drawn cars all
+  // come from different places and carry different amounts of noise, and a
+  // single film of it laid over the lot is what a photograph does to a scene.
+  // Very low alpha — it is meant to be felt, not seen.
+  const film = groundTexture(ctx, 'concrete');
+  if (film) {
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = film;
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+    ctx.restore();
+  }
+
   const vignette = ctx.createRadialGradient(
     DESIGN_W * 0.5, DESIGN_H * 0.46, DESIGN_H * 0.30,
     DESIGN_W * 0.5, DESIGN_H * 0.46, DESIGN_H * 0.78

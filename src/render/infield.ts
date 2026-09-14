@@ -601,7 +601,12 @@ function drawStructure(structure: Structure): void {
       rows.forEach(([cx, cy], i) => {
         const tx = x + cx * size * 2.1;
         const ty = y + cy * size * 2.1;
-        if (drawArt(marquees[i], tx, ty, size * 2.4, { shadow: 0.3 })) return;
+        const world = surfaceFor(activeTrackId);
+        if (drawArt(marquees[i], tx, ty, size * 2.4, {
+          shadow: 0.3,
+          tint: world.artTint,
+          tintStrength: world.artTintStrength
+        })) return;
         shade(tx, ty + size * 0.42, size * 0.58, size * 0.26, 0.26);
         pitchedRoof(tx, ty, size, 4, Math.PI / 4, [236, 232, 222], 0.9);
       });

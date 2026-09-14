@@ -3531,6 +3531,8 @@ var HarborLoop = (() => {
         shelf: "#9C8F62",
         planted: true
       },
+      artTint: "#7C9AA8",
+      artTintStrength: 0.34,
       boundary: "none",
       props: [],
       propDensity: 0,
@@ -3572,6 +3574,8 @@ var HarborLoop = (() => {
         shelf: "#D8C79A",
         planted: true
       },
+      artTint: "#C4A971",
+      artTintStrength: 0.38,
       boundary: "none",
       props: ["rock", "tuft"],
       propDensity: 1,
@@ -3591,7 +3595,7 @@ var HarborLoop = (() => {
       mottle: 0.7,
       drift: [],
       afloat: false,
-      life: "none",
+      life: "birds",
       road: {
         tile: "asphalt",
         surface: "#5A636C",
@@ -3616,6 +3620,8 @@ var HarborLoop = (() => {
         shelf: "#6E767E",
         planted: false
       },
+      artTint: "#3C444C",
+      artTintStrength: 0.42,
       boundary: "none",
       props: ["barrier", "lamp", "cone"],
       propDensity: 1.1,
@@ -3653,6 +3659,8 @@ var HarborLoop = (() => {
         shelf: "#7A7264",
         planted: false
       },
+      artTint: "#5E5A51",
+      artTintStrength: 0.4,
       boundary: "none",
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
@@ -3667,7 +3675,7 @@ var HarborLoop = (() => {
       mottle: 0.8,
       drift: [],
       afloat: false,
-      life: "none",
+      life: "birds",
       road: {
         tile: "concrete",
         surface: "#CFCBBE",
@@ -3689,6 +3697,8 @@ var HarborLoop = (() => {
         shelf: "#A29A72",
         planted: true
       },
+      artTint: "#5E7F45",
+      artTintStrength: 0.34,
       boundary: "none",
       props: ["tree", "bush", "rock"],
       propDensity: 1,
@@ -3708,8 +3718,41 @@ var HarborLoop = (() => {
   }
 
   // src/render/art.ts
+  var harmonised = /* @__PURE__ */ new Map();
+  function harmonise(name, image, tint, strength, desaturate) {
+    const key2 = `${name}|${tint}|${strength}|${desaturate}`;
+    const cached3 = harmonised.get(key2);
+    if (cached3) return cached3;
+    const canvas2 = createOffscreenCanvas(image.width, image.height);
+    const target = canvas2 ? canvas2.getContext("2d") : null;
+    if (!canvas2 || !target) return null;
+    const source = image;
+    target.drawImage(source, 0, 0);
+    const light = target.createLinearGradient(0, 0, image.width, image.height);
+    light.addColorStop(0, "rgb(255,252,244)");
+    light.addColorStop(0.5, "rgb(206,204,198)");
+    light.addColorStop(1, "rgb(150,150,148)");
+    target.globalCompositeOperation = "multiply";
+    target.fillStyle = light;
+    target.fillRect(0, 0, image.width, image.height);
+    target.globalCompositeOperation = "source-atop";
+    if (desaturate > 0) {
+      target.globalAlpha = desaturate;
+      target.fillStyle = "#8E8E8A";
+      target.fillRect(0, 0, image.width, image.height);
+    }
+    target.globalAlpha = strength;
+    target.fillStyle = tint;
+    target.fillRect(0, 0, image.width, image.height);
+    target.globalAlpha = 1;
+    target.globalCompositeOperation = "destination-in";
+    target.drawImage(source, 0, 0);
+    target.globalCompositeOperation = "source-over";
+    harmonised.set(key2, canvas2);
+    return canvas2;
+  }
   function drawArt(name, x, y, width, options = {}) {
-    var _a;
+    var _a, _b, _c;
     const image = propArt(name);
     if (!image || !image.width) return false;
     const height = width * (image.height / image.width);
@@ -3730,12 +3773,13 @@ var HarborLoop = (() => {
       ctx.fill();
       ctx.restore();
     }
+    const toned = options.tint ? harmonise(name, image, options.tint, (_b = options.tintStrength) != null ? _b : 0.3, (_c = options.desaturate) != null ? _c : 0.22) : null;
     ctx.save();
     if (options.alpha !== void 0) ctx.globalAlpha = options.alpha;
     ctx.translate(x, y);
     if (options.angle) ctx.rotate(options.angle);
     ctx.drawImage(
-      image,
+      toned != null ? toned : image,
       -width / 2,
       -height / 2,
       width,
@@ -3812,11 +3856,13 @@ var HarborLoop = (() => {
       if (taken.has(index)) continue;
       taken.add(index);
       const spot = free[index];
+      const huddles = hash(n * 11.3 + 5) < 0.34;
+      const keepOut = huddles ? SPACING * 0.34 : SPACING;
       let crowded = false;
       for (const other of props2) {
         const dx = other.x - spot.x;
         const dy = other.y - spot.y;
-        if (dx * dx + dy * dy < SPACING * SPACING) {
+        if (dx * dx + dy * dy < keepOut * keepOut) {
           crowded = true;
           break;
         }
@@ -3829,7 +3875,9 @@ var HarborLoop = (() => {
         x: spot.x + (hash(index) - 0.5) * 11,
         y: spot.y + (hash(index * 2.1) - 0.5) * 11,
         kind: surface.props[Math.floor(roll * surface.props.length) % surface.props.length],
-        size: 0.8 + hash(index * 7.9) * 0.5
+        // A wide spread of sizes, because a stand of identically sized rocks is
+        // as obviously generated as an evenly spaced one.
+        size: 0.55 + Math.pow(hash(index * 7.9), 1.8) * 1.25
       });
     }
     props2.sort((a, b) => a.y - b.y);
@@ -3870,7 +3918,11 @@ var HarborLoop = (() => {
     const x = p.x;
     const y = p.y;
     const art = ART[prop.kind];
-    if (art && drawArt(art.name, x, y, art.width * prop.size * p.scale)) return;
+    const surface = surfaceFor(activeTrackId);
+    if (art && drawArt(art.name, x, y, art.width * prop.size * p.scale, {
+      tint: surface.artTint,
+      tintStrength: surface.artTintStrength
+    })) return;
     switch (prop.kind) {
       case "rock": {
         shadow(x, y + 1.5 * s, 5.5 * s, 3 * s);
@@ -4371,7 +4423,12 @@ var HarborLoop = (() => {
         rows.forEach(([cx, cy], i) => {
           const tx = x + cx * size * 2.1;
           const ty = y + cy * size * 2.1;
-          if (drawArt(marquees[i], tx, ty, size * 2.4, { shadow: 0.3 })) return;
+          const world = surfaceFor(activeTrackId);
+          if (drawArt(marquees[i], tx, ty, size * 2.4, {
+            shadow: 0.3,
+            tint: world.artTint,
+            tintStrength: world.artTintStrength
+          })) return;
           shade(tx, ty + size * 0.42, size * 0.58, size * 0.26, 0.26);
           pitchedRoof(tx, ty, size, 4, Math.PI / 4, [236, 232, 222], 0.9);
         });
@@ -4913,6 +4970,14 @@ var HarborLoop = (() => {
     sun.addColorStop(1, "rgba(255,240,205,0)");
     ctx.fillStyle = sun;
     ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+    const film = groundTexture(ctx, "concrete");
+    if (film) {
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = film;
+      ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+      ctx.restore();
+    }
     const vignette = ctx.createRadialGradient(
       DESIGN_W * 0.5,
       DESIGN_H * 0.46,
@@ -5108,7 +5173,11 @@ var HarborLoop = (() => {
     clipToBoard();
     if (life === "harbour") drawGulls();
     else if (life === "crabs") drawCrabs();
-    else if (life === "smoke") drawSmoke();
+    else if (life === "birds") drawGulls();
+    else if (life === "smoke") {
+      drawSmoke();
+      drawGulls();
+    }
     ctx.restore();
   }
 
@@ -6747,6 +6816,7 @@ var HarborLoop = (() => {
 
   // src/render/vehicles.ts
   var PLAYER_STYLE = {
+    art: "car-player",
     body: COLORS.player,
     cabin: COLORS.playerLight,
     window: COLORS.window,
@@ -6756,6 +6826,7 @@ var HarborLoop = (() => {
     rim: "#FFC9B2"
   };
   var AI_STYLE = {
+    art: "car-blue",
     body: COLORS.ai,
     cabin: COLORS.aiLight,
     window: COLORS.aiWindow,
@@ -6843,6 +6914,7 @@ var HarborLoop = (() => {
     ctx.restore();
   }
   function drawSpriteVehicle(p, sprite, style, alpha, indicatorDirection, indicatorOn, swell = 1) {
+    var _a;
     const length = CAR_LENGTH * swell;
     const width = CAR_WIDTH * swell;
     const halfL = length / 2;
@@ -6857,7 +6929,17 @@ var HarborLoop = (() => {
     ctx.globalAlpha = alpha;
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
-    ctx.drawImage(sprite.image, -halfL, -halfW, length, width);
+    const artName = (_a = style.art) != null ? _a : "";
+    const world = surfaceFor(activeTrackId);
+    if (!artName || !drawArt(artName, 0, 0, width, {
+      angle: Math.PI / 2,
+      shadow: 0,
+      tint: world.artTint,
+      tintStrength: 0.08,
+      desaturate: 0
+    })) {
+      ctx.drawImage(sprite.image, -halfL, -halfW, length, width);
+    }
     if (indicatorDirection !== 0 && indicatorOn) {
       ctx.fillStyle = "#FFD55C";
       const indicatorY = indicatorDirection > 0 ? halfW - 0.4 : -halfW - 1;

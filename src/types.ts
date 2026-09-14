@@ -79,6 +79,8 @@ export interface AiBlueprint {
 }
 
 export interface VehicleStyle {
+  /** Name of the drawing to use, if there is one. */
+  art?: string;
   body: string;
   cabin: string;
   window: string;
