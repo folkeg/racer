@@ -3531,7 +3531,7 @@ var HarborLoop = (() => {
         shelf: "#9C8F62",
         planted: true
       },
-      boundary: "stand",
+      boundary: "none",
       props: [],
       propDensity: 0,
       structures: [],
@@ -3572,7 +3572,7 @@ var HarborLoop = (() => {
         shelf: "#D8C79A",
         planted: true
       },
-      boundary: "stand",
+      boundary: "none",
       props: ["rock", "tuft"],
       propDensity: 1,
       structures: ["lagoon", "pavilion", "dome"],
@@ -3616,7 +3616,7 @@ var HarborLoop = (() => {
         shelf: "#6E767E",
         planted: false
       },
-      boundary: "stand",
+      boundary: "none",
       props: ["barrier", "lamp", "cone"],
       propDensity: 1.1,
       structures: ["lawn", "hall", "dome"],
@@ -3653,7 +3653,7 @@ var HarborLoop = (() => {
         shelf: "#7A7264",
         planted: false
       },
-      boundary: "stand",
+      boundary: "none",
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
       structures: ["containers", "hall", "tank"],
@@ -3689,7 +3689,7 @@ var HarborLoop = (() => {
         shelf: "#A29A72",
         planted: true
       },
-      boundary: "stand",
+      boundary: "none",
       props: ["tree", "bush", "rock"],
       propDensity: 1,
       structures: ["lagoon", "pavilion"],

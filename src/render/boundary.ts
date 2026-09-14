@@ -1,10 +1,23 @@
 /**
- * The wall around the world.
+ * The wall around the world. Three attempts, three failures, and the idea is
+ * retired rather than varied a fourth time.
  *
- * In the reference the outfield is not landscape, it is architecture: an
- * unbroken ring of grandstands with the crowd in them, so no part of the frame
- * is empty and the circuit is plainly inside something. Ours faded out into open
- * ground, which is why the board had no edge and therefore no interior.
+ * The reference bounds its board with an unbroken ring of grandstands, and every
+ * attempt to do the same here has come out as a picture frame. The first was
+ * built from rectangles and ellipses and gave the beach scalloped edging and the
+ * works yard bathroom tiling. The second was the same with different numbers.
+ * The third used a proper drawn grandstand with a crowd in it — and came out as
+ * a row of boxes with crowds inside them, because the art was never the problem.
+ *
+ * What the three share is the structure, and it is the structure that fails: a
+ * line of identical bordered units, butted together, following the edge of a
+ * rectangle, all the way round. That is the definition of a border pattern. The
+ * reference's stands work because they follow the *circuit* — curving with it,
+ * at varying distance, broken by other buildings, some of them occluded — and
+ * because they are deep enough to have an inside.
+ *
+ * There is no room for that here without making the track smaller, which is a
+ * trade the code cannot make on its own. The renderer stays; nothing calls it.
  */
 
 import { DESIGN_W } from '../platform';

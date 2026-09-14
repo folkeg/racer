@@ -113,7 +113,7 @@ export interface Surface {
     planted: boolean;
   };
   /**
-   * The ring of structure around the frame.
+   * The ring of structure around the frame. Nothing uses it.
    *
    * Nothing uses this. Two attempts have now been made at walling the board in
    * and both failed the same way, which is worth recording rather than trying a
@@ -181,7 +181,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#9C8F62',
       planted: true
     },
-    boundary: 'stand',
+    boundary: 'none',
     props: [],
     propDensity: 0,
     structures: [],
@@ -223,7 +223,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#D8C79A',
       planted: true
     },
-    boundary: 'stand',
+    boundary: 'none',
     props: ['rock', 'tuft'],
     propDensity: 1,
     structures: ['lagoon', 'pavilion', 'dome'],
@@ -268,7 +268,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#6E767E',
       planted: false
     },
-    boundary: 'stand',
+    boundary: 'none',
     props: ['barrier', 'lamp', 'cone'],
     propDensity: 1.1,
     structures: ['lawn', 'hall', 'dome'],
@@ -306,7 +306,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#7A7264',
       planted: false
     },
-    boundary: 'stand',
+    boundary: 'none',
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
     structures: ['containers', 'hall', 'tank'],
@@ -343,7 +343,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#A29A72',
       planted: true
     },
-    boundary: 'stand',
+    boundary: 'none',
     props: ['tree', 'bush', 'rock'],
     propDensity: 1,
     structures: ['lagoon', 'pavilion'],
