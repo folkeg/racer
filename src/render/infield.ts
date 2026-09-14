@@ -24,7 +24,7 @@ import { activeTrackId, pathAtOffset } from '../track';
 import type { TrackId } from '../tracks';
 import { lateralUnit, project } from './camera';
 import { SHADOW_X, SHADOW_Y } from './light';
-import { freeGround } from './props';
+import { claimGround, freeGround, releaseGround } from './props';
 import { BOARD_BOTTOM, BOARD_TOP } from './scenery';
 import { groundTexture } from './sprites';
 import { surfaceFor } from './surface';
@@ -47,6 +47,8 @@ interface Structure {
 
 /** A structure needs this much clearance before it is worth placing one. */
 const MIN_REACH = 26;
+/** Run-off plus breathing room, which no structure may eat into. */
+const APRON_ALLOWANCE = 34;
 /** And the infield needs this many free points to be a room rather than a slot. */
 const MIN_ROOM = 10;
 
@@ -112,7 +114,15 @@ function buildStructures(
       spot.y - BOARD_TOP,
       BOARD_BOTTOM - spot.y
     );
-    const reach = Math.min(spot.clearance * 0.72, edgeRoom * 0.78, 46);
+    // The apron counts as the circuit's, not as spare ground.
+    //
+    // Clearance is measured to the tarmac, and the run-off now reaches up to 26
+    // units past it, so sizing straight off clearance let a rotunda sit with its
+    // wall against the edge of the racing — which is the one place a building
+    // has no business being. What is available is what is left after the apron
+    // and a margin.
+    const usable = spot.clearance - APRON_ALLOWANCE;
+    const reach = Math.min(usable * 0.8, edgeRoom * 0.78, 46);
     if (reach < minReach * 0.62) continue;
 
     placed.push({
@@ -128,8 +138,13 @@ function buildStructures(
 function ensure(): void {
   if (cachedTrack === activeTrackId) return;
   const surface = surfaceFor(activeTrackId);
+  releaseGround();
   cached = buildStructures(true, surface.structures, MIN_REACH, 3);
   cachedOutfield = buildStructures(false, surface.outfield, 21, 2);
+  // Claim what has been built on, so nothing is scattered on top of it later.
+  for (const structure of [...cached, ...cachedOutfield]) {
+    claimGround(structure.x, structure.y, structure.reach * 1.15);
+  }
   cachedTrack = activeTrackId;
 }
 
@@ -173,17 +188,24 @@ function drawServiceRoad(placed: Structure[]): void {
   // a flat fill between two textured surfaces does not read as a surface at all.
   // For the thing whose entire job is to say "these buildings can be reached",
   // that was worth catching.
-  stroke(15, 'rgba(8,14,20,0.16)');
-  stroke(12.5, paint.apronEdge);
-  stroke(10, paint.apron);
+  stroke(19, 'rgba(8,14,20,0.16)');
+  stroke(16, paint.apronEdge);
+  stroke(13, paint.apron);
 
   const grain = groundTexture(ctx, paint.tile);
   if (grain) {
     ctx.save();
     ctx.globalAlpha = 0.5;
-    stroke(10, grain);
+    stroke(13, grain);
     ctx.restore();
   }
+
+  // A broken centre line. A road without one is a paved strip; it is the single
+  // cheapest mark that says vehicles use this and which way they go.
+  ctx.save();
+  ctx.setLineDash([7 * lateralUnit(), 6 * lateralUnit()]);
+  stroke(0.9, 'rgba(240,236,224,0.42)');
+  ctx.restore();
 
   // Pads where it arrives, so the buildings stand on it rather than beside it.
   //
@@ -452,13 +474,28 @@ function drawStructure(structure: Structure): void {
       // top of it. Without that tile it was a flat turquoise disc — a plastic
       // paddling pool, the same plain-fill failure as everything else, and the
       // more saturated the colour the more obvious it was.
+      // An outline, not an ellipse.
+      //
+      // A perfect ellipse of water is a swimming pool however it is shaded, and
+      // that is what made it look inert: nothing natural has a constant radius.
+      // Three harmonics of wobble on the radius is enough to break it, and the
+      // shape stays the same from run to run because the phases are fixed.
       const water = (scale: number): void => {
         ctx.beginPath();
-        ctx.ellipse(x, y, r * 1.12 * scale, r * 0.76 * scale, 0.2, 0, Math.PI * 2);
+        const steps = 44;
+        for (let i = 0; i <= steps; i++) {
+          const t = (i / steps) * Math.PI * 2;
+          const wobble = 1 + 0.10 * Math.sin(t * 3 + 0.7) + 0.06 * Math.sin(t * 5 + 2.1)
+            + 0.04 * Math.sin(t * 7 + 4.3);
+          const px = x + Math.cos(t) * r * 1.12 * scale * wobble;
+          const py = y + Math.sin(t) * r * 0.76 * scale * wobble;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
       };
       ctx.fillStyle = '#E6D6A8';
-      ctx.beginPath();
-      ctx.ellipse(x, y, r * 1.3, r * 0.92, 0.2, 0, Math.PI * 2);
+      water(1.16);
       ctx.fill();
       ctx.fillStyle = '#58C0C4';
       water(1);

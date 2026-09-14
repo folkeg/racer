@@ -24,7 +24,7 @@ import { trackById } from '../tracks';
 import { project } from './camera';
 import { clipToBoard, drawBoardGround, drawBoat, drawGroundSurface } from './scenery';
 import { surfaceFor } from './surface';
-import { chimneys, freeGround } from './props';
+import { chimneys, freeGround, groundIsFree } from './props';
 
 /** Seconds since the circuit loaded. Drives every phase below. */
 let elapsed = 0;
@@ -213,7 +213,9 @@ function drawCrabs(): void {
   // deep enough that a full-length dash still lands clear of the tarmac. They
   // used to be hashed straight out of the design area, which is why they were
   // running across the racing line.
-  const ground = freeGround().filter((spot) => spot.clearance > CRAB_DASH + 14);
+  const ground = freeGround().filter(
+    (spot) => spot.clearance > CRAB_DASH + 14 && groundIsFree(spot.x, spot.y, CRAB_DASH)
+  );
   if (ground.length === 0) return;
 
   for (let i = 0; i < CRABS; i++) {

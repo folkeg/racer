@@ -3668,6 +3668,22 @@ var HarborLoop = (() => {
   // src/render/props.ts
   var EDGE_MARGIN = 14;
   var SPACING = 34;
+  var claimed = [];
+  function claimGround(x, y, r) {
+    claimed.push({ x, y, r });
+  }
+  function releaseGround() {
+    claimed.length = 0;
+  }
+  function groundIsFree(x, y, margin = 0) {
+    for (const spot of claimed) {
+      const dx = spot.x - x;
+      const dy = spot.y - y;
+      const reach = spot.r + margin;
+      if (dx * dx + dy * dy < reach * reach) return false;
+    }
+    return true;
+  }
   var cachedTrack = null;
   var cached = [];
   var cachedFree = [];
@@ -3726,6 +3742,7 @@ var HarborLoop = (() => {
         }
       }
       if (crowded) continue;
+      if (!groundIsFree(spot.x, spot.y, 8)) continue;
       const roll = hash(index * 5.3 + 2);
       props.push({
         // Jittered off the grid, or the scatter reads as a lattice.
@@ -3880,6 +3897,7 @@ var HarborLoop = (() => {
   // src/render/infield.ts
   var GROUND_KINDS = ["lagoon", "lawn"];
   var MIN_REACH = 26;
+  var APRON_ALLOWANCE = 34;
   var MIN_ROOM = 10;
   var cachedTrack2 = null;
   var cached2 = [];
@@ -3915,7 +3933,8 @@ var HarborLoop = (() => {
         spot.y - BOARD_TOP,
         BOARD_BOTTOM - spot.y
       );
-      const reach = Math.min(spot.clearance * 0.72, edgeRoom * 0.78, 46);
+      const usable = spot.clearance - APRON_ALLOWANCE;
+      const reach = Math.min(usable * 0.8, edgeRoom * 0.78, 46);
       if (reach < minReach * 0.62) continue;
       placed.push({
         x: spot.x,
@@ -3929,8 +3948,12 @@ var HarborLoop = (() => {
   function ensure() {
     if (cachedTrack2 === activeTrackId) return;
     const surface = surfaceFor(activeTrackId);
+    releaseGround();
     cached2 = buildStructures(true, surface.structures, MIN_REACH, 3);
     cachedOutfield = buildStructures(false, surface.outfield, 21, 2);
+    for (const structure of [...cached2, ...cachedOutfield]) {
+      claimGround(structure.x, structure.y, structure.reach * 1.15);
+    }
     cachedTrack2 = activeTrackId;
   }
   function structures() {
@@ -3961,16 +3984,20 @@ var HarborLoop = (() => {
       ctx.stroke();
       ctx.restore();
     };
-    stroke(15, "rgba(8,14,20,0.16)");
-    stroke(12.5, paint.apronEdge);
-    stroke(10, paint.apron);
+    stroke(19, "rgba(8,14,20,0.16)");
+    stroke(16, paint.apronEdge);
+    stroke(13, paint.apron);
     const grain = groundTexture(ctx, paint.tile);
     if (grain) {
       ctx.save();
       ctx.globalAlpha = 0.5;
-      stroke(10, grain);
+      stroke(13, grain);
       ctx.restore();
     }
+    ctx.save();
+    ctx.setLineDash([7 * lateralUnit(), 6 * lateralUnit()]);
+    stroke(0.9, "rgba(240,236,224,0.42)");
+    ctx.restore();
     const squared = !surfaceFor(activeTrackId).island.planted;
     for (const structure of placed) {
       if (GROUND_KINDS.includes(structure.kind)) continue;
@@ -4156,11 +4183,19 @@ var HarborLoop = (() => {
       case "lagoon": {
         const water = (scale2) => {
           ctx.beginPath();
-          ctx.ellipse(x, y, r * 1.12 * scale2, r * 0.76 * scale2, 0.2, 0, Math.PI * 2);
+          const steps = 44;
+          for (let i = 0; i <= steps; i++) {
+            const t = i / steps * Math.PI * 2;
+            const wobble = 1 + 0.1 * Math.sin(t * 3 + 0.7) + 0.06 * Math.sin(t * 5 + 2.1) + 0.04 * Math.sin(t * 7 + 4.3);
+            const px = x + Math.cos(t) * r * 1.12 * scale2 * wobble;
+            const py = y + Math.sin(t) * r * 0.76 * scale2 * wobble;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
         };
         ctx.fillStyle = "#E6D6A8";
-        ctx.beginPath();
-        ctx.ellipse(x, y, r * 1.3, r * 0.92, 0.2, 0, Math.PI * 2);
+        water(1.16);
         ctx.fill();
         ctx.fillStyle = "#58C0C4";
         water(1);
@@ -4877,7 +4912,9 @@ var HarborLoop = (() => {
   var CRABS = 9;
   var CRAB_DASH = 16;
   function drawCrabs() {
-    const ground = freeGround().filter((spot) => spot.clearance > CRAB_DASH + 14);
+    const ground = freeGround().filter(
+      (spot) => spot.clearance > CRAB_DASH + 14 && groundIsFree(spot.x, spot.y, CRAB_DASH)
+    );
     if (ground.length === 0) return;
     for (let i = 0; i < CRABS; i++) {
       const p = phase(i * 3 + 5);

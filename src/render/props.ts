@@ -47,6 +47,34 @@ export interface FreeSpot {
   clearance: number;
 }
 
+/**
+ * Ground already taken by something built.
+ *
+ * The free-ground scan only knows about tarmac and islands, so a crab picked a
+ * home on top of the dome and sat there — and the props scatter could just as
+ * easily have put a rock on a tent roof. Whatever places a structure claims the
+ * ground under it here, and everything scattered afterwards asks first.
+ */
+const claimed: Array<{ x: number; y: number; r: number }> = [];
+
+export function claimGround(x: number, y: number, r: number): void {
+  claimed.push({ x, y, r });
+}
+
+export function releaseGround(): void {
+  claimed.length = 0;
+}
+
+export function groundIsFree(x: number, y: number, margin = 0): boolean {
+  for (const spot of claimed) {
+    const dx = spot.x - x;
+    const dy = spot.y - y;
+    const reach = spot.r + margin;
+    if (dx * dx + dy * dy < reach * reach) return false;
+  }
+  return true;
+}
+
 let cachedTrack: TrackId | null = null;
 let cached: Prop[] = [];
 let cachedFree: FreeSpot[] = [];
@@ -128,6 +156,7 @@ function buildProps(track: TrackId): Prop[] {
       if (dx * dx + dy * dy < SPACING * SPACING) { crowded = true; break; }
     }
     if (crowded) continue;
+    if (!groundIsFree(spot.x, spot.y, 8)) continue;
     const roll = hash(index * 5.3 + 2);
     props.push({
       // Jittered off the grid, or the scatter reads as a lattice.
