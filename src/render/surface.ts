@@ -140,6 +140,19 @@ export interface Surface {
   /**
    * The large structures inside the circuit.
    *
+   * Only kinds that have real artwork behind them are used now. Everything
+   * hand-drawn was tried and none of it survived being looked at: a hall, a
+   * storage tank, a rotunda, a container stack and a chimney were each named by
+   * the player as "what on earth is that". The reason is not the drawing, it is
+   * that a grey rectangle does not become a factory and a grey disc does not
+   * become a tank, at any level of polish. A car reads at thirty pixels because
+   * everyone knows the silhouette of a car; nobody knows the silhouette of "a
+   * works building seen from above".
+   *
+   * So the infield is a paddock — marquees, trees, water — which is what a
+   * circuit's infield actually holds, and all of it is drawn by someone who was
+   * looking at the thing they drew.
+   *
    * Empty for a world that should stay bare, and ignored by any circuit whose
    * interior is a set of narrow slots rather than one room.
    */
@@ -236,8 +249,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'none',
     props: ['rock'],
     propDensity: 0.4,
-    structures: ['lagoon', 'pavilion', 'dome'],
-    outfield: ['pavilion', 'dome']
+    structures: ['lagoon', 'pavilion'],
+    outfield: ['pavilion']
   },
 
   city: {
@@ -281,10 +294,10 @@ export const SURFACES: Record<string, Surface> = {
     artTint: '#3C444C',
     artTintStrength: 0.20,
     boundary: 'none',
-    props: ['lamp'],
+    props: ['tree'],
     propDensity: 0.35,
-    structures: ['lawn', 'hall', 'dome'],
-    outfield: ['hall', 'lawn']
+    structures: ['pavilion'],
+    outfield: ['pavilion']
   },
 
   industrial: {
@@ -321,14 +334,14 @@ export const SURFACES: Record<string, Surface> = {
     artTint: '#5E5A51',
     artTintStrength: 0.19,
     boundary: 'none',
-    props: ['chimney'],
+    props: ['rock'],
     // Halved. Grouping the small props multiplied what was on the ground by
     // three or four without changing the count, and a yard carpeted in orange
     // clusters turns the accent colour into noise — the containers were meant
     // to be the one thing the eye goes to.
     propDensity: 0.3,
-    structures: ['containers', 'hall', 'tank'],
-    outfield: ['tank', 'containers']
+    structures: ['pavilion'],
+    outfield: ['pavilion']
   },
 
   meadow: {

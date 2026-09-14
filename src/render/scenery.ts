@@ -330,7 +330,15 @@ export function drawGroundSurface(elapsed: number): void {
   // somewhere to come from. The caller's board clip is what keeps that overhang
   // from painting past the end of the gradient — and from costing 3.72x the fill
   // for pixels nobody can see.
-  for (const [speedX, speedY, alpha] of surface.drift) {
+  // A ground that does not move still has a material.
+  //
+  // The tile was only ever drawn inside this loop, and a static world declares
+  // an empty drift list — so the city, the works yard and the meadow have been
+  // running with no ground texture at all since the day they were added. It did
+  // not fail, it just quietly drew the gradient and stopped, which is exactly
+  // what "the background is flat grey with no grain in it" looks like.
+  const layers = surface.drift.length > 0 ? surface.drift : STATIC_GROUND;
+  for (const [speedX, speedY, alpha] of layers) {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(((elapsed * speedX) % tile) - tile, ((elapsed * speedY) % tile) - tile);
@@ -339,6 +347,9 @@ export function drawGroundSurface(elapsed: number): void {
     ctx.restore();
   }
 }
+
+/** What a ground that holds still gets instead of a scroll. */
+const STATIC_GROUND: Array<[number, number, number]> = [[0, 0, 0.5]];
 
 /** Fixed high and low ground: [x, y, radius, "r,g,b", alpha]. */
 const GROUND_PATCHES: Array<[number, number, number, string, number]> = [

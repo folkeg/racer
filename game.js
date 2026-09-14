@@ -3591,8 +3591,8 @@ var HarborLoop = (() => {
       boundary: "none",
       props: ["rock"],
       propDensity: 0.4,
-      structures: ["lagoon", "pavilion", "dome"],
-      outfield: ["pavilion", "dome"]
+      structures: ["lagoon", "pavilion"],
+      outfield: ["pavilion"]
     },
     city: {
       // Night-ish tarmac yard. The ground is the same asphalt as the road, one
@@ -3635,10 +3635,10 @@ var HarborLoop = (() => {
       artTint: "#3C444C",
       artTintStrength: 0.2,
       boundary: "none",
-      props: ["lamp"],
+      props: ["tree"],
       propDensity: 0.35,
-      structures: ["lawn", "hall", "dome"],
-      outfield: ["hall", "lawn"]
+      structures: ["pavilion"],
+      outfield: ["pavilion"]
     },
     industrial: {
       // A works yard: stained concrete, rust, and nothing growing.
@@ -3674,14 +3674,14 @@ var HarborLoop = (() => {
       artTint: "#5E5A51",
       artTintStrength: 0.19,
       boundary: "none",
-      props: ["chimney"],
+      props: ["rock"],
       // Halved. Grouping the small props multiplied what was on the ground by
       // three or four without changing the count, and a yard carpeted in orange
       // clusters turns the accent colour into noise — the containers were meant
       // to be the one thing the eye goes to.
       propDensity: 0.3,
-      structures: ["containers", "hall", "tank"],
-      outfield: ["tank", "containers"]
+      structures: ["pavilion"],
+      outfield: ["pavilion"]
     },
     meadow: {
       tile: "grass",
@@ -4820,7 +4820,8 @@ var HarborLoop = (() => {
     const ripple = groundTexture(ctx, surface.tile);
     if (!ripple) return;
     const tile = groundTileSize(surface.tile);
-    for (const [speedX, speedY, alpha] of surface.drift) {
+    const layers = surface.drift.length > 0 ? surface.drift : STATIC_GROUND;
+    for (const [speedX, speedY, alpha] of layers) {
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.translate(elapsed2 * speedX % tile - tile, elapsed2 * speedY % tile - tile);
@@ -4829,6 +4830,7 @@ var HarborLoop = (() => {
       ctx.restore();
     }
   }
+  var STATIC_GROUND = [[0, 0, 0.5]];
   var GROUND_PATCHES = [
     [40, 120, 190, "16,42,66", 0.3],
     [352, 250, 210, "16,42,66", 0.22],
