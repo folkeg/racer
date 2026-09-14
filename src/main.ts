@@ -211,5 +211,8 @@ export { TRACKS } from './tracks';
 // Exported so a session can be pointed at a circuit directly — useful to the
 // headless tests, and the only sane way to compare four worlds side by side.
 export { setTrack, activeTrackId } from './track';
+// Exported so the composition can be measured from the console rather than
+// guessed at from a screenshot.
+export { zones, facility, depthOf } from './render/land';
 export { totalStars, starsFor, modeUnlocked, modeUnlockCost, setUnlockOverride } from './progress';
 export { LANE_COUNT, LANE_GAP, ROAD_HALF_WIDTH, KERB_WIDTH } from './config';

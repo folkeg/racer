@@ -15,6 +15,8 @@
  * this can be added without touching a single test.
  */
 
+import { MODELS } from './models.generated';
+
 const loaded: Record<string, WxImage | null> = {
   water: null,
   sand: null,
@@ -63,30 +65,28 @@ const props: Record<string, WxImage | null> = {};
  * The manifest beside them carries each model's true size, so the game scales
  * them from measurements rather than from whatever looked right.
  */
-const RENDERED = [
-  'factory', 'works', 'shed', 'chimney', 'tank', 'tank-small', 'container', 'water-tower'
-];
-
 /**
  * Design units per model unit.
  *
- * Calibrated so a works building comes out three to four car lengths across,
- * which is the scale hierarchy the board has never had: until now nothing on it
- * was bigger than a car.
+ * Calibrated against the road, which is 68 units wide, and against the yards the
+ * board can actually hold, which are 44 to 96 deep. At 46 the only models that
+ * fitted across a yard were the shallow ones — and the shallow ones in this kit
+ * are the plain ones, so the fit test was quietly selecting for the most boring
+ * building in the set and putting two of them side by side. At 38 a works is 79
+ * across and 71 deep: four car lengths, the largest thing on the board by a
+ * distance, and small enough that the interesting models fit too.
  */
-export const MODEL_SCALE = 40;
+export const MODEL_SCALE = 38;
 
-/** True size of each rendered model, in model units. */
-export const MODEL_SIZE: Record<string, { w: number; d: number; framed: number }> = {
-  factory: { w: 1.684, d: 1.29, framed: 1.818 },
-  works: { w: 2.084, d: 1.87, framed: 2.25 },
-  shed: { w: 2.484, d: 1.272, framed: 2.682 },
-  chimney: { w: 1.08, d: 1.08, framed: 1.166 },
-  tank: { w: 1.508, d: 1.648, framed: 1.78 },
-  'tank-small': { w: 0.848, d: 0.515, framed: 0.916 },
-  container: { w: 0.373, d: 0.823, framed: 0.888 },
-  'water-tower': { w: 0.852, d: 0.832, framed: 0.92 }
-};
+/** Every turn of every model, by the filename it is stored under. */
+function renderedSprites(): string[] {
+  const names: string[] = [];
+  for (const [name, info] of Object.entries(MODELS)) {
+    if (info.yaws === 1) names.push(name);
+    else for (let k = 0; k < info.yaws; k++) names.push(`${name}-${k}`);
+  }
+  return names;
+}
 
 /**
  * Called when a tile arrives.
@@ -175,19 +175,22 @@ function loadRendered(name: string): void {
 export function loadArt(): void {
   for (const name of Object.keys(loaded)) load(name);
   for (const name of PROP_NAMES) loadProp(name);
-  for (const name of RENDERED) loadRendered(name);
+  for (const name of renderedSprites()) loadRendered(name);
 }
 
 /**
- * How wide a rendered model should be drawn, in design units.
+ * How wide one turn of a model should be drawn, in design units.
  *
- * The sprite is framed to the model's bounding box with a small margin, so the
- * image is wider than the model itself — drawing at the model's width would
- * shrink everything by that margin. This returns the width of the *image*.
+ * The sprite is framed to what that turn of the model actually spans, and every
+ * turn spans something different — a long shed seen end-on needs a third less
+ * frame than the same shed seen broadside. Drawing them all at one width would
+ * stretch or shrink the model with its own rotation, which is why the span of
+ * each turn is carried rather than assumed.
  */
-export function modelWidth(name: string): number {
-  const size = MODEL_SIZE[name];
-  return size ? size.framed * MODEL_SCALE : 40;
+export function modelWidth(name: string, yaw = 0): number {
+  const info = MODELS[name];
+  if (!info) return 40;
+  return info.spans[Math.min(yaw, info.spans.length - 1)] * MODEL_SCALE;
 }
 
 /** A drawn object, or null while it is loading or unavailable. */

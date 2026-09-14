@@ -47,6 +47,8 @@ var HarborLoop = (() => {
     dailyBestScore: () => dailyBestScore,
     dailyPlan: () => dailyPlan,
     debugPointerCount: () => debugPointerCount,
+    depthOf: () => depthOf,
+    facility: () => facility,
     feelState: () => feelState,
     goBack: () => goBack,
     inputState: () => inputState,
@@ -78,7 +80,8 @@ var HarborLoop = (() => {
     totalStars: () => totalStars,
     touchStreak: () => touchStreak,
     trackLength: () => trackLength,
-    trackScreenBounds: () => trackScreenBounds
+    trackScreenBounds: () => trackScreenBounds,
+    zones: () => zones
   });
 
   // src/config.ts
@@ -396,10 +399,10 @@ var HarborLoop = (() => {
     const eastX = 310;
     const innerX = 184;
     const path = new PathBuilder().start(110, LONG_BAY_TOP);
-    for (let row = 0; row < LONG_BAY_ROWS; row++) {
-      const y = LONG_BAY_TOP + row * step;
-      const goingEast = row % 2 === 0;
-      const last = row === LONG_BAY_ROWS - 1;
+    for (let row2 = 0; row2 < LONG_BAY_ROWS; row2++) {
+      const y = LONG_BAY_TOP + row2 * step;
+      const goingEast = row2 % 2 === 0;
+      const last = row2 === LONG_BAY_ROWS - 1;
       path.lineTo(last ? 110 : goingEast ? eastX : innerX, y);
       if (last) break;
       if (goingEast) {
@@ -2247,8 +2250,8 @@ var HarborLoop = (() => {
     update(dt, run2) {
       const target = paceTarget(run2.elapsed);
       const delta = Math.abs(player.speed - target);
-      const inside2 = delta <= BAND_HALF_WIDTH && player.state !== "CRASHED";
-      if (inside2) inBandSeconds += dt;
+      const inside = delta <= BAND_HALF_WIDTH && player.state !== "CRASHED";
+      if (inside) inBandSeconds += dt;
       run2.score = Math.floor(inBandSeconds * 100);
       run2.progress = Math.max(0, 1 - delta / (BAND_HALF_WIDTH * 3));
     }
@@ -2836,8 +2839,8 @@ var HarborLoop = (() => {
   }
   function globalBoard(modeId, difficulty, day = "") {
     const key2 = boardKey(modeId, difficulty, day);
-    const cached3 = boards.get(key2);
-    if (cached3) return cached3;
+    const cached2 = boards.get(key2);
+    if (cached2) return cached2;
     const board = {
       rows: [],
       selfRank: null,
@@ -3165,6 +3168,123 @@ var HarborLoop = (() => {
     return { hitStop: state4.hitStop, shake: state4.shake };
   }
 
+  // src/models.generated.ts
+  var MODELS = {
+    "works": {
+      yaws: 8,
+      width: 2.084,
+      depth: 1.87,
+      height: 1.925,
+      spans: [2.7004, 3.6445, 2.9183, 3.6445, 2.7004, 3.6445, 2.9183, 3.6445],
+      anchors: [0.1335, 0.0989, 0.1236, 0.0989, 0.1335, 0.0989, 0.1236, 0.0989]
+    },
+    "factory": {
+      yaws: 8,
+      width: 1.684,
+      depth: 1.29,
+      height: 1.65,
+      spans: [1.9956, 2.8244, 2.397, 2.8244, 1.9956, 2.8244, 2.397, 2.8244],
+      anchors: [0.1549, 0.1094, 0.1289, 0.1094, 0.1549, 0.1094, 0.1289, 0.1094]
+    },
+    "shed": {
+      yaws: 8,
+      width: 2.484,
+      depth: 1.272,
+      height: 1.393,
+      spans: [2.7319, 3.2825, 3.107, 3.2825, 2.7319, 3.2825, 3.107, 3.2825],
+      anchors: [0.0955, 0.0795, 0.084, 0.0795, 0.0955, 0.0795, 0.084, 0.0795]
+    },
+    "hall": {
+      yaws: 8,
+      width: 2.14,
+      depth: 1.77,
+      height: 0.88,
+      spans: [2.354, 3.1824, 2.5452, 3.1824, 2.354, 3.1824, 2.5452, 3.1824],
+      anchors: [0.07, 0.0518, 0.0648, 0.0518, 0.07, 0.0518, 0.0648, 0.0518]
+    },
+    "depot": {
+      yaws: 8,
+      width: 2.12,
+      depth: 0.916,
+      height: 0.837,
+      spans: [2.332, 2.5345, 2.507, 2.5345, 2.332, 2.5345, 2.507, 2.5345],
+      anchors: [0.0672, 0.0618, 0.0625, 0.0618, 0.0672, 0.0618, 0.0625, 0.0618]
+    },
+    "plant": {
+      yaws: 8,
+      width: 1.876,
+      depth: 2.108,
+      height: 1.25,
+      spans: [2.6651, 3.3882, 2.4284, 3.3882, 2.6651, 3.3882, 2.4284, 3.3882],
+      anchors: [0.0879, 0.0691, 0.0964, 0.0691, 0.0879, 0.0691, 0.0964, 0.0691]
+    },
+    "tank": {
+      yaws: 1,
+      width: 1.508,
+      depth: 1.648,
+      height: 0.962,
+      spans: [2.0775],
+      anchors: [0.0867]
+    },
+    "tank-small": {
+      yaws: 4,
+      width: 0.848,
+      depth: 0.515,
+      height: 0.415,
+      spans: [0.9328, 1.036, 0.9328, 1.036],
+      anchors: [0.0834, 0.0751, 0.0834, 0.0751]
+    },
+    "chimney": {
+      yaws: 1,
+      width: 1.08,
+      depth: 1.08,
+      height: 1.7,
+      spans: [1.802],
+      anchors: [0.1767]
+    },
+    "water-tower": {
+      yaws: 1,
+      width: 0.852,
+      depth: 0.832,
+      height: 2.142,
+      spans: [1.7309],
+      anchors: [0.2318]
+    },
+    "container": {
+      yaws: 4,
+      width: 0.373,
+      depth: 0.823,
+      height: 0.348,
+      spans: [0.9824, 0.9049, 0.9824, 0.9049],
+      anchors: [0.0664, 0.0721, 0.0664, 0.0721]
+    },
+    "container-b": {
+      yaws: 4,
+      width: 0.373,
+      depth: 0.823,
+      height: 0.348,
+      spans: [0.9824, 0.9049, 0.9824, 0.9049],
+      anchors: [0.0664, 0.0721, 0.0664, 0.0721]
+    },
+    "container-c": {
+      yaws: 4,
+      width: 0.373,
+      depth: 0.823,
+      height: 0.348,
+      spans: [0.9824, 0.9049, 0.9824, 0.9049],
+      anchors: [0.0664, 0.0721, 0.0664, 0.0721]
+    },
+    "solar": {
+      yaws: 4,
+      width: 1.513,
+      depth: 0.895,
+      height: 0.262,
+      spans: [1.6647, 1.6516, 1.6647, 1.6516],
+      anchors: [0.0295, 0.0298, 0.0295, 0.0298]
+    }
+  };
+  var MODEL_NAMES = Object.keys(MODELS);
+
   // src/assets.ts
   var loaded = {
     water: null,
@@ -3194,27 +3314,15 @@ var HarborLoop = (() => {
     "cone"
   ];
   var props = {};
-  var RENDERED = [
-    "factory",
-    "works",
-    "shed",
-    "chimney",
-    "tank",
-    "tank-small",
-    "container",
-    "water-tower"
-  ];
-  var MODEL_SCALE = 40;
-  var MODEL_SIZE = {
-    factory: { w: 1.684, d: 1.29, framed: 1.818 },
-    works: { w: 2.084, d: 1.87, framed: 2.25 },
-    shed: { w: 2.484, d: 1.272, framed: 2.682 },
-    chimney: { w: 1.08, d: 1.08, framed: 1.166 },
-    tank: { w: 1.508, d: 1.648, framed: 1.78 },
-    "tank-small": { w: 0.848, d: 0.515, framed: 0.916 },
-    container: { w: 0.373, d: 0.823, framed: 0.888 },
-    "water-tower": { w: 0.852, d: 0.832, framed: 0.92 }
-  };
+  var MODEL_SCALE = 38;
+  function renderedSprites() {
+    const names = [];
+    for (const [name, info] of Object.entries(MODELS)) {
+      if (info.yaws === 1) names.push(name);
+      else for (let k = 0; k < info.yaws; k++) names.push(`${name}-${k}`);
+    }
+    return names;
+  }
   var onLoaded = null;
   var missing = 0;
   function warn(path) {
@@ -3280,11 +3388,12 @@ var HarborLoop = (() => {
   function loadArt() {
     for (const name of Object.keys(loaded)) load(name);
     for (const name of PROP_NAMES) loadProp(name);
-    for (const name of RENDERED) loadRendered(name);
+    for (const name of renderedSprites()) loadRendered(name);
   }
-  function modelWidth(name) {
-    const size = MODEL_SIZE[name];
-    return size ? size.framed * MODEL_SCALE : 40;
+  function modelWidth(name, yaw = 0) {
+    const info = MODELS[name];
+    if (!info) return 40;
+    return info.spans[Math.min(yaw, info.spans.length - 1)] * MODEL_SCALE;
   }
   function propArt(name) {
     var _a;
@@ -3430,8 +3539,8 @@ var HarborLoop = (() => {
   }
   var cache2 = /* @__PURE__ */ new Map();
   function vehicleSprite(key2, style) {
-    const cached3 = cache2.get(key2);
-    if (cached3 !== void 0) return cached3;
+    const cached2 = cache2.get(key2);
+    if (cached2 !== void 0) return cached2;
     const image = build((ctx2) => paintCar(ctx2, style));
     const shadow2 = build(paintShadow);
     const sprite = image && shadow2 ? { image, shadow: shadow2 } : null;
@@ -3585,13 +3694,14 @@ var HarborLoop = (() => {
         shelf: "#9C8F62",
         planted: true
       },
+      yard: { fill: "#A6A698", edge: "#7B7B6D", tile: "concrete" },
       artTint: "#7C9AA8",
       artTintStrength: 0.16,
       boundary: "none",
       props: [],
       propDensity: 0,
-      structures: [],
-      outfield: []
+      structures: ["depot", "shed", "hall"],
+      clutter: ["container", "container-b", "container-c", "tank-small"]
     },
     beach: {
       // Wind ripples fall out of the same wave field as water with different
@@ -3628,13 +3738,14 @@ var HarborLoop = (() => {
         shelf: "#D8C79A",
         planted: true
       },
+      yard: { fill: "#C6B48C", edge: "#9A8965", tile: "concrete" },
       artTint: "#C4A971",
       artTintStrength: 0.18,
       boundary: "none",
       props: ["rock"],
       propDensity: 0.4,
-      structures: ["lagoon", "pavilion"],
-      outfield: ["pavilion"]
+      structures: ["depot", "hall"],
+      clutter: ["container-c", "solar", "tank-small"]
     },
     city: {
       // Night-ish tarmac yard. The ground is the same asphalt as the road, one
@@ -3674,13 +3785,14 @@ var HarborLoop = (() => {
         shelf: "#6E767E",
         planted: false
       },
+      yard: { fill: "#697079", edge: "#454C55", tile: "concrete" },
       artTint: "#3C444C",
       artTintStrength: 0.2,
       boundary: "none",
       props: ["tree"],
       propDensity: 0.35,
-      structures: ["works", "shed", "pavilion"],
-      outfield: ["factory", "shed"]
+      structures: ["hall", "plant", "depot", "factory"],
+      clutter: ["solar", "container-b", "tank-small", "water-tower"]
     },
     industrial: {
       // A works yard: stained concrete, rust, and nothing growing.
@@ -3713,6 +3825,7 @@ var HarborLoop = (() => {
         shelf: "#7A7264",
         planted: false
       },
+      yard: { fill: "#7A776E", edge: "#54514A", tile: "concrete" },
       artTint: "#5E5A51",
       artTintStrength: 0.19,
       boundary: "none",
@@ -3722,8 +3835,8 @@ var HarborLoop = (() => {
       // clusters turns the accent colour into noise — the containers were meant
       // to be the one thing the eye goes to.
       propDensity: 0.3,
-      structures: ["factory", "tanks", "shed"],
-      outfield: ["works", "tower"]
+      structures: ["works", "factory", "shed", "plant", "depot"],
+      clutter: ["tank", "container", "container-b", "chimney", "tank-small"]
     },
     meadow: {
       tile: "grass",
@@ -3755,13 +3868,14 @@ var HarborLoop = (() => {
         shelf: "#A29A72",
         planted: true
       },
+      yard: { fill: "#9C9880", edge: "#75725D", tile: "concrete" },
       artTint: "#5E7F45",
       artTintStrength: 0.16,
       boundary: "none",
       props: ["tree"],
       propDensity: 0.4,
-      structures: ["lagoon", "pavilion"],
-      outfield: ["pavilion"]
+      structures: ["hall", "depot"],
+      clutter: ["solar", "tank-small"]
     }
   };
   var TRACK_SURFACE = {
@@ -3779,8 +3893,8 @@ var HarborLoop = (() => {
   var harmonised = /* @__PURE__ */ new Map();
   function harmonise(name, image, tint, strength, desaturate) {
     const key2 = `${name}|${tint}|${strength}|${desaturate}`;
-    const cached3 = harmonised.get(key2);
-    if (cached3) return cached3;
+    const cached2 = harmonised.get(key2);
+    if (cached2) return cached2;
     const canvas2 = createOffscreenCanvas(image.width, image.height);
     const target = canvas2 ? canvas2.getContext("2d") : null;
     if (!canvas2 || !target) return null;
@@ -3853,17 +3967,80 @@ var HarborLoop = (() => {
     ctx.restore();
     return true;
   }
+  function yawFor(heading, yaws) {
+    if (yaws <= 1) return 0;
+    const wanted = Math.atan2(-Math.sin(heading), Math.cos(heading));
+    const step = Math.PI * 2 / yaws;
+    return (Math.round(wanted / step) % yaws + yaws) % yaws;
+  }
+  function yawSprite(name, yaws, yaw) {
+    return yaws <= 1 ? name : `${name}-${yaw}`;
+  }
+  var SHADOW_LEAN = 0.7;
+  var silhouettes = /* @__PURE__ */ new Map();
+  function silhouette(name, image) {
+    const cached2 = silhouettes.get(name);
+    if (cached2) return cached2;
+    const canvas2 = createOffscreenCanvas(image.width, image.height);
+    const target = canvas2 ? canvas2.getContext("2d") : null;
+    if (!canvas2 || !target) return null;
+    target.drawImage(image, 0, 0);
+    target.globalCompositeOperation = "source-in";
+    target.fillStyle = "#0B1218";
+    target.fillRect(0, 0, image.width, image.height);
+    target.globalCompositeOperation = "source-over";
+    silhouettes.set(name, canvas2);
+    return canvas2;
+  }
+  function drawModel(sprite, x, y, options) {
+    var _a, _b, _c;
+    const image = propArt(sprite);
+    if (!image || !image.width) return false;
+    const width = options.width;
+    const height = width * (image.height / image.width);
+    const top = y - height / 2 - options.anchor * height;
+    const shadow2 = (_a = options.shadow) != null ? _a : 0;
+    if (shadow2 > 0) {
+      const outline = silhouette(sprite, image);
+      if (outline) {
+        ctx.save();
+        ctx.globalAlpha = shadow2;
+        ctx.translate(x, y);
+        ctx.transform(1, 0, -SHADOW_X * SHADOW_LEAN, -SHADOW_Y * SHADOW_LEAN, 0, 0);
+        ctx.drawImage(
+          outline,
+          -width / 2,
+          top - y,
+          width,
+          height
+        );
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.fillStyle = `rgba(14,20,26,${(shadow2 * 0.55).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, width * 0.3, width * 0.13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    const toned = options.tint ? harmonise(sprite, image, options.tint, (_b = options.tintStrength) != null ? _b : 0.12, (_c = options.desaturate) != null ? _c : 0) : null;
+    ctx.save();
+    if (options.alpha !== void 0) ctx.globalAlpha = options.alpha;
+    ctx.drawImage(
+      toned != null ? toned : image,
+      x - width / 2,
+      top,
+      width,
+      height
+    );
+    ctx.restore();
+    return true;
+  }
 
   // src/render/props.ts
   var EDGE_MARGIN = 14;
   var SPACING = 34;
   var claimed = [];
-  function claimGround(x, y, r) {
-    claimed.push({ x, y, r });
-  }
-  function releaseGround() {
-    claimed.length = 0;
-  }
   function groundIsFree(x, y, margin = 0) {
     for (const spot of claimed) {
       const dx = spot.x - x;
@@ -4130,440 +4307,499 @@ var HarborLoop = (() => {
     for (const prop of propsForTrack()) drawProp(prop);
   }
 
-  // src/render/infield.ts
-  var GROUND_KINDS = ["lagoon", "lawn"];
-  var MIN_REACH = 26;
-  var APRON_ALLOWANCE = 34;
-  var MIN_ROOM = 10;
+  // src/render/land.ts
+  var NEAR_GAP = ROAD_HALF_WIDTH + 10;
+  var DEPTHS = [96, 80, 66, 54, 44, 36, 28];
+  var FOLD_TOLERANCE = 0.88;
+  var ZONE_LENGTH = 66;
+  var YARD_SAMPLES = 190;
+  var YARD_MIN_DEPTH = 38;
+  var MIN_DEPTH = 22;
   var cachedTrack2 = null;
-  var cached2 = [];
-  var cachedOutfield = [];
-  function inside(x, y, path) {
-    let hit = false;
-    for (let i = 0, j = path.length - 1; i < path.length; j = i++) {
-      const a = path[i];
-      const b = path[j];
-      if (a.y > y !== b.y > y && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) hit = !hit;
-    }
-    return hit;
+  var cachedZones = [];
+  var cachedDepth = /* @__PURE__ */ new Map();
+  function offsetPoint(i, offset) {
+    const path = centerPath;
+    const n = path.length;
+    const a = path[(i - 1 + n) % n];
+    const b = path[(i + 1) % n];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy) || 1;
+    return { x: path[i].x + -dy / length * offset, y: path[i].y + dx / length * offset };
   }
-  function buildStructures(wantInside, kinds, minReach, limit) {
-    const path = pathAtOffset(0);
-    const room = freeGround().filter((spot) => inside(spot.x, spot.y, path) === wantInside);
-    if (room.length < MIN_ROOM) return [];
-    if (kinds.length === 0) return [];
-    const ranked = [...room].sort((a, b) => b.clearance - a.clearance);
-    const placed = [];
-    for (const spot of ranked) {
-      if (placed.length >= limit) break;
-      if (spot.clearance < minReach) break;
-      const clash = placed.some((other) => {
-        const dx = other.x - spot.x;
-        const dy = other.y - spot.y;
-        return Math.hypot(dx, dy) < other.reach + spot.clearance * 0.9 + 18;
+  function distanceToTrack(point) {
+    let nearest = Infinity;
+    for (let i = 0; i < centerPath.length; i += 3) {
+      const dx = centerPath[i].x - point.x;
+      const dy = centerPath[i].y - point.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < nearest) nearest = d2;
+    }
+    return Math.sqrt(nearest);
+  }
+  function holds(i, side, depth) {
+    const far = side * (NEAR_GAP + depth);
+    const point = offsetPoint(i, far);
+    if (point.x < 8 || point.x > 382) return false;
+    if (point.y < BOARD_TOP + 6 || point.y > BOARD_BOTTOM - 6) return false;
+    return distanceToTrack(point) >= Math.abs(far) * FOLD_TOLERANCE;
+  }
+  function headroom(i, side) {
+    for (const depth of DEPTHS) if (holds(i, side, depth)) return depth;
+    return 0;
+  }
+  function seeded2(seed) {
+    let state5 = seed * 2654435761 >>> 0;
+    return () => {
+      state5 = state5 * 1664525 + 1013904223 >>> 0;
+      return state5 / 4294967296;
+    };
+  }
+  function bestSite(room) {
+    const n = room.length;
+    const length = Math.min(YARD_SAMPLES, Math.floor(n * 0.42));
+    if (length < 60) return null;
+    let best2 = -1;
+    let bestDepth = 0;
+    for (let start = 0; start < n; start += 3) {
+      let sum = 0;
+      let floor = Infinity;
+      for (let i = start; i < start + length; i++) {
+        sum += room[i % n];
+        floor = Math.min(floor, room[i % n]);
+      }
+      const mean = sum / length;
+      if (floor < MIN_DEPTH) continue;
+      if (mean > bestDepth) {
+        bestDepth = mean;
+        best2 = start;
+      }
+    }
+    return best2 < 0 || bestDepth < YARD_MIN_DEPTH ? null : { at: best2, length, depth: bestDepth };
+  }
+  function zonesForSide(side, kinds, seed, site) {
+    const n = centerPath.length;
+    const room = centerPath.map((_, i) => headroom(i, side));
+    if (room.every((value) => value === 0)) return [];
+    const random2 = seeded2(seed);
+    const zones2 = [];
+    const natural = kinds.filter((kind) => kind !== "yard");
+    if (site) {
+      let depth = Infinity;
+      for (let i = site.at; i < site.at + site.length; i++) depth = Math.min(depth, room[i % n]);
+      zones2.push({
+        i0: site.at,
+        i1: site.at + site.length,
+        side,
+        kind: "yard",
+        want: Math.round(depth)
       });
-      if (clash) continue;
-      const edgeRoom = Math.min(
-        spot.x,
-        DESIGN_W - spot.x,
-        spot.y - BOARD_TOP,
-        BOARD_BOTTOM - spot.y
+    }
+    const from = site ? site.at + site.length : 0;
+    const until = site ? site.at + n : n;
+    let at = from;
+    let previous = site ? "yard" : null;
+    while (at < until - 24) {
+      const length = Math.min(
+        Math.round(ZONE_LENGTH * (0.62 + random2() * 0.9)),
+        until - at
       );
-      const usable = spot.clearance - APRON_ALLOWANCE;
-      const reach = Math.min(usable * 0.8, edgeRoom * 0.78, 46);
-      if (reach < minReach * 0.62) continue;
+      if (length < 24) break;
+      const end = at + length;
+      const available = [];
+      for (let i = at; i < end; i++) available.push(room[i % n]);
+      available.sort((a, b) => a - b);
+      let depth = available[Math.floor(available.length * 0.65)];
+      let kind;
+      if (depth < MIN_DEPTH) {
+        kind = "bare";
+        depth = 0;
+      } else {
+        const choices = natural.filter((value) => value !== previous);
+        kind = choices[Math.floor(random2() * choices.length) % choices.length];
+        depth *= 0.45 + random2() * 0.55;
+      }
+      previous = kind;
+      zones2.push({ i0: at, i1: end, side, kind, want: Math.round(depth) });
+      at = end;
+      if (zones2.length > 20) break;
+    }
+    return zones2;
+  }
+  function paletteFor() {
+    const world = surfaceFor(activeTrackId);
+    const kinds = ["yard", "gravel", "bare", "bare"];
+    if (world.island.planted) kinds.push("grass", "scrub");
+    if (world.afloat) kinds.push("water");
+    return kinds;
+  }
+  function build2() {
+    var _a, _b, _c;
+    cachedZones = [];
+    cachedDepth = /* @__PURE__ */ new Map();
+    const n = centerPath.length;
+    const sites = /* @__PURE__ */ new Map();
+    for (const side of [-1, 1]) {
+      sites.set(side, bestSite(centerPath.map((_, i) => headroom(i, side))));
+    }
+    const inside = sites.get(-1);
+    const outside = sites.get(1);
+    const built = ((_a = inside == null ? void 0 : inside.depth) != null ? _a : 0) >= ((_b = outside == null ? void 0 : outside.depth) != null ? _b : 0) ? -1 : 1;
+    for (const side of [-1, 1]) {
+      const zones2 = zonesForSide(
+        side,
+        paletteFor(),
+        side === 1 ? 8191 : 5077,
+        side === built ? (_c = sites.get(side)) != null ? _c : null : null
+      );
+      cachedZones.push(...zones2);
+      const room = centerPath.map((_, i) => headroom(i, side));
+      const target = new Array(n).fill(0);
+      for (const zone of zones2) {
+        for (let i = zone.i0; i < zone.i1; i++) {
+          target[i % n] = Math.min(zone.want, room[i % n]);
+        }
+      }
+      const SMOOTH = 7;
+      const smoothed = target.map((_, i) => {
+        let sum = 0;
+        for (let k = -SMOOTH; k <= SMOOTH; k++) sum += target[(i + k + n) % n];
+        return sum / (SMOOTH * 2 + 1);
+      });
+      cachedDepth.set(side, smoothed);
+    }
+  }
+  function ensure() {
+    if (cachedTrack2 === activeTrackId) return;
+    build2();
+    cachedTrack2 = activeTrackId;
+  }
+  function zones() {
+    ensure();
+    return cachedZones;
+  }
+  function depthAt(side, i) {
+    ensure();
+    const profile = cachedDepth.get(side);
+    return profile ? profile[i % centerPath.length] : 0;
+  }
+  function zoneOutline(zone, inset = 0) {
+    const n = centerPath.length;
+    const bite = inset > 0 ? Math.round(inset * 0.9) : -1;
+    const from = zone.i0 + bite;
+    const to = zone.i1 - bite;
+    if (to - from < 4) return [];
+    const points = [];
+    for (let i = from; i < to; i++) {
+      const depth = depthAt(zone.side, i) - inset;
+      if (depth <= 0) continue;
+      points.push(offsetPoint((i % n + n) % n, zone.side * (NEAR_GAP + depth)));
+    }
+    for (let i = to - 1; i >= from; i--) {
+      points.push(offsetPoint((i % n + n) % n, zone.side * (NEAR_GAP + inset * 0.35)));
+    }
+    return points;
+  }
+  function buildLine(zone, fraction) {
+    const n = centerPath.length;
+    const out = [];
+    for (let i = zone.i0; i < zone.i1; i++) {
+      const index = (i % n + n) % n;
+      const point = offsetPoint(index, zone.side * (NEAR_GAP + depthAt(zone.side, i) * fraction));
+      const a = centerPath[(index - 1 + n) % n];
+      const b = centerPath[(index + 1) % n];
+      out.push({ x: point.x, y: point.y, angle: Math.atan2(b.y - a.y, b.x - a.x) });
+    }
+    return out;
+  }
+  function trace(points) {
+    ctx.beginPath();
+    const first = project(points[0].x, points[0].y);
+    ctx.moveTo(first.x, first.y);
+    for (let i = 1; i < points.length; i++) {
+      const p = project(points[i].x, points[i].y);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+  }
+  function materialFor(kind) {
+    const world = surfaceFor(activeTrackId);
+    switch (kind) {
+      case "yard":
+        return {
+          fill: world.yard.fill,
+          edge: world.yard.edge,
+          tile: world.yard.tile,
+          grain: 0.5,
+          made: true
+        };
+      case "gravel":
+        return {
+          fill: world.road.apron,
+          edge: world.road.apronEdge,
+          tile: world.road.tile,
+          grain: 0.55,
+          made: true
+        };
+      case "grass":
+        return {
+          fill: world.island.tops[0],
+          edge: world.island.rim,
+          tile: "grass",
+          grain: 0.6,
+          made: false
+        };
+      case "scrub":
+        return {
+          fill: world.island.shelf,
+          edge: world.island.rim,
+          tile: "sand",
+          grain: 0.46,
+          made: false
+        };
+      case "water":
+        return { fill: "#4E6C7E", edge: "#32485A", tile: "water", grain: 0.6, made: false };
+      default:
+        return null;
+    }
+  }
+  function depthOf(zone) {
+    let sum = 0;
+    for (let i = zone.i0; i < zone.i1; i++) sum += depthAt(zone.side, i);
+    return sum / Math.max(1, zone.i1 - zone.i0);
+  }
+  function boundary(side) {
+    const n = centerPath.length;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const depth = depthAt(side, i);
+      const point = offsetPoint(i, side * (NEAR_GAP + depth));
+      out.push({ x: point.x, y: point.y, depth });
+    }
+    return out;
+  }
+  var EDGE_FLOOR = 9;
+  function drawLand() {
+    for (const zone of zones()) {
+      const material = materialFor(zone.kind);
+      if (material) drawZone(zone, material);
+    }
+    for (const side of [-1, 1]) drawBoundaryEdge(side);
+  }
+  function drawZone(zone, material) {
+    const grain = groundTexture(ctx, material.tile);
+    const steps = material.made ? [0] : SOFT_STEPS;
+    for (const [inset, alpha] of steps.map(
+      (value, i) => material.made ? [0, 1] : [value, SOFT_ALPHA[i]]
+    )) {
+      const outline = zoneOutline(zone, inset);
+      if (outline.length < 6) continue;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      trace(outline);
+      ctx.fillStyle = material.fill;
+      ctx.fill();
+      if (grain) {
+        ctx.clip();
+        ctx.globalAlpha = alpha * material.grain;
+        ctx.fillStyle = grain;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const point of outline) {
+          const p = project(point.x, point.y);
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        }
+        ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+      }
+      ctx.restore();
+    }
+  }
+  var SOFT_STEPS = [14, 9, 4.5, 0];
+  var SOFT_ALPHA = [0.22, 0.34, 0.5, 1];
+  function drawBoundaryEdge(side) {
+    const line = boundary(side);
+    const n = line.length;
+    if (n === 0) return;
+    const world = surfaceFor(activeTrackId);
+    let run2 = [];
+    const flush = () => {
+      if (run2.length > 4) {
+        const stroke = (colour, width, inset) => {
+          ctx.beginPath();
+          for (let i = 0; i < run2.length; i++) {
+            const p = project(run2[i].x, run2[i].y);
+            if (i === 0) ctx.moveTo(p.x, p.y + inset);
+            else ctx.lineTo(p.x, p.y + inset);
+          }
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = colour;
+          ctx.lineWidth = width * lateralUnit();
+          ctx.stroke();
+        };
+        stroke("rgba(10,15,20,0.22)", 5.4, 0.8 * lateralUnit());
+        stroke(world.yard.edge, 2.2, 0);
+        stroke("rgba(255,250,238,0.26)", 1.1, -0.9 * lateralUnit());
+      }
+      run2 = [];
+    };
+    const laid = new Array(n).fill(false);
+    for (const zone of zones()) {
+      if (zone.side !== side) continue;
+      const material = materialFor(zone.kind);
+      if (!material || !material.made) continue;
+      for (let i = zone.i0; i < zone.i1; i++) laid[(i % n + n) % n] = true;
+    }
+    ctx.save();
+    for (let i = 0; i <= n; i++) {
+      const index = i % n;
+      const point = line[index];
+      if (i < n && laid[index] && point.depth > EDGE_FLOOR) run2.push(point);
+      else flush();
+    }
+    flush();
+    ctx.restore();
+  }
+  var YARD_GAP = 9;
+  var YARD_MARGIN = 26;
+  function clashes(placed, x, y, radius) {
+    for (const other of placed) {
+      if (Math.hypot(other.x - x, other.y - y) < (other.radius + radius) * 0.82) return true;
+    }
+    return false;
+  }
+  function row(zone, anchor, maxShare, names, gap, seed, limit, taken) {
+    const depth = depthOf(zone);
+    if (depth < MIN_DEPTH) return [];
+    const line = buildLine(zone, anchor);
+    if (line.length < 8) return [];
+    const kinds = names.filter((name) => MODELS[name]);
+    if (kinds.length === 0) return [];
+    const step = [0];
+    for (let i = 1; i < line.length; i++) {
+      step.push(step[i - 1] + Math.hypot(line[i].x - line[i - 1].x, line[i].y - line[i - 1].y));
+    }
+    const total = step[step.length - 1];
+    const random2 = seeded2(seed);
+    const margin = Math.min(YARD_MARGIN, total * 0.1);
+    const n = centerPath.length;
+    const placed = [];
+    let at = margin;
+    let previous = "";
+    while (at < total - margin && placed.length < limit) {
+      let name = kinds[Math.floor(random2() * kinds.length) % kinds.length];
+      if (name === previous && kinds.length > 1) {
+        name = kinds[(kinds.indexOf(name) + 1 + Math.floor(random2() * (kinds.length - 1))) % kinds.length];
+      }
+      const info = MODELS[name];
+      const along = info.width * MODEL_SCALE;
+      const across = info.depth * MODEL_SCALE;
+      if (at + along > total - margin) break;
+      const centre = at + along / 2;
+      let i = 1;
+      while (i < step.length - 1 && step[i] < centre) i++;
+      const index = ((zone.i0 + i) % n + n) % n;
+      const here = depthAt(zone.side, index);
+      if (across > here * maxShare) {
+        at += along * 0.4 + gap;
+        continue;
+      }
+      const half = across / 2 / Math.max(1, here);
+      const wanted = anchor + (random2() - 0.5) * 0.16;
+      const fraction = Math.min(Math.max(wanted, half + 0.04), 1 - half - 0.04);
+      const point = offsetPoint(index, zone.side * (NEAR_GAP + here * fraction));
+      const radius = Math.max(along, across) * 0.42;
+      if (clashes(taken, point.x, point.y, radius) || clashes(placed, point.x, point.y, radius)) {
+        at += gap;
+        continue;
+      }
+      previous = name;
+      const yaw = yawFor(line[i].angle, info.yaws);
       placed.push({
-        x: spot.x,
-        y: spot.y,
-        kind: kinds[placed.length % kinds.length],
-        reach
+        x: point.x,
+        y: point.y,
+        model: yawSprite(name, info.yaws, yaw),
+        width: modelWidth(name, yaw),
+        anchor: info.anchors[Math.min(yaw, info.anchors.length - 1)],
+        radius,
+        order: point.y
+      });
+      at += along + gap * (0.5 + random2() * 1.5);
+    }
+    return placed;
+  }
+  function scatter(zone, names, attempts, seed, taken) {
+    const depth = depthOf(zone);
+    if (depth < 14) return [];
+    const kinds = names.filter((name) => MODELS[name]);
+    if (kinds.length === 0) return [];
+    const n = centerPath.length;
+    const random2 = seeded2(seed);
+    const placed = [];
+    const span = zone.i1 - zone.i0;
+    for (let a = 0; a < attempts; a++) {
+      const name = kinds[Math.floor(random2() * kinds.length) % kinds.length];
+      const info = MODELS[name];
+      const along = info.width * MODEL_SCALE;
+      const across = info.depth * MODEL_SCALE;
+      const offset = 0.06 + random2() * 0.88;
+      const index = (Math.round(zone.i0 + offset * span) % n + n) % n;
+      const here = depthAt(zone.side, index);
+      if (across > here * 0.8) continue;
+      const half = across / 2 / Math.max(1, here);
+      const wanted = 0.42 + random2() * 0.5;
+      const fraction = Math.min(Math.max(wanted, half + 0.03), 1 - half - 0.03);
+      const point = offsetPoint(index, zone.side * (NEAR_GAP + here * fraction));
+      const radius = Math.max(along, across) * 0.46;
+      if (clashes(taken, point.x, point.y, radius) || clashes(placed, point.x, point.y, radius)) {
+        continue;
+      }
+      const before = centerPath[(index - 1 + n) % n];
+      const after = centerPath[(index + 1) % n];
+      const yaw = yawFor(Math.atan2(after.y - before.y, after.x - before.x), info.yaws);
+      placed.push({
+        x: point.x,
+        y: point.y,
+        model: yawSprite(name, info.yaws, yaw),
+        width: modelWidth(name, yaw),
+        anchor: info.anchors[Math.min(yaw, info.anchors.length - 1)],
+        radius,
+        order: point.y
       });
     }
     return placed;
   }
-  function ensure() {
-    if (cachedTrack2 === activeTrackId) return;
-    const surface = surfaceFor(activeTrackId);
-    releaseGround();
-    cached2 = buildStructures(true, surface.structures, MIN_REACH, 3);
-    cachedOutfield = buildStructures(false, surface.outfield, 21, 2);
-    for (const structure of [...cached2, ...cachedOutfield]) {
-      claimGround(structure.x, structure.y, structure.reach * 1.15);
+  function facility() {
+    const world = surfaceFor(activeTrackId);
+    const placed = [];
+    for (const [index, zone] of zones().entries()) {
+      if (zone.kind !== "yard") continue;
+      const seed = index * 977 + zone.i0 * 31 + zone.want;
+      const site = [];
+      site.push(...row(zone, 0.58, 0.95, world.structures, YARD_GAP, seed, 6, site));
+      site.push(...scatter(zone, world.clutter, 90, seed + 13, site));
+      placed.push(...site);
     }
-    cachedTrack2 = activeTrackId;
+    return placed;
   }
-  function structures() {
-    ensure();
-    return cached2;
-  }
-  function outfieldStructures() {
-    ensure();
-    return cachedOutfield;
-  }
-  function drawServiceRoad(placed) {
-    if (placed.length < 2) return;
-    const paint = surfaceFor(activeTrackId).road;
-    const served = placed.filter((structure) => !GROUND_KINDS.includes(structure.kind));
-    if (served.length < 2) return;
-    const order = [...served].sort((a, b) => a.y - b.y);
-    const stroke = (width, colour) => {
-      ctx.save();
-      ctx.beginPath();
-      const first = project(order[0].x, order[0].y);
-      ctx.moveTo(first.x, first.y);
-      for (let i = 1; i < order.length; i++) {
-        const p = project(order[i].x, order[i].y);
-        ctx.lineTo(p.x, p.y);
-      }
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      ctx.strokeStyle = colour;
-      ctx.lineWidth = width * lateralUnit();
-      ctx.stroke();
-      ctx.restore();
-    };
-    stroke(19, "rgba(8,14,20,0.16)");
-    stroke(16, paint.apronEdge);
-    stroke(13, paint.apron);
-    const grain = groundTexture(ctx, paint.tile);
-    if (grain) {
-      ctx.save();
-      ctx.globalAlpha = 0.5;
-      stroke(13, grain);
-      ctx.restore();
-    }
-    ctx.save();
-    ctx.setLineDash([7 * lateralUnit(), 6 * lateralUnit()]);
-    stroke(0.9, "rgba(240,236,224,0.42)");
-    ctx.restore();
-    const squared = !surfaceFor(activeTrackId).island.planted;
-    for (const structure of placed) {
-      if (GROUND_KINDS.includes(structure.kind)) continue;
-      const p = project(structure.x, structure.y);
-      const r = structure.reach * lateralUnit();
-      const w = r * 1.12;
-      const h = r * 0.72;
-      const shape = () => {
-        ctx.beginPath();
-        if (squared) ctx.rect(p.x - w, p.y - h, w * 2, h * 2);
-        else ctx.ellipse(p.x, p.y, w, h, 0, 0, Math.PI * 2);
-      };
-      ctx.fillStyle = paint.apronEdge;
-      shape();
-      ctx.fill();
-      ctx.fillStyle = paint.apron;
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.scale(0.93, 0.9);
-      ctx.translate(-p.x, -p.y);
-      shape();
-      ctx.fill();
-      if (grain) {
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = grain;
-        shape();
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-  }
-  function facetShade(nx, ny) {
-    const length = Math.hypot(nx, ny) || 1;
-    const lit = nx / length * -SHADOW_X + ny / length * -SHADOW_Y;
-    return (lit + 1) / 2;
-  }
-  function mixShade(base, shade2, spread) {
-    const k = 1 + (shade2 - 0.5) * spread;
-    const channel = (v) => Math.max(0, Math.min(255, Math.round(v * k)));
-    return `rgb(${channel(base[0])},${channel(base[1])},${channel(base[2])})`;
-  }
-  function pitchedRoof(x, y, radius, sides, rotation, base, spread) {
-    const corner = (i) => {
-      const angle = rotation + i / sides * Math.PI * 2;
-      return { x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius * 0.72 };
-    };
-    for (let i = 0; i < sides; i++) {
-      const a = corner(i);
-      const b = corner(i + 1);
-      const midX = (a.x + b.x) / 2 - x;
-      const midY = (a.y + b.y) / 2 - y;
-      ctx.fillStyle = mixShade(base, facetShade(midX, midY), spread);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(x, y);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.strokeStyle = "rgba(40,44,48,0.22)";
-    ctx.lineWidth = Math.max(0.5, radius * 0.04);
-    for (let i = 0; i < sides; i++) {
-      const a = corner(i);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    }
-  }
-  function shade(x, y, w, h, alpha) {
-    ctx.fillStyle = `rgba(10,16,22,${alpha})`;
-    ctx.beginPath();
-    ctx.ellipse(x + SHADOW_X * w * 0.42, y + SHADOW_Y * w * 0.42, w, h, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  var MODEL_FOR = {
-    factory: "factory",
-    works: "works",
-    shed: "shed",
-    tower: "water-tower",
-    tanks: "tank"
-  };
-  function drawStructure(structure) {
-    const p = project(structure.x, structure.y);
-    const r = structure.reach * lateralUnit();
-    const x = p.x;
-    const y = p.y;
-    const model = MODEL_FOR[structure.kind];
-    if (model) {
-      const world = surfaceFor(activeTrackId);
-      const width = modelWidth(model) * lateralUnit();
-      if (drawArt(model, x, y, width, {
-        shadow: 0.32,
+  function drawFacility() {
+    const world = surfaceFor(activeTrackId);
+    for (const item of [...facility()].sort((a, b) => a.order - b.order)) {
+      const p = project(item.x, item.y);
+      drawModel(item.model, p.x, p.y, {
+        width: item.width * lateralUnit(),
+        anchor: item.anchor,
+        shadow: 0.3,
         tint: world.artTint,
-        tintStrength: 0.12,
-        desaturate: 0
-      })) return;
+        tintStrength: world.artTintStrength * 0.5
+      });
     }
-    switch (structure.kind) {
-      case "dome": {
-        shade(x, y + r * 0.26, r * 1.02, r * 0.5, 0.34);
-        ctx.fillStyle = "#6E747C";
-        ctx.beginPath();
-        ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
-        ctx.fill();
-        const courses = 3;
-        for (let i = 0; i < courses; i++) {
-          const t = 1 - i / courses;
-          ctx.fillStyle = i % 2 === 0 ? "#D2D0C8" : "#A8A69E";
-          ctx.beginPath();
-          ctx.ellipse(x, y - r * 0.05 * i, r * 0.94 * t, r * 0.84 * t, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.strokeStyle = "rgba(70,76,84,0.30)";
-        ctx.lineWidth = Math.max(0.6, r * 0.04);
-        for (let i = 0; i < 6; i++) {
-          const angle = i / 6 * Math.PI * 2 + 0.4;
-          ctx.beginPath();
-          ctx.moveTo(x + Math.cos(angle) * r * 0.24, y + Math.sin(angle) * r * 0.2);
-          ctx.lineTo(x + Math.cos(angle) * r * 0.9, y + Math.sin(angle) * r * 0.8);
-          ctx.stroke();
-        }
-        const gloss = ctx.createRadialGradient(
-          x - r * 0.38,
-          y - r * 0.42,
-          r * 0.05,
-          x - r * 0.2,
-          y - r * 0.2,
-          r * 0.95
-        );
-        gloss.addColorStop(0, "rgba(255,253,246,0.5)");
-        gloss.addColorStop(1, "rgba(255,253,246,0)");
-        ctx.fillStyle = gloss;
-        ctx.beginPath();
-        ctx.ellipse(x, y, r * 0.94, r * 0.84, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#8E9298";
-        ctx.beginPath();
-        ctx.ellipse(x, y - r * 0.2, r * 0.19, r * 0.16, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,252,244,0.7)";
-        ctx.beginPath();
-        ctx.ellipse(x - r * 0.04, y - r * 0.24, r * 0.11, r * 0.08, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(52,58,64,0.5)";
-        ctx.lineWidth = Math.max(1, r * 0.07);
-        ctx.beginPath();
-        ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        break;
-      }
-      case "hall": {
-        const w = r * 1.85;
-        const h = r * 1.05;
-        shade(x, y + h * 0.2, w * 0.6, h * 0.5, 0.32);
-        ctx.fillStyle = "#4E5660";
-        ctx.fillRect(x - w / 2, y - h / 2, w, h);
-        for (let i = 0; i < 3; i++) {
-          const bay = h / 3;
-          ctx.fillStyle = i % 2 === 0 ? "#5E6872" : "#545E68";
-          ctx.fillRect(x - w / 2, y - h / 2 + i * bay, w, bay);
-          ctx.fillStyle = "rgba(238,244,250,0.16)";
-          ctx.fillRect(x - w / 2, y - h / 2 + i * bay, w, bay * 0.22);
-        }
-        ctx.strokeStyle = "rgba(14,20,26,0.5)";
-        ctx.lineWidth = 1.4;
-        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
-        break;
-      }
-      case "tank": {
-        const rr = r * 0.66;
-        const wall = rr * 0.62;
-        shade(x, y + wall, rr * 0.95, rr * 0.42, 0.34);
-        const side = ctx.createLinearGradient(x - rr, y, x + rr, y);
-        side.addColorStop(0, "#4E4A42");
-        side.addColorStop(0.4, "#7A7468");
-        side.addColorStop(1, "#3E3A34");
-        ctx.fillStyle = side;
-        ctx.beginPath();
-        ctx.moveTo(x - rr, y);
-        ctx.lineTo(x - rr, y + wall);
-        ctx.arc(x, y + wall, rr, Math.PI, 0, true);
-        ctx.lineTo(x + rr, y);
-        ctx.closePath();
-        ctx.fill();
-        const top = ctx.createLinearGradient(x - rr, y - rr, x + rr, y + rr);
-        top.addColorStop(0, "#C2BCAE");
-        top.addColorStop(0.55, "#9A9488");
-        top.addColorStop(1, "#6E685E");
-        ctx.fillStyle = top;
-        ctx.beginPath();
-        ctx.ellipse(x, y, rr, rr * 0.82, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(228,222,208,0.45)";
-        ctx.lineWidth = rr * 0.08;
-        ctx.beginPath();
-        ctx.ellipse(x, y, rr * 0.62, rr * 0.5, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        break;
-      }
-      case "lagoon": {
-        const water = (scale2) => {
-          ctx.beginPath();
-          const steps = 44;
-          for (let i = 0; i <= steps; i++) {
-            const t = i / steps * Math.PI * 2;
-            const wobble = 1 + 0.1 * Math.sin(t * 3 + 0.7) + 0.06 * Math.sin(t * 5 + 2.1) + 0.04 * Math.sin(t * 7 + 4.3);
-            const px = x + Math.cos(t) * r * 1.12 * scale2 * wobble;
-            const py = y + Math.sin(t) * r * 0.76 * scale2 * wobble;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
-          ctx.closePath();
-        };
-        ctx.fillStyle = "#E6D6A8";
-        water(1.16);
-        ctx.fill();
-        ctx.fillStyle = "#58C0C4";
-        water(1);
-        ctx.fill();
-        ctx.fillStyle = "#27889A";
-        water(0.82);
-        ctx.fill();
-        ctx.fillStyle = "#1C6C7E";
-        water(0.58);
-        ctx.fill();
-        const ripples = groundTexture(ctx, "water");
-        if (ripples) {
-          ctx.save();
-          ctx.globalAlpha = 0.4;
-          ctx.fillStyle = ripples;
-          water(1);
-          ctx.fill();
-          ctx.restore();
-        }
-        ctx.strokeStyle = "rgba(255,255,255,0.4)";
-        ctx.lineWidth = 1.6;
-        water(1);
-        ctx.stroke();
-        break;
-      }
-      case "lawn": {
-        const lawn = (scale2) => {
-          ctx.beginPath();
-          ctx.ellipse(x, y, r * 1.25 * scale2, r * 0.88 * scale2, -0.15, 0, Math.PI * 2);
-        };
-        ctx.fillStyle = "#4E6B2C";
-        lawn(1);
-        ctx.fill();
-        ctx.fillStyle = "#7FB23F";
-        lawn(0.93);
-        ctx.fill();
-        const blades = groundTexture(ctx, "grass");
-        if (blades) {
-          ctx.save();
-          ctx.globalAlpha = 0.8;
-          ctx.fillStyle = blades;
-          lawn(0.93);
-          ctx.fill();
-          ctx.restore();
-        }
-        break;
-      }
-      case "containers": {
-        const hues = ["#B4573A", "#2F7E86", "#B8912F", "#4E6E3A", "#8A4A4A", "#3F6E74"];
-        const rows = [
-          [0, 3, 0],
-          [0.06, 2, 1],
-          [-0.04, 4, 0],
-          [0.1, 2, 2]
-        ];
-        const unit = r * 0.46;
-        rows.forEach(([skew, count, gapAt], row) => {
-          for (let i = 0; i < count; i++) {
-            if (i === gapAt) continue;
-            const cx = x - r * 0.9 + i * unit * 1.06 + skew * r;
-            const cy = y - r * 0.46 + row * unit * 0.42;
-            const w = unit * 0.94;
-            const h = unit * 0.34;
-            const doubled = (row + i) % 3 === 0;
-            ctx.fillStyle = "rgba(10,14,18,0.32)";
-            ctx.fillRect(cx + 2, cy + 2.5, w, h);
-            if (doubled) {
-              ctx.fillStyle = hues[(row * 3 + i + 2) % hues.length];
-              ctx.fillRect(cx - 1.5, cy - 2, w, h);
-            }
-            ctx.fillStyle = hues[(row * 3 + i) % hues.length];
-            ctx.fillRect(cx, cy, w, h);
-            ctx.fillStyle = "rgba(255,250,238,0.16)";
-            ctx.fillRect(cx, cy, w, h * 0.26);
-            ctx.fillStyle = "rgba(10,14,18,0.18)";
-            for (let rib = 1; rib < 4; rib++) ctx.fillRect(cx + w / 4 * rib, cy, 0.8, h);
-          }
-        });
-        break;
-      }
-      case "pavilion": {
-        const size = r * 0.34;
-        const rows = [
-          [-1, -0.85],
-          [0.05, -1.05],
-          [-0.45, 0.5]
-        ];
-        const marquees = ["tent-red", "tent-blue", "tent-red"];
-        rows.forEach(([cx, cy], i) => {
-          const tx = x + cx * size * 2.1;
-          const ty = y + cy * size * 2.1;
-          const world = surfaceFor(activeTrackId);
-          if (drawArt(marquees[i], tx, ty, size * 2.4, {
-            shadow: 0.3,
-            tint: world.artTint,
-            tintStrength: world.artTintStrength
-          })) return;
-          shade(tx, ty + size * 0.42, size * 0.58, size * 0.26, 0.26);
-          pitchedRoof(tx, ty, size, 4, Math.PI / 4, [236, 232, 222], 0.9);
-        });
-        break;
-      }
-    }
-  }
-  function drawInfield() {
-    const placed = structures();
-    if (placed.length > 0) {
-      drawServiceRoad(placed);
-      for (const structure of [...placed].sort((a, b) => a.y - b.y)) drawStructure(structure);
-    }
-    const outside = outfieldStructures();
-    for (const structure of [...outside].sort((a, b) => a.y - b.y)) drawStructure(structure);
   }
 
   // src/render/boundary.ts
@@ -4736,7 +4972,7 @@ var HarborLoop = (() => {
       const py = y + h / 2 + Math.sin(angle) * (h / 2) * wobble;
       points.push(project(px, py));
     }
-    const trace = () => {
+    const trace2 = () => {
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
       for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
@@ -4744,15 +4980,15 @@ var HarborLoop = (() => {
     };
     ctx.save();
     ctx.translate(SHADOW_X * 3, SHADOW_Y * 3);
-    trace();
+    trace2();
     ctx.fillStyle = "rgba(48,58,64,0.35)";
     ctx.fill();
     ctx.restore();
-    trace();
+    trace2();
     ctx.fillStyle = COLORS.rock;
     ctx.fill();
     ctx.save();
-    trace();
+    trace2();
     ctx.clip();
     ctx.fillStyle = "rgba(214,214,204,0.30)";
     const cap = project(x + w * 0.5 - SHADOW_X * 12, y + h * 0.5 - SHADOW_Y * 12);
@@ -5045,6 +5281,7 @@ var HarborLoop = (() => {
   }
   function drawBackground() {
     drawBoundary();
+    drawLand();
     const decor = trackById(activeTrackId).decor;
     decor.medians.forEach(([x, y, w, h], i) => drawIsland(x, y, w, h, i));
     for (const [x, y, size] of decor.trees) {
@@ -5058,7 +5295,7 @@ var HarborLoop = (() => {
     for (const [x, y, w, h, seed] of decor.rocks) drawRocks(x, y, w, h, seed);
     for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
     for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
-    drawInfield();
+    drawFacility();
     drawProps();
     for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
     drawVignette();
@@ -6233,23 +6470,23 @@ var HarborLoop = (() => {
     const rowH = 22;
     const visible = Math.min(board.rows.length, Math.floor((listH - 16) / rowH));
     for (let i = 0; i < visible; i++) {
-      const row = board.rows[i];
+      const row2 = board.rows[i];
       const y = listY + i * rowH;
-      if (row.self) {
+      if (row2.self) {
         ctx.fillStyle = "rgba(87,213,203,0.16)";
         ctx.fillRect(RANK_CARD.x + 8, y - 2, RANK_CARD.w - 16, rowH - 2);
       }
       ctx.textAlign = "left";
       ctx.fillStyle = i < 3 ? UI.primary : "rgba(255,246,228,0.5)";
       ctx.font = "900 11px monospace";
-      ctx.fillText(String(row.rank), RANK_CARD.x + 14, y + 12);
+      ctx.fillText(String(row2.rank), RANK_CARD.x + 14, y + 12);
       ctx.fillStyle = UI.card;
       ctx.font = "600 11px sans-serif";
-      ctx.fillText(row.nickname.slice(0, 8), RANK_CARD.x + 40, y + 12);
+      ctx.fillText(row2.nickname.slice(0, 8), RANK_CARD.x + 40, y + 12);
       ctx.textAlign = "right";
-      ctx.fillStyle = row.self ? UI.primary : "rgba(255,246,228,0.75)";
+      ctx.fillStyle = row2.self ? UI.primary : "rgba(255,246,228,0.75)";
       ctx.font = "900 11px monospace";
-      ctx.fillText(String(row.score), RANK_CARD.x + RANK_CARD.w - 14, y + 12);
+      ctx.fillText(String(row2.score), RANK_CARD.x + RANK_CARD.w - 14, y + 12);
     }
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(255,246,228,0.5)";
@@ -6297,8 +6534,8 @@ var HarborLoop = (() => {
   var BACK = { x: MARGIN3, y: DESIGN_H - 84, w: DESIGN_W - MARGIN3 * 2, h: 54 };
   var boundsCache = /* @__PURE__ */ new Map();
   function trackBounds(trackId) {
-    const cached3 = boundsCache.get(trackId);
-    if (cached3) return cached3;
+    const cached2 = boundsCache.get(trackId);
+    if (cached2) return cached2;
     const points = TRACKS.find((track) => track.id === trackId).build();
     let minX = Infinity;
     let minY = Infinity;
@@ -6316,10 +6553,10 @@ var HarborLoop = (() => {
   }
   function cardRect(index) {
     const column = index % COLUMNS;
-    const row = Math.floor(index / COLUMNS);
+    const row2 = Math.floor(index / COLUMNS);
     return {
       x: MARGIN3 + column * (CELL + GAP),
-      y: GRID_TOP + row * (CELL + GAP),
+      y: GRID_TOP + row2 * (CELL + GAP),
       w: CELL,
       h: CELL
     };
@@ -6687,8 +6924,11 @@ var HarborLoop = (() => {
     strokeAlongCentre(ROAD_HALF_WIDTH + 8, "rgba(6,14,20,0.16)");
     strokeAlongCentre(ROAD_HALF_WIDTH + 4.5, "rgba(6,14,20,0.20)");
   }
-  var CORNER_PERCENTILE = 0.72;
+  var CORNER_PERCENTILE = 0.84;
   var CORNER_FLOOR = 25e-4;
+  var CORNER_HYSTERESIS = 0.75;
+  var CORNER_MERGE = 12;
+  var MIN_KERB_BLOCKS = 2;
   var KERB_BLOCK = 7;
   var KERB_REACH = 4;
   var KERB_INSET = 3.2;
@@ -6746,39 +6986,63 @@ var HarborLoop = (() => {
       return sum / 13;
     });
   }
-  function drawCornerKerbs(outerRoad) {
+  function cornerRuns(curvature) {
     var _a;
-    const curvature = centreCurvature();
-    const count = Math.min(outerRoad.length, curvature.length);
     const ranked = [...curvature].sort((a, b) => a - b);
-    const threshold = Math.max(
+    const enter = Math.max(
       CORNER_FLOOR,
       (_a = ranked[Math.floor(ranked.length * CORNER_PERCENTILE)]) != null ? _a : CORNER_FLOOR
     );
+    const leave = enter * CORNER_HYSTERESIS;
+    const turning = new Array(curvature.length).fill(false);
+    let active = false;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < curvature.length; i++) {
+        if (!active && curvature[i] > enter) active = true;
+        else if (active && curvature[i] < leave) active = false;
+        turning[i] = active;
+      }
+    }
+    const runs = [];
     let start = null;
-    for (let i = 0; i <= count; i++) {
-      const turning = i < count && curvature[i] > threshold;
-      if (turning && start === null) start = i;
-      if (!turning && start !== null) {
-        const baseOuter = edge(ROAD_HALF_WIDTH + KERB_REACH);
-        const baseOuterIn = edge(ROAD_HALF_WIDTH - KERB_INSET);
-        const baseInner = edge(-ROAD_HALF_WIDTH - KERB_REACH);
-        const baseInnerIn = edge(-ROAD_HALF_WIDTH + KERB_INSET);
-        fillRibbon(baseOuter.slice(start, i), baseOuterIn.slice(start, i), "#2A2F35");
-        fillRibbon(baseInnerIn.slice(start, i), baseInner.slice(start, i), "#2A2F35");
-        const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH - 0.7);
-        const outerInner = edge(ROAD_HALF_WIDTH - KERB_INSET + 0.7);
-        const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH + 0.7);
-        const innerInner = edge(-ROAD_HALF_WIDTH + KERB_INSET - 0.7);
-        for (let b = start; b < i; b += KERB_BLOCK) {
-          const end = Math.min(b + KERB_BLOCK + 1, i);
-          if (end - b < 2) continue;
-          const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
-          const colour = red ? "#C6392C" : "#2E343A";
-          fillRibbon(outerReach.slice(b, end), outerInner.slice(b, end), colour);
-          fillRibbon(innerInner.slice(b, end), innerReach.slice(b, end), colour);
-        }
+    for (let i = 0; i <= curvature.length; i++) {
+      const on = i < curvature.length && turning[i];
+      if (on && start === null) start = i;
+      if (!on && start !== null) {
+        runs.push([start, i]);
         start = null;
+      }
+    }
+    const merged = [];
+    for (const run2 of runs) {
+      const last = merged[merged.length - 1];
+      if (last && run2[0] - last[1] <= CORNER_MERGE) last[1] = run2[1];
+      else merged.push([run2[0], run2[1]]);
+    }
+    return merged.filter(([a, b]) => b - a >= MIN_KERB_BLOCKS * KERB_BLOCK);
+  }
+  function drawCornerKerbs() {
+    const curvature = centreCurvature();
+    for (const [start, end] of cornerRuns(curvature)) {
+      const baseOuter = edge(ROAD_HALF_WIDTH + KERB_REACH);
+      const baseOuterIn = edge(ROAD_HALF_WIDTH - KERB_INSET);
+      const baseInner = edge(-ROAD_HALF_WIDTH - KERB_REACH);
+      const baseInnerIn = edge(-ROAD_HALF_WIDTH + KERB_INSET);
+      fillRibbon(baseOuter.slice(start, end), baseOuterIn.slice(start, end), "#2A2F35");
+      fillRibbon(baseInnerIn.slice(start, end), baseInner.slice(start, end), "#2A2F35");
+      const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH - 0.7);
+      const outerInner = edge(ROAD_HALF_WIDTH - KERB_INSET + 0.7);
+      const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH + 0.7);
+      const innerInner = edge(-ROAD_HALF_WIDTH + KERB_INSET - 0.7);
+      const span = end - start;
+      const blocks = Math.max(MIN_KERB_BLOCKS, Math.round(span / KERB_BLOCK));
+      for (let b = 0; b < blocks; b++) {
+        if (b % 2 !== 0) continue;
+        const from = start + Math.round(b * span / blocks);
+        const to = start + Math.round((b + 1) * span / blocks) + 1;
+        if (to - from < 2) continue;
+        fillRibbon(outerReach.slice(from, to), outerInner.slice(from, to), "#C6392C");
+        fillRibbon(innerInner.slice(from, to), innerReach.slice(from, to), "#C6392C");
       }
     }
   }
@@ -6867,7 +7131,7 @@ var HarborLoop = (() => {
     const innerKerb = edge(-ROAD_HALF_WIDTH);
     fillRibbon(outerKerb, outerRoad, paint.kerb);
     fillRibbon(innerRoad, innerKerb, paint.kerb);
-    drawCornerKerbs(outerRoad);
+    drawCornerKerbs();
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const laneOuter = projectPath(pathForLane(lane - 0.5));
       const laneInner = projectPath(pathForLane(lane + 0.5));
@@ -6886,8 +7150,8 @@ var HarborLoop = (() => {
     const count = Math.min(outer.length, inner.length);
     for (let i = 0; i < count - SEAM_SPACING; i += SEAM_SPACING) {
       const panel2 = Math.floor(i / SEAM_SPACING);
-      const shade2 = Math.sin(panel2 * 12.9898) * 43758.5453;
-      const tone = shade2 - Math.floor(shade2);
+      const shade = Math.sin(panel2 * 12.9898) * 43758.5453;
+      const tone = shade - Math.floor(shade);
       if (tone > 0.62) continue;
       const end = Math.min(count - 1, i + SEAM_SPACING);
       const top = outer.slice(i, end + 1);
@@ -7150,7 +7414,7 @@ var HarborLoop = (() => {
     ctx.fill();
     ctx.restore();
   }
-  function drawZone(car) {
+  function drawZone2(car) {
     const gap = forwardPathDistance(player.distance, car.distance);
     const engaged = gap > 13 && gap < 66 && Math.abs(player.visualLane - car.visualLane) < 0.7;
     ctx.save();
@@ -7288,7 +7552,7 @@ var HarborLoop = (() => {
         if (car.wreck > 0) drawWreck(car);
         continue;
       }
-      if (car.hasZone) drawZone(car);
+      if (car.hasZone) drawZone2(car);
       drawAiCar(car);
     }
     const shakeX = shakeOffsetX() * CAR_SHAKE;

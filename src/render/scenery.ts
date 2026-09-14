@@ -7,7 +7,7 @@ import { activeTrackId } from '../track';
 import { grassTexture, groundTexture, groundTileSize } from './sprites';
 import { surfaceFor } from './surface';
 import { drawProps } from './props';
-import { drawInfield } from './infield';
+import { drawFacility, drawLand } from './land';
 import { drawBoundary } from './boundary';
 import { activeTrackId as currentTrack } from '../track';
 import { trackById } from '../tracks';
@@ -584,6 +584,11 @@ export function drawBush(x: number, y: number, size = 1): void {
 export function drawBackground(): void {
   drawBoundary();
 
+  // The made ground first, under everything. It is ground, not scenery: the
+  // islands, the planting and the scatter all stand *on* it, and anything drawn
+  // before it would be buried.
+  drawLand();
+
   // Decor follows the circuit: each track declares where its dry land is, so
   // islands never end up drawn across the road.
   const decor = trackById(activeTrackId).decor;
@@ -602,8 +607,9 @@ export function drawBackground(): void {
   for (const [x1, y1, x2, y2, width] of decor.bridges) drawBridge(x1, y1, x2, y2, width);
   for (const [x, y, w, h, angle] of decor.chequers) drawChequer(x, y, w, h, angle);
 
-  // The complex inside the circuit, then whatever stands about outside it.
-  drawInfield();
+  // What is built on the made ground, then whatever stands about on the open
+  // ground that is left.
+  drawFacility();
   drawProps();
   for (const [x, y, w, h, angle] of decor.buildings) drawBuilding(x, y, w, h, angle);
   // Boats and buoys are deliberately absent here. They are the only decor that

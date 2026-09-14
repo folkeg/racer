@@ -201,3 +201,139 @@ export function artReady(name: string): boolean {
   const image = propArt(name);
   return Boolean(image && image.width);
 }
+
+/* ------------------------------------------------------------------------- */
+/* Models rendered from 3D                                                    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Which turn of a model to use for a heading, in plane space.
+ *
+ * The sprites were made by turning the model under a fixed sun, so the game
+ * never rotates one: it picks the one that was rendered facing the right way.
+ * Blender's +X is screen right and its +Y is screen *up*, while design y runs
+ * down the screen — hence the sign flip. A model turned by a in Blender has its
+ * own width axis along design (cos a, -sin a), so the turn wanted for a heading
+ * (dx, dy) is atan2(-dy, dx), snapped to the nearest one rendered.
+ */
+export function yawFor(heading: number, yaws: number): number {
+  if (yaws <= 1) return 0;
+  const wanted = Math.atan2(-Math.sin(heading), Math.cos(heading));
+  const step = (Math.PI * 2) / yaws;
+  return ((Math.round(wanted / step) % yaws) + yaws) % yaws;
+}
+
+/** The sprite filename for a turn of a model. */
+export function yawSprite(name: string, yaws: number, yaw: number): string {
+  return yaws <= 1 ? name : `${name}-${yaw}`;
+}
+
+/**
+ * How far a cast shadow leans, as a fraction of the sprite's own height.
+ *
+ * Not tuned to taste: the models were rendered under a sun at 1.15 elevation
+ * against a unit of ground reach, so a wall of height h throws its shadow about
+ * 0.87h. Rounded down a little, because a shadow that reaches further than the
+ * building is tall reads as late afternoon and this board is lit at noon.
+ */
+const SHADOW_LEAN = 0.7;
+
+const silhouettes = new Map<string, WxCanvas>();
+
+/** The sprite as one flat dark shape, for casting. */
+function silhouette(name: string, image: WxImage): WxCanvas | null {
+  const cached = silhouettes.get(name);
+  if (cached) return cached;
+
+  const canvas = createOffscreenCanvas(image.width, image.height);
+  const target = canvas ? canvas.getContext('2d') : null;
+  if (!canvas || !target) return null;
+
+  target.drawImage(image as unknown as CanvasImageSource, 0, 0);
+  target.globalCompositeOperation = 'source-in';
+  target.fillStyle = '#0B1218';
+  target.fillRect(0, 0, image.width, image.height);
+  target.globalCompositeOperation = 'source-over';
+
+  silhouettes.set(name, canvas);
+  return canvas;
+}
+
+export interface ModelOptions extends ArtOptions {
+  /** Sprite width in screen pixels. */
+  width: number;
+  /** Footprint offset below the middle of the sprite, as a fraction of its height. */
+  anchor: number;
+}
+
+/**
+ * Draws a model so its *footprint* lands on (x, y).
+ *
+ * The sprite's middle is not its footprint's middle. The camera that rendered it
+ * is tilted, so height carries the image up the frame — a water tower is nearly
+ * a fifth of its own sprite taller than the ground it stands on. Ignoring that
+ * stands every building slightly behind where it was put, which on a row of them
+ * lining a straight is the difference between a row and a stagger.
+ */
+export function drawModel(sprite: string, x: number, y: number, options: ModelOptions): boolean {
+  const image = propArt(sprite);
+  if (!image || !image.width) return false;
+
+  const width = options.width;
+  const height = width * (image.height / image.width);
+  const top = y - height / 2 - options.anchor * height;
+  const shadow = options.shadow ?? 0;
+
+  if (shadow > 0) {
+    // The building's own silhouette, laid down the light.
+    //
+    // A soft ellipse under the middle is what small props get and it is wrong
+    // for anything with a shape: a shed is 114 units long and an ellipse a
+    // third of that under the middle of it reads as a stain, not a shadow, and
+    // the building goes on floating. This takes the sprite's actual outline,
+    // flips it about its own footprint and shears it down-light, which is what
+    // the shadow of a solid standing on a plane is.
+    const outline = silhouette(sprite, image);
+    if (outline) {
+      ctx.save();
+      ctx.globalAlpha = shadow;
+      ctx.translate(x, y);
+      // Maps the sprite's up axis onto the light's own direction. The vertical
+      // flip is not a mistake: the top of the building casts furthest away.
+      ctx.transform(1, 0, -SHADOW_X * SHADOW_LEAN, -SHADOW_Y * SHADOW_LEAN, 0, 0);
+      ctx.drawImage(
+        outline as unknown as CanvasImageSource,
+        -width / 2,
+        top - y,
+        width,
+        height
+      );
+      ctx.restore();
+    }
+
+    // And a contact shadow, because a cast shadow alone leaves a gap of clean
+    // ground where the wall actually meets the floor.
+    ctx.save();
+    ctx.fillStyle = `rgba(14,20,26,${(shadow * 0.55).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y, width * 0.30, width * 0.13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  const toned = options.tint
+    ? harmonise(sprite, image, options.tint, options.tintStrength ?? 0.12, options.desaturate ?? 0)
+    : null;
+
+  ctx.save();
+  if (options.alpha !== undefined) ctx.globalAlpha = options.alpha;
+  ctx.drawImage(
+    (toned ?? image) as unknown as CanvasImageSource,
+    x - width / 2,
+    top,
+    width,
+    height
+  );
+  ctx.restore();
+  return true;
+}

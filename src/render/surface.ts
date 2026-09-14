@@ -138,35 +138,45 @@ export interface Surface {
   props: PropKind[];
   propDensity: number;
   /**
-   * The large structures inside the circuit.
+   * The made ground beside the circuit, and what it is made of.
    *
-   * Only kinds that have real artwork behind them are used now. Everything
-   * hand-drawn was tried and none of it survived being looked at: a hall, a
-   * storage tank, a rotunda, a container stack and a chimney were each named by
-   * the player as "what on earth is that". The reason is not the drawing, it is
-   * that a grey rectangle does not become a factory and a grey disc does not
-   * become a tank, at any level of polish. A car reads at thirty pixels because
-   * everyone knows the silhouette of a car; nobody knows the silhouette of "a
-   * works building seen from above".
-   *
-   * So the infield is a paddock — marquees, trees, water — which is what a
-   * circuit's infield actually holds, and all of it is drawn by someone who was
-   * looking at the thing they drew.
-   *
-   * Empty for a world that should stay bare, and ignored by any circuit whose
-   * interior is a set of narrow slots rather than one room.
+   * A third material, and deliberately not the run-off's. The reference's boards
+   * are built from bands of surface running parallel to the racing — tarmac,
+   * then kerb, then run-off, then the yard or the grass beyond it — and it is
+   * those long concentric boundaries following the circuit that make the whole
+   * picture read as one place rather than as a road with things near it. One
+   * band of one colour cannot do that; the boundary is the thing that works.
    */
-  structures: import('./infield').StructureKind[];
+  yard: {
+    fill: string;
+    edge: string;
+    tile: GroundTile;
+  };
   /**
-   * Large structures outside the circuit.
+   * What is built in this world's yard, as names from src/models.generated.ts.
    *
-   * The board had nothing bigger than a car anywhere except the infield, which
-   * is why the outer half kept reading as empty ground with litter on it. These
-   * are the landmarks that half needs — and they go in the open ground the
-   * search finds, not in a belt around the frame, which is the mistake that
-   * produced a picture frame twice.
+   * Every one of these is a render of an actual model. Everything hand-drawn
+   * was tried first and none of it survived being looked at: a hall, a storage
+   * tank, a rotunda, a container stack and a chimney were each named by the
+   * player as "what on earth is that". The reason is not the drawing — a grey
+   * rectangle does not become a factory at any level of polish, because nobody
+   * knows the silhouette of "a works building seen from above" to recognise it
+   * against.
+   *
+   * The order is not meaningful: the layout sorts by what fits the yard it has,
+   * largest first, which is why the same list makes a works on one circuit and a
+   * container park on another.
    */
-  outfield: import('./infield').StructureKind[];
+  structures: string[];
+  /**
+   * The small things that fill the ground between the buildings.
+   *
+   * Density is the difference between a site and three objects on a field. These
+   * are what a yard is actually full of — tanks, containers, panels — and they
+   * go in the space the buildings leave rather than being scattered over open
+   * ground, which is what "位置 数量不匹配" was describing.
+   */
+  clutter: string[];
 }
 
 export const SURFACES: Record<string, Surface> = {
@@ -200,13 +210,14 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#9C8F62',
       planted: true
     },
+    yard: { fill: '#A6A698', edge: '#7B7B6D', tile: 'concrete' },
     artTint: '#7C9AA8',
     artTintStrength: 0.16,
     boundary: 'none',
     props: [],
     propDensity: 0,
-    structures: [],
-    outfield: []
+    structures: ['depot', 'shed', 'hall'],
+    clutter: ['container', 'container-b', 'container-c', 'tank-small']
   },
 
   beach: {
@@ -244,13 +255,14 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#D8C79A',
       planted: true
     },
+    yard: { fill: '#C6B48C', edge: '#9A8965', tile: 'concrete' },
     artTint: '#C4A971',
     artTintStrength: 0.18,
     boundary: 'none',
     props: ['rock'],
     propDensity: 0.4,
-    structures: ['lagoon', 'pavilion'],
-    outfield: ['pavilion']
+    structures: ['depot', 'hall'],
+    clutter: ['container-c', 'solar', 'tank-small']
   },
 
   city: {
@@ -291,13 +303,14 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#6E767E',
       planted: false
     },
+    yard: { fill: '#697079', edge: '#454C55', tile: 'concrete' },
     artTint: '#3C444C',
     artTintStrength: 0.20,
     boundary: 'none',
     props: ['tree'],
     propDensity: 0.35,
-    structures: ['works', 'shed', 'pavilion'],
-    outfield: ['factory', 'shed']
+    structures: ['hall', 'plant', 'depot', 'factory'],
+    clutter: ['solar', 'container-b', 'tank-small', 'water-tower']
   },
 
   industrial: {
@@ -331,6 +344,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#7A7264',
       planted: false
     },
+    yard: { fill: '#7A776E', edge: '#54514A', tile: 'concrete' },
     artTint: '#5E5A51',
     artTintStrength: 0.19,
     boundary: 'none',
@@ -340,8 +354,8 @@ export const SURFACES: Record<string, Surface> = {
     // clusters turns the accent colour into noise — the containers were meant
     // to be the one thing the eye goes to.
     propDensity: 0.3,
-    structures: ['factory', 'tanks', 'shed'],
-    outfield: ['works', 'tower']
+    structures: ['works', 'factory', 'shed', 'plant', 'depot'],
+    clutter: ['tank', 'container', 'container-b', 'chimney', 'tank-small']
   },
 
   meadow: {
@@ -374,13 +388,14 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#A29A72',
       planted: true
     },
+    yard: { fill: '#9C9880', edge: '#75725D', tile: 'concrete' },
     artTint: '#5E7F45',
     artTintStrength: 0.16,
     boundary: 'none',
     props: ['tree'],
     propDensity: 0.4,
-    structures: ['lagoon', 'pavilion'],
-    outfield: ['pavilion']
+    structures: ['hall', 'depot'],
+    clutter: ['solar', 'tank-small']
   }
 };
 

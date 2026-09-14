@@ -4,3 +4,6 @@ node_modules/
 project.private.config.json
 
 .DS_Store
+
+# Scratch contact sheets and probe scripts used while looking at the art.
+.artreview/
