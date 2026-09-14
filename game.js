@@ -3589,8 +3589,8 @@ var HarborLoop = (() => {
       artTint: "#C4A971",
       artTintStrength: 0.18,
       boundary: "none",
-      props: ["rock", "tuft"],
-      propDensity: 1,
+      props: ["rock"],
+      propDensity: 0.4,
       structures: ["lagoon", "pavilion", "dome"],
       outfield: ["pavilion", "dome"]
     },
@@ -3635,8 +3635,8 @@ var HarborLoop = (() => {
       artTint: "#3C444C",
       artTintStrength: 0.2,
       boundary: "none",
-      props: ["barrier", "lamp", "cone"],
-      propDensity: 0.7,
+      props: ["lamp"],
+      propDensity: 0.35,
       structures: ["lawn", "hall", "dome"],
       outfield: ["hall", "lawn"]
     },
@@ -3674,12 +3674,12 @@ var HarborLoop = (() => {
       artTint: "#5E5A51",
       artTintStrength: 0.19,
       boundary: "none",
-      props: ["drum", "tyres", "cone", "chimney"],
+      props: ["chimney"],
       // Halved. Grouping the small props multiplied what was on the ground by
       // three or four without changing the count, and a yard carpeted in orange
       // clusters turns the accent colour into noise — the containers were meant
       // to be the one thing the eye goes to.
-      propDensity: 0.6,
+      propDensity: 0.3,
       structures: ["containers", "hall", "tank"],
       outfield: ["tank", "containers"]
     },
@@ -3716,8 +3716,8 @@ var HarborLoop = (() => {
       artTint: "#5E7F45",
       artTintStrength: 0.16,
       boundary: "none",
-      props: ["tree", "bush", "rock"],
-      propDensity: 1,
+      props: ["tree"],
+      propDensity: 0.4,
       structures: ["lagoon", "pavilion"],
       outfield: ["pavilion"]
     }
@@ -4440,23 +4440,36 @@ var HarborLoop = (() => {
         break;
       }
       case "containers": {
-        const hues = ["#B4573A", "#2F7E86", "#B8912F", "#4E6E3A"];
-        const cols = 4;
-        const rows = 3;
-        const cw = r * 1.9 / cols;
-        const ch = r * 1 / rows;
-        for (let row = 0; row < rows; row++) {
-          for (let col = 0; col < cols; col++) {
-            const cx = x - r * 0.95 + col * cw;
-            const cy = y - r * 0.5 + row * ch;
-            ctx.fillStyle = "rgba(10,14,18,0.30)";
-            ctx.fillRect(cx + 1.5, cy + 2, cw * 0.86, ch * 0.76);
-            ctx.fillStyle = hues[(row * cols + col) % hues.length];
-            ctx.fillRect(cx, cy, cw * 0.86, ch * 0.76);
-            ctx.fillStyle = "rgba(255,250,238,0.22)";
-            ctx.fillRect(cx, cy, cw * 0.86, ch * 0.2);
+        const hues = ["#B4573A", "#2F7E86", "#B8912F", "#4E6E3A", "#8A4A4A", "#3F6E74"];
+        const rows = [
+          [0, 3, 0],
+          [0.06, 2, 1],
+          [-0.04, 4, 0],
+          [0.1, 2, 2]
+        ];
+        const unit = r * 0.46;
+        rows.forEach(([skew, count, gapAt], row) => {
+          for (let i = 0; i < count; i++) {
+            if (i === gapAt) continue;
+            const cx = x - r * 0.9 + i * unit * 1.06 + skew * r;
+            const cy = y - r * 0.46 + row * unit * 0.42;
+            const w = unit * 0.94;
+            const h = unit * 0.34;
+            const doubled = (row + i) % 3 === 0;
+            ctx.fillStyle = "rgba(10,14,18,0.32)";
+            ctx.fillRect(cx + 2, cy + 2.5, w, h);
+            if (doubled) {
+              ctx.fillStyle = hues[(row * 3 + i + 2) % hues.length];
+              ctx.fillRect(cx - 1.5, cy - 2, w, h);
+            }
+            ctx.fillStyle = hues[(row * 3 + i) % hues.length];
+            ctx.fillRect(cx, cy, w, h);
+            ctx.fillStyle = "rgba(255,250,238,0.16)";
+            ctx.fillRect(cx, cy, w, h * 0.26);
+            ctx.fillStyle = "rgba(10,14,18,0.18)";
+            for (let rib = 1; rib < 4; rib++) ctx.fillRect(cx + w / 4 * rib, cy, 0.8, h);
           }
-        }
+        });
         break;
       }
       case "pavilion": {

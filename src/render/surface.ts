@@ -234,8 +234,8 @@ export const SURFACES: Record<string, Surface> = {
     artTint: '#C4A971',
     artTintStrength: 0.18,
     boundary: 'none',
-    props: ['rock', 'tuft'],
-    propDensity: 1,
+    props: ['rock'],
+    propDensity: 0.4,
     structures: ['lagoon', 'pavilion', 'dome'],
     outfield: ['pavilion', 'dome']
   },
@@ -281,8 +281,8 @@ export const SURFACES: Record<string, Surface> = {
     artTint: '#3C444C',
     artTintStrength: 0.20,
     boundary: 'none',
-    props: ['barrier', 'lamp', 'cone'],
-    propDensity: 0.7,
+    props: ['lamp'],
+    propDensity: 0.35,
     structures: ['lawn', 'hall', 'dome'],
     outfield: ['hall', 'lawn']
   },
@@ -321,12 +321,12 @@ export const SURFACES: Record<string, Surface> = {
     artTint: '#5E5A51',
     artTintStrength: 0.19,
     boundary: 'none',
-    props: ['drum', 'tyres', 'cone', 'chimney'],
+    props: ['chimney'],
     // Halved. Grouping the small props multiplied what was on the ground by
     // three or four without changing the count, and a yard carpeted in orange
     // clusters turns the accent colour into noise — the containers were meant
     // to be the one thing the eye goes to.
-    propDensity: 0.6,
+    propDensity: 0.3,
     structures: ['containers', 'hall', 'tank'],
     outfield: ['tank', 'containers']
   },
@@ -364,8 +364,8 @@ export const SURFACES: Record<string, Surface> = {
     artTint: '#5E7F45',
     artTintStrength: 0.16,
     boundary: 'none',
-    props: ['tree', 'bush', 'rock'],
-    propDensity: 1,
+    props: ['tree'],
+    propDensity: 0.4,
     structures: ['lagoon', 'pavilion'],
     outfield: ['pavilion']
   }

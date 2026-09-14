@@ -558,25 +558,41 @@ function drawStructure(structure: Structure): void {
       break;
     }
     case 'containers': {
-      // Rows, because a works yard is set out with a rule — and because the
-      // colours are the point, four saturated ones against all that grey.
-      const hues = ['#B4573A', '#2F7E86', '#B8912F', '#4E6E3A'];
-      const cols = 4;
-      const rows = 3;
-      const cw = (r * 1.9) / cols;
-      const ch = (r * 1.0) / rows;
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const cx = x - r * 0.95 + col * cw;
-          const cy = y - r * 0.5 + row * ch;
-          ctx.fillStyle = 'rgba(10,14,18,0.30)';
-          ctx.fillRect(cx + 1.5, cy + 2, cw * 0.86, ch * 0.76);
-          ctx.fillStyle = hues[(row * cols + col) % hues.length];
-          ctx.fillRect(cx, cy, cw * 0.86, ch * 0.76);
-          ctx.fillStyle = 'rgba(255,250,238,0.22)';
-          ctx.fillRect(cx, cy, cw * 0.86, ch * 0.2);
+      // Not a grid.
+      //
+      // Twelve equal rectangles in even rows read as a colour picker, which is
+      // what they looked like — the regularity was meant to say "industry is set
+      // out with a rule" and instead said "generated". A real stack is rows of
+      // different lengths with gaps where one has been taken away, some doubled
+      // up, all of them long boxes rather than squares.
+      const hues = ['#B4573A', '#2F7E86', '#B8912F', '#4E6E3A', '#8A4A4A', '#3F6E74'];
+      const rows = [
+        [0, 3, 0], [0.06, 2, 1], [-0.04, 4, 0], [0.1, 2, 2]
+      ];
+      const unit = r * 0.46;
+      rows.forEach(([skew, count, gapAt], row) => {
+        for (let i = 0; i < count; i++) {
+          if (i === gapAt) continue;
+          const cx = x - r * 0.9 + i * unit * 1.06 + skew * r;
+          const cy = y - r * 0.46 + row * unit * 0.42;
+          const w = unit * 0.94;
+          const h = unit * 0.34;
+          const doubled = (row + i) % 3 === 0;
+          ctx.fillStyle = 'rgba(10,14,18,0.32)';
+          ctx.fillRect(cx + 2, cy + 2.5, w, h);
+          if (doubled) {
+            ctx.fillStyle = hues[(row * 3 + i + 2) % hues.length];
+            ctx.fillRect(cx - 1.5, cy - 2, w, h);
+          }
+          ctx.fillStyle = hues[(row * 3 + i) % hues.length];
+          ctx.fillRect(cx, cy, w, h);
+          // Ribbing along the top face, which is what a container has.
+          ctx.fillStyle = 'rgba(255,250,238,0.16)';
+          ctx.fillRect(cx, cy, w, h * 0.26);
+          ctx.fillStyle = 'rgba(10,14,18,0.18)';
+          for (let rib = 1; rib < 4; rib++) ctx.fillRect(cx + (w / 4) * rib, cy, 0.8, h);
         }
-      }
+      });
       break;
     }
     case 'pavilion': {
