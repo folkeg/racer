@@ -3636,7 +3636,7 @@ var HarborLoop = (() => {
       artTintStrength: 0.2,
       boundary: "none",
       props: ["barrier", "lamp", "cone"],
-      propDensity: 1.1,
+      propDensity: 0.7,
       structures: ["lawn", "hall", "dome"],
       outfield: ["hall", "lawn"]
     },
@@ -3675,7 +3675,11 @@ var HarborLoop = (() => {
       artTintStrength: 0.19,
       boundary: "none",
       props: ["drum", "tyres", "cone", "chimney"],
-      propDensity: 1.3,
+      // Halved. Grouping the small props multiplied what was on the ground by
+      // three or four without changing the count, and a yard carpeted in orange
+      // clusters turns the accent colour into noise — the containers were meant
+      // to be the one thing the eye goes to.
+      propDensity: 0.6,
       structures: ["containers", "hall", "tank"],
       outfield: ["tank", "containers"]
     },
@@ -3919,17 +3923,25 @@ var HarborLoop = (() => {
     ctx.fill();
   }
   var ART = {
-    rock: { name: "rock", width: 9 },
-    tyres: { name: "tyres", width: 8 },
-    drum: { name: "drum-red", width: 6 },
-    cone: { name: "cone", width: 5 },
-    barrier: { name: "barrier", width: 15 },
-    tree: { name: "tree", width: 16 },
-    bush: { name: "tree-small", width: 10 },
-    // Not the marquee sprite. Mapping a parasol to a full RACE tent turned the
-    // beach into a tent city — dozens of them, all identical, all the size of a
-    // building. A parasol is furniture.
-    parasol: { name: "tree-small", width: 7 }
+    rock: { name: "rock", width: 11 },
+    // The small ones come in groups.
+    //
+    // A drum is half a metre across and a car is four, so at its true relative
+    // size it lands at five or six units — and anything under about half a car
+    // stops reading as an object at this resolution and becomes a dot. That was
+    // the answer to "what are those circles with a black dot in them": tyre
+    // stacks, correctly sized and completely illegible.
+    //
+    // Making one drum bigger would be a lie about how big a drum is. A pallet of
+    // them is not: the group reaches car scale, and a group is what is actually
+    // lying around a yard anyway.
+    tyres: { name: "tyres", width: 9, group: 3 },
+    drum: { name: "drum-red", width: 7, group: 4 },
+    cone: { name: "cone", width: 6, group: 3 },
+    barrier: { name: "barrier", width: 17 },
+    tree: { name: "tree", width: 17 },
+    bush: { name: "tree-small", width: 11 },
+    parasol: { name: "tree-small", width: 8 }
   };
   function drawProp(prop) {
     const p = project(prop.x, prop.y);
@@ -3938,10 +3950,26 @@ var HarborLoop = (() => {
     const y = p.y;
     const art = ART[prop.kind];
     const surface = surfaceFor(activeTrackId);
-    if (art && drawArt(art.name, x, y, art.width * prop.size * p.scale, {
-      tint: surface.artTint,
-      tintStrength: surface.artTintStrength
-    })) return;
+    if (art) {
+      const width = art.width * prop.size * p.scale;
+      const options = { tint: surface.artTint, tintStrength: surface.artTintStrength };
+      if (!art.group) {
+        if (drawArt(art.name, x, y, width, options)) return;
+      } else {
+        const spread = width * 0.62;
+        const offsets = [];
+        for (let i = 0; i < art.group; i++) {
+          const angle = i / art.group * Math.PI * 2 + prop.size * 3;
+          offsets.push([Math.cos(angle) * spread, Math.sin(angle) * spread * 0.6]);
+        }
+        offsets.sort((a, b) => a[1] - b[1]);
+        let drawn = false;
+        for (const [dx, dy] of offsets) {
+          drawn = drawArt(art.name, x + dx, y + dy, width, options) || drawn;
+        }
+        if (drawn) return;
+      }
+    }
     switch (prop.kind) {
       case "rock": {
         shadow(x, y + 1.5 * s, 5.5 * s, 3 * s);

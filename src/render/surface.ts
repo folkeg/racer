@@ -282,7 +282,7 @@ export const SURFACES: Record<string, Surface> = {
     artTintStrength: 0.20,
     boundary: 'none',
     props: ['barrier', 'lamp', 'cone'],
-    propDensity: 1.1,
+    propDensity: 0.7,
     structures: ['lawn', 'hall', 'dome'],
     outfield: ['hall', 'lawn']
   },
@@ -322,7 +322,11 @@ export const SURFACES: Record<string, Surface> = {
     artTintStrength: 0.19,
     boundary: 'none',
     props: ['drum', 'tyres', 'cone', 'chimney'],
-    propDensity: 1.3,
+    // Halved. Grouping the small props multiplied what was on the ground by
+    // three or four without changing the count, and a yard carpeted in orange
+    // clusters turns the accent colour into noise — the containers were meant
+    // to be the one thing the eye goes to.
+    propDensity: 0.6,
     structures: ['containers', 'hall', 'tank'],
     outfield: ['tank', 'containers']
   },
