@@ -3170,8 +3170,30 @@ var HarborLoop = (() => {
     water: null,
     sand: null,
     concrete: null,
+    // Baked, listed in the tile sizes, used as the city and works-yard paving —
+    // and never loaded, so both of those roads have been running with no grain on
+    // them at all. Nothing failed loudly; groundTexture simply returned null and
+    // the fill went out flat.
+    asphalt: null,
     grass: null
   };
+  var PROP_NAMES = [
+    "tent-red",
+    "tent-blue",
+    "tribune",
+    "tribune-roof",
+    "tree",
+    "tree-small",
+    "rock",
+    "rock-alt",
+    "tyres",
+    "tyres-red",
+    "drum-red",
+    "drum-blue",
+    "barrier",
+    "cone"
+  ];
+  var props = {};
   var onLoaded = null;
   function setArtListener(listener) {
     onLoaded = listener;
@@ -3191,8 +3213,28 @@ var HarborLoop = (() => {
     };
     image.src = `assets/${name}-tile.png`;
   }
+  function loadProp(name) {
+    var _a;
+    const image = (_a = wx.createImage) == null ? void 0 : _a.call(wx);
+    if (!image) return;
+    image.onload = () => {
+      if (image.width > 0 && image.height > 0) {
+        props[name] = image;
+        onLoaded == null ? void 0 : onLoaded();
+      }
+    };
+    image.onerror = () => {
+      props[name] = null;
+    };
+    image.src = `assets/props/${name}.png`;
+  }
   function loadArt() {
     for (const name of Object.keys(loaded)) load(name);
+    for (const name of PROP_NAMES) loadProp(name);
+  }
+  function propArt(name) {
+    var _a;
+    return (_a = props[name]) != null ? _a : null;
   }
   function tileArt(name) {
     var _a;
@@ -3489,7 +3531,7 @@ var HarborLoop = (() => {
         shelf: "#9C8F62",
         planted: true
       },
-      boundary: "quay",
+      boundary: "stand",
       props: [],
       propDensity: 0,
       structures: [],
@@ -3530,8 +3572,8 @@ var HarborLoop = (() => {
         shelf: "#D8C79A",
         planted: true
       },
-      boundary: "dune",
-      props: ["rock", "tuft", "parasol"],
+      boundary: "stand",
+      props: ["rock", "tuft"],
       propDensity: 1,
       structures: ["lagoon", "pavilion", "dome"],
       outfield: ["pavilion", "dome"]
@@ -3611,7 +3653,7 @@ var HarborLoop = (() => {
         shelf: "#7A7264",
         planted: false
       },
-      boundary: "shed",
+      boundary: "stand",
       props: ["drum", "tyres", "cone", "chimney"],
       propDensity: 1.3,
       structures: ["containers", "hall", "tank"],
@@ -3663,6 +3705,44 @@ var HarborLoop = (() => {
   function surfaceFor(track) {
     var _a;
     return (_a = SURFACES[TRACK_SURFACE[track]]) != null ? _a : SURFACES.harbour;
+  }
+
+  // src/render/art.ts
+  function drawArt(name, x, y, width, options = {}) {
+    var _a;
+    const image = propArt(name);
+    if (!image || !image.width) return false;
+    const height = width * (image.height / image.width);
+    const shadow2 = (_a = options.shadow) != null ? _a : 0.34;
+    if (shadow2 > 0) {
+      ctx.save();
+      ctx.fillStyle = "rgba(12,18,24,0.26)";
+      ctx.beginPath();
+      ctx.ellipse(
+        x + SHADOW_X * width * 0.14,
+        y + SHADOW_Y * width * 0.14,
+        width * shadow2,
+        height * shadow2 * 0.62,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.save();
+    if (options.alpha !== void 0) ctx.globalAlpha = options.alpha;
+    ctx.translate(x, y);
+    if (options.angle) ctx.rotate(options.angle);
+    ctx.drawImage(
+      image,
+      -width / 2,
+      -height / 2,
+      width,
+      height
+    );
+    ctx.restore();
+    return true;
   }
 
   // src/render/props.ts
@@ -3725,15 +3805,15 @@ var HarborLoop = (() => {
     const free = freeGround();
     if (free.length === 0) return [];
     const wanted = Math.min(free.length, Math.round(free.length * 0.045 * surface.propDensity));
-    const props = [];
+    const props2 = [];
     const taken = /* @__PURE__ */ new Set();
-    for (let n = 0; props.length < wanted && n < wanted * 40; n++) {
+    for (let n = 0; props2.length < wanted && n < wanted * 40; n++) {
       const index = Math.floor(hash(n * 3.7 + 1) * free.length);
       if (taken.has(index)) continue;
       taken.add(index);
       const spot = free[index];
       let crowded = false;
-      for (const other of props) {
+      for (const other of props2) {
         const dx = other.x - spot.x;
         const dy = other.y - spot.y;
         if (dx * dx + dy * dy < SPACING * SPACING) {
@@ -3744,7 +3824,7 @@ var HarborLoop = (() => {
       if (crowded) continue;
       if (!groundIsFree(spot.x, spot.y, 8)) continue;
       const roll = hash(index * 5.3 + 2);
-      props.push({
+      props2.push({
         // Jittered off the grid, or the scatter reads as a lattice.
         x: spot.x + (hash(index) - 0.5) * 11,
         y: spot.y + (hash(index * 2.1) - 0.5) * 11,
@@ -3752,8 +3832,8 @@ var HarborLoop = (() => {
         size: 0.8 + hash(index * 7.9) * 0.5
       });
     }
-    props.sort((a, b) => a.y - b.y);
-    return props;
+    props2.sort((a, b) => a.y - b.y);
+    return props2;
   }
   function propsForTrack() {
     if (cachedTrack !== activeTrackId) {
@@ -3771,11 +3851,26 @@ var HarborLoop = (() => {
     ctx.ellipse(x + SHADOW_X * 2.5, y + SHADOW_Y * 2.5, w, h, 0, 0, Math.PI * 2);
     ctx.fill();
   }
+  var ART = {
+    rock: { name: "rock", width: 9 },
+    tyres: { name: "tyres", width: 8 },
+    drum: { name: "drum-red", width: 6 },
+    cone: { name: "cone", width: 5 },
+    barrier: { name: "barrier", width: 15 },
+    tree: { name: "tree", width: 16 },
+    bush: { name: "tree-small", width: 10 },
+    // Not the marquee sprite. Mapping a parasol to a full RACE tent turned the
+    // beach into a tent city — dozens of them, all identical, all the size of a
+    // building. A parasol is furniture.
+    parasol: { name: "tree-small", width: 7 }
+  };
   function drawProp(prop) {
     const p = project(prop.x, prop.y);
     const s = prop.size * p.scale;
     const x = p.x;
     const y = p.y;
+    const art = ART[prop.kind];
+    if (art && drawArt(art.name, x, y, art.width * prop.size * p.scale)) return;
     switch (prop.kind) {
       case "rock": {
         shadow(x, y + 1.5 * s, 5.5 * s, 3 * s);
@@ -3967,7 +4062,9 @@ var HarborLoop = (() => {
   function drawServiceRoad(placed) {
     if (placed.length < 2) return;
     const paint = surfaceFor(activeTrackId).road;
-    const order = [...placed].sort((a, b) => a.y - b.y);
+    const served = placed.filter((structure) => !GROUND_KINDS.includes(structure.kind));
+    if (served.length < 2) return;
+    const order = [...served].sort((a, b) => a.y - b.y);
     const stroke = (width, colour) => {
       ctx.save();
       ctx.beginPath();
@@ -4085,21 +4182,21 @@ var HarborLoop = (() => {
         ctx.beginPath();
         ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
         ctx.fill();
-        const courses = 4;
+        const courses = 3;
         for (let i = 0; i < courses; i++) {
           const t = 1 - i / courses;
-          ctx.fillStyle = i % 2 === 0 ? "#C8C6BE" : "#B6B4AC";
+          ctx.fillStyle = i % 2 === 0 ? "#D2D0C8" : "#A8A69E";
           ctx.beginPath();
           ctx.ellipse(x, y - r * 0.05 * i, r * 0.94 * t, r * 0.84 * t, 0, 0, Math.PI * 2);
           ctx.fill();
         }
-        ctx.strokeStyle = "rgba(70,76,84,0.34)";
-        ctx.lineWidth = Math.max(0.6, r * 0.035);
-        for (let i = 0; i < 12; i++) {
-          const angle = i / 12 * Math.PI * 2;
+        ctx.strokeStyle = "rgba(70,76,84,0.30)";
+        ctx.lineWidth = Math.max(0.6, r * 0.04);
+        for (let i = 0; i < 6; i++) {
+          const angle = i / 6 * Math.PI * 2 + 0.4;
           ctx.beginPath();
-          ctx.moveTo(x + Math.cos(angle) * r * 0.18, y + Math.sin(angle) * r * 0.16);
-          ctx.lineTo(x + Math.cos(angle) * r * 0.92, y + Math.sin(angle) * r * 0.82);
+          ctx.moveTo(x + Math.cos(angle) * r * 0.24, y + Math.sin(angle) * r * 0.2);
+          ctx.lineTo(x + Math.cos(angle) * r * 0.9, y + Math.sin(angle) * r * 0.8);
           ctx.stroke();
         }
         const gloss = ctx.createRadialGradient(
@@ -4264,22 +4361,20 @@ var HarborLoop = (() => {
         break;
       }
       case "pavilion": {
-        const size = r * 0.3;
-        const stepX = size * 2.5;
-        const stepY = size * 1.7;
+        const size = r * 0.34;
         const rows = [
-          [-1, -1],
-          [0, -1],
-          [1, -1],
-          [-0.5, 0.45],
-          [0.5, 0.45]
+          [-1, -0.85],
+          [0.05, -1.05],
+          [-0.45, 0.5]
         ];
-        for (const [cx, cy] of rows) {
-          const tx = x + cx * stepX;
-          const ty = y + cy * stepY;
+        const marquees = ["tent-red", "tent-blue", "tent-red"];
+        rows.forEach(([cx, cy], i) => {
+          const tx = x + cx * size * 2.1;
+          const ty = y + cy * size * 2.1;
+          if (drawArt(marquees[i], tx, ty, size * 2.4, { shadow: 0.3 })) return;
           shade(tx, ty + size * 0.42, size * 0.58, size * 0.26, 0.26);
-          pitchedRoof(tx, ty - size * 0.18, size, 4, Math.PI / 4, [236, 232, 222], 0.46);
-        }
+          pitchedRoof(tx, ty, size, 4, Math.PI / 4, [236, 232, 222], 0.9);
+        });
         break;
       }
     }
@@ -4292,6 +4387,26 @@ var HarborLoop = (() => {
     }
     const outside = outfieldStructures();
     for (const structure of [...outside].sort((a, b) => a.y - b.y)) drawStructure(structure);
+  }
+
+  // src/render/boundary.ts
+  function drawBoundary() {
+    const kind = surfaceFor(activeTrackId).boundary;
+    if (kind === "none") return;
+    if (kind !== "stand") return;
+    const top = BOARD_TOP;
+    const bottom = BOARD_BOTTOM;
+    const SPAN = 74;
+    const DEEP = 30;
+    const inset = DEEP * 0.22;
+    for (let y = top + SPAN * 0.3; y < bottom; y += SPAN) {
+      drawArt("tribune", inset, y, SPAN, { angle: Math.PI / 2, shadow: 0 });
+      drawArt("tribune", DESIGN_W - inset, y, SPAN, { angle: Math.PI / 2, shadow: 0 });
+    }
+    for (let x = SPAN * 0.35; x < DESIGN_W; x += SPAN) {
+      drawArt("tribune", x, top + inset * 0.6, SPAN, { shadow: 0 });
+      drawArt("tribune", x, bottom - inset * 0.6, SPAN, { shadow: 0 });
+    }
   }
 
   // src/render/primitives.ts
@@ -4750,6 +4865,7 @@ var HarborLoop = (() => {
     ctx.restore();
   }
   function drawBackground() {
+    drawBoundary();
     const decor = trackById(activeTrackId).decor;
     decor.medians.forEach(([x, y, w, h], i) => drawIsland(x, y, w, h, i));
     for (const [x, y, size] of decor.trees) {

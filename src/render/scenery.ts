@@ -8,6 +8,7 @@ import { grassTexture, groundTexture, groundTileSize } from './sprites';
 import { surfaceFor } from './surface';
 import { drawProps } from './props';
 import { drawInfield } from './infield';
+import { drawBoundary } from './boundary';
 import { activeTrackId as currentTrack } from '../track';
 import { trackById } from '../tracks';
 import { project } from './camera';
@@ -570,6 +571,8 @@ export function drawBush(x: number, y: number, size = 1): void {
 }
 
 export function drawBackground(): void {
+  drawBoundary();
+
   // Decor follows the circuit: each track declares where its dry land is, so
   // islands never end up drawn across the road.
   const decor = trackById(activeTrackId).decor;

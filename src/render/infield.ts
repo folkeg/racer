@@ -23,6 +23,7 @@ import { ctx, DESIGN_W } from '../platform';
 import { activeTrackId, pathAtOffset } from '../track';
 import type { TrackId } from '../tracks';
 import { lateralUnit, project } from './camera';
+import { drawArt } from './art';
 import { SHADOW_X, SHADOW_Y } from './light';
 import { claimGround, freeGround, releaseGround } from './props';
 import { BOARD_BOTTOM, BOARD_TOP } from './scenery';
@@ -162,7 +163,12 @@ function outfieldStructures(): Structure[] {
 function drawServiceRoad(placed: Structure[]): void {
   if (placed.length < 2) return;
   const paint = surfaceFor(activeTrackId).road;
-  const order = [...placed].sort((a, b) => a.y - b.y);
+  // A road's ends are buildings. It was running into the lagoon, because ground
+  // features were in the waypoint list along with everything else, and a road
+  // that stops in a pond is not a road.
+  const served = placed.filter((structure) => !GROUND_KINDS.includes(structure.kind));
+  if (served.length < 2) return;
+  const order = [...served].sort((a, b) => a.y - b.y);
 
   const stroke = (width: number, colour: string | CanvasPattern): void => {
     ctx.save();
@@ -355,22 +361,25 @@ function drawStructure(structure: Structure): void {
       ctx.ellipse(x, y, r, r * 0.9, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      const courses = 4;
+      const courses = 3;
       for (let i = 0; i < courses; i++) {
         const t = 1 - i / courses;
-        ctx.fillStyle = i % 2 === 0 ? '#C8C6BE' : '#B6B4AC';
+        ctx.fillStyle = i % 2 === 0 ? '#D2D0C8' : '#A8A69E';
         ctx.beginPath();
         ctx.ellipse(x, y - r * 0.05 * i, r * 0.94 * t, r * 0.84 * t, 0, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      ctx.strokeStyle = 'rgba(70,76,84,0.34)';
-      ctx.lineWidth = Math.max(0.6, r * 0.035);
-      for (let i = 0; i < 12; i++) {
-        const angle = (i / 12) * Math.PI * 2;
+      // Six ribs, not twelve. At this size twelve of them come out as teeth and
+      // the building reads as a gear; the ribs are meant to say "panelled roof",
+      // and past about six they stop saying anything but "cog".
+      ctx.strokeStyle = 'rgba(70,76,84,0.30)';
+      ctx.lineWidth = Math.max(0.6, r * 0.04);
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + 0.4;
         ctx.beginPath();
-        ctx.moveTo(x + Math.cos(angle) * r * 0.18, y + Math.sin(angle) * r * 0.16);
-        ctx.lineTo(x + Math.cos(angle) * r * 0.92, y + Math.sin(angle) * r * 0.82);
+        ctx.moveTo(x + Math.cos(angle) * r * 0.24, y + Math.sin(angle) * r * 0.2);
+        ctx.lineTo(x + Math.cos(angle) * r * 0.9, y + Math.sin(angle) * r * 0.8);
         ctx.stroke();
       }
 
@@ -577,21 +586,25 @@ function drawStructure(structure: Structure): void {
       // into a heap of crumpled paper. Marquees at a meeting are pitched in
       // lines with room to walk between them, and the gaps are most of what says
       // there are several rather than one lumpy thing.
-      const size = r * 0.3;
-      const stepX = size * 2.5;
-      const stepY = size * 1.7;
+      // Three, and drawn rather than built out of triangles.
+      //
+      // Five at 0.3 of the reach came out twelve pixels across, and at twelve
+      // pixels the shading across four facets averages into one tone — what was
+      // left was a square with an X in it, which is a napkin. The drawing has
+      // the same four slopes and does not depend on me getting the contrast
+      // right at any particular size.
+      const size = r * 0.34;
       const rows = [
-        [-1, -1], [0, -1], [1, -1],
-        [-0.5, 0.45], [0.5, 0.45]
+        [-1, -0.85], [0.05, -1.05], [-0.45, 0.5]
       ];
-      for (const [cx, cy] of rows) {
-        const tx = x + cx * stepX;
-        const ty = y + cy * stepY;
-        // Lifted off its own ground point, with the shadow left behind: the two
-        // together are what read as height.
+      const marquees = ['tent-red', 'tent-blue', 'tent-red'];
+      rows.forEach(([cx, cy], i) => {
+        const tx = x + cx * size * 2.1;
+        const ty = y + cy * size * 2.1;
+        if (drawArt(marquees[i], tx, ty, size * 2.4, { shadow: 0.3 })) return;
         shade(tx, ty + size * 0.42, size * 0.58, size * 0.26, 0.26);
-        pitchedRoof(tx, ty - size * 0.18, size, 4, Math.PI / 4, [236, 232, 222], 0.46);
-      }
+        pitchedRoof(tx, ty, size, 4, Math.PI / 4, [236, 232, 222], 0.9);
+      });
       break;
     }
   }

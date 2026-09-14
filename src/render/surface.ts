@@ -181,7 +181,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#9C8F62',
       planted: true
     },
-    boundary: 'quay',
+    boundary: 'stand',
     props: [],
     propDensity: 0,
     structures: [],
@@ -223,8 +223,8 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#D8C79A',
       planted: true
     },
-    boundary: 'dune',
-    props: ['rock', 'tuft', 'parasol'],
+    boundary: 'stand',
+    props: ['rock', 'tuft'],
     propDensity: 1,
     structures: ['lagoon', 'pavilion', 'dome'],
     outfield: ['pavilion', 'dome']
@@ -306,7 +306,7 @@ export const SURFACES: Record<string, Surface> = {
       shelf: '#7A7264',
       planted: false
     },
-    boundary: 'shed',
+    boundary: 'stand',
     props: ['drum', 'tyres', 'cone', 'chimney'],
     propDensity: 1.3,
     structures: ['containers', 'hall', 'tank'],

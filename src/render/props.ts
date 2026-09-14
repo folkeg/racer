@@ -23,6 +23,7 @@ import { activeTrackId, pathAtOffset } from '../track';
 import { trackById } from '../tracks';
 import type { TrackId } from '../tracks';
 import { project } from './camera';
+import { drawArt } from './art';
 import { SHADOW_X, SHADOW_Y } from './light';
 import { BOARD_BOTTOM, BOARD_TOP, drawBush, drawTree, drawUmbrella } from './scenery';
 import { surfaceFor } from './surface';
@@ -191,12 +192,39 @@ function shadow(x: number, y: number, w: number, h: number): void {
   ctx.fill();
 }
 
+/**
+ * Which drawing stands in for which prop, and how wide it is in plane units.
+ *
+ * Sizes are in the same units as the road, so a tyre stack is a bit over a car's
+ * width and a tree is twice that — which is the first time anything here has had
+ * a stated scale rather than one tuned by eye until it looked about right.
+ */
+const ART: Partial<Record<PropKind, { name: string; width: number }>> = {
+  rock: { name: 'rock', width: 9 },
+  tyres: { name: 'tyres', width: 8 },
+  drum: { name: 'drum-red', width: 6 },
+  cone: { name: 'cone', width: 5 },
+  barrier: { name: 'barrier', width: 15 },
+  tree: { name: 'tree', width: 16 },
+  bush: { name: 'tree-small', width: 10 },
+  // Not the marquee sprite. Mapping a parasol to a full RACE tent turned the
+  // beach into a tent city — dozens of them, all identical, all the size of a
+  // building. A parasol is furniture.
+  parasol: { name: 'tree-small', width: 7 }
+};
+
 /** Every prop is a solid with a lit top and a darker side, like everything else. */
 function drawProp(prop: Prop): void {
   const p = project(prop.x, prop.y);
   const s = prop.size * p.scale;
   const x = p.x;
   const y = p.y;
+
+  // A drawing if there is one, and the hand-coded shape otherwise — which is
+  // what keeps this working while the images are in flight and on any platform
+  // that cannot fetch them.
+  const art = ART[prop.kind];
+  if (art && drawArt(art.name, x, y, art.width * prop.size * p.scale)) return;
 
   switch (prop.kind) {
     case 'rock': {

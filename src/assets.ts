@@ -19,8 +19,35 @@ const loaded: Record<string, WxImage | null> = {
   water: null,
   sand: null,
   concrete: null,
+  // Baked, listed in the tile sizes, used as the city and works-yard paving —
+  // and never loaded, so both of those roads have been running with no grain on
+  // them at all. Nothing failed loudly; groundTexture simply returned null and
+  // the fill went out flat.
+  asphalt: null,
   grass: null
 };
+
+/**
+ * Drawn objects, as opposed to surfaces.
+ *
+ * Everything standing on this board used to be hand-coded — twenty lines for a
+ * tent, forty for a rotunda — and that cost is why the scene never had more than
+ * five things in it while the reference has fifty. It is also why the mistakes
+ * were the kind they were: a tent drawn in side elevation, a roof with twelve
+ * ribs that read as a cog. A drawing does not have those failure modes, because
+ * whoever drew it was looking at it.
+ *
+ * These are Kenney's Racing Pack, CC0, and they are genuinely top-down: the
+ * marquee is four slopes meeting at a peak and the grandstand has a crowd in it,
+ * seen from directly above.
+ */
+const PROP_NAMES = [
+  'tent-red', 'tent-blue', 'tribune', 'tribune-roof', 'tree', 'tree-small',
+  'rock', 'rock-alt', 'tyres', 'tyres-red', 'drum-red', 'drum-blue',
+  'barrier', 'cone'
+];
+
+const props: Record<string, WxImage | null> = {};
 
 /**
  * Called when a tile arrives.
@@ -52,8 +79,29 @@ function load(name: string): void {
   image.src = `assets/${name}-tile.png`;
 }
 
+function loadProp(name: string): void {
+  const image = wx.createImage?.();
+  if (!image) return;
+  image.onload = () => {
+    if (image.width > 0 && image.height > 0) {
+      props[name] = image;
+      onLoaded?.();
+    }
+  };
+  image.onerror = () => {
+    props[name] = null;
+  };
+  image.src = `assets/props/${name}.png`;
+}
+
 export function loadArt(): void {
   for (const name of Object.keys(loaded)) load(name);
+  for (const name of PROP_NAMES) loadProp(name);
+}
+
+/** A drawn object, or null while it is loading or unavailable. */
+export function propArt(name: string): WxImage | null {
+  return props[name] ?? null;
 }
 
 /** A tile by name, or null while it is still loading or unavailable. */
