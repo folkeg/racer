@@ -192,7 +192,9 @@ const KERB_BLOCK = 7;
  * way, out into the run-off, which is exactly what a real kerb does. So these
  * reach into the apron instead, and the racing surface is untouched.
  */
-const KERB_REACH = 6.5;
+const KERB_REACH = 4;
+/** How far the blocks sit inside the road edge, over the kerb band itself. */
+const KERB_INSET = 3.2;
 
 /**
  * Curvature with its sign kept: positive where the circuit turns one way,
@@ -260,10 +262,7 @@ function centreCurvature(): number[] {
   });
 }
 
-function drawCornerKerbs(
-  outerRoad: ReturnType<typeof edge>,
-  innerRoad: ReturnType<typeof edge>
-): void {
+function drawCornerKerbs(outerRoad: ReturnType<typeof edge>): void {
   const curvature = centreCurvature();
   const count = Math.min(outerRoad.length, curvature.length);
 
@@ -278,19 +277,53 @@ function drawCornerKerbs(
     const turning = i < count && curvature[i] > threshold;
     if (turning && start === null) start = i;
     if (!turning && start !== null) {
+      // A dark base under the whole run, first.
+      //
+      // Red and white is the kerb of every circuit on earth and it is a pattern
+      // designed for dark tarmac. Here the kerb band is pale stone and the
+      // run-off past it is pale too, so the white blocks had nothing to be white
+      // against and the thing read as a row of disconnected red bars — which is
+      // what it was called, twice. Outlining the run did not fix it because the
+      // problem was never the boundary, it was that half the pattern was
+      // invisible. On a dark base the white is white again.
+      const baseOuter = edge(ROAD_HALF_WIDTH + KERB_REACH);
+      const baseOuterIn = edge(ROAD_HALF_WIDTH - KERB_INSET);
+      const baseInner = edge(-ROAD_HALF_WIDTH - KERB_REACH);
+      const baseInnerIn = edge(-ROAD_HALF_WIDTH + KERB_INSET);
+      fillRibbon(baseOuter.slice(start, i), baseOuterIn.slice(start, i), '#2A2F35');
+      fillRibbon(baseInnerIn.slice(start, i), baseInner.slice(start, i), '#2A2F35');
+
       // Blocks alternate along the run, and both sides of the road get them.
-      const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH);
-      const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH);
+      // Straddling the road's edge rather than sitting beside it.
+      //
+      // They were drawn entirely outside the tarmac, on the run-off, which made
+      // them read as a row of red tiles laid next to the track instead of as the
+      // track's own edge — "what are those red bars" was exactly right. A kerb
+      // is part of the road: it starts on the road surface and finishes past it.
+      const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH - 0.7);
+      const outerInner = edge(ROAD_HALF_WIDTH - KERB_INSET + 0.7);
+      const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH + 0.7);
+      const innerInner = edge(-ROAD_HALF_WIDTH + KERB_INSET - 0.7);
       for (let b = start; b < i; b += KERB_BLOCK) {
         const end = Math.min(b + KERB_BLOCK + 1, i);
         if (end - b < 2) continue;
         // The pale block has to be paler than the kerb it sits on, or it
         // disappears into it and the whole thing reads as a row of red dashes
         // rather than as a kerb. '#EDE7DA' against a stone kerb was invisible.
+        // Red and slate, not red and white.
+        //
+        // Red-and-white is the kerb of every circuit on earth, and it is a
+        // pattern for dark tarmac. This board is pale stone with pale run-off
+        // beyond it, so the white half had nothing to be white against: it was
+        // drawn, it was there, and it read as a gap — leaving a row of
+        // disconnected red bars, which is what it was called twice. A dark base
+        // under the run did not fix it either, because the blocks covered the
+        // base. The pattern has to carry its own contrast against a light
+        // ground, and on a light ground that means the other half is dark.
         const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
-        const colour = red ? '#C6392C' : '#FFFFFF';
-        fillRibbon(outerReach.slice(b, end), outerRoad.slice(b, end), colour);
-        fillRibbon(innerRoad.slice(b, end), innerReach.slice(b, end), colour);
+        const colour = red ? '#C6392C' : '#2E343A';
+        fillRibbon(outerReach.slice(b, end), outerInner.slice(b, end), colour);
+        fillRibbon(innerInner.slice(b, end), innerReach.slice(b, end), colour);
       }
       start = null;
     }
@@ -437,7 +470,7 @@ export function drawTrack(): void {
   // race kerb, which this harbour road is not.
   fillRibbon(outerKerb, outerRoad, paint.kerb);
   fillRibbon(innerRoad, innerKerb, paint.kerb);
-  drawCornerKerbs(outerRoad, innerRoad);
+  drawCornerKerbs(outerRoad);
 
   // Lanes are shaded alternately rather than separated by dashed lines. Solid
   // bands read as five distinct channels at a glance, where dashes read as

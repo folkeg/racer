@@ -6630,7 +6630,8 @@ var HarborLoop = (() => {
   var CORNER_PERCENTILE = 0.72;
   var CORNER_FLOOR = 25e-4;
   var KERB_BLOCK = 7;
-  var KERB_REACH = 6.5;
+  var KERB_REACH = 4;
+  var KERB_INSET = 3.2;
   function signedCurvature() {
     const path = pathAtOffset(0);
     const out = new Array(path.length).fill(0);
@@ -6685,7 +6686,7 @@ var HarborLoop = (() => {
       return sum / 13;
     });
   }
-  function drawCornerKerbs(outerRoad, innerRoad) {
+  function drawCornerKerbs(outerRoad) {
     var _a;
     const curvature = centreCurvature();
     const count = Math.min(outerRoad.length, curvature.length);
@@ -6699,15 +6700,23 @@ var HarborLoop = (() => {
       const turning = i < count && curvature[i] > threshold;
       if (turning && start === null) start = i;
       if (!turning && start !== null) {
-        const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH);
-        const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH);
+        const baseOuter = edge(ROAD_HALF_WIDTH + KERB_REACH);
+        const baseOuterIn = edge(ROAD_HALF_WIDTH - KERB_INSET);
+        const baseInner = edge(-ROAD_HALF_WIDTH - KERB_REACH);
+        const baseInnerIn = edge(-ROAD_HALF_WIDTH + KERB_INSET);
+        fillRibbon(baseOuter.slice(start, i), baseOuterIn.slice(start, i), "#2A2F35");
+        fillRibbon(baseInnerIn.slice(start, i), baseInner.slice(start, i), "#2A2F35");
+        const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH - 0.7);
+        const outerInner = edge(ROAD_HALF_WIDTH - KERB_INSET + 0.7);
+        const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH + 0.7);
+        const innerInner = edge(-ROAD_HALF_WIDTH + KERB_INSET - 0.7);
         for (let b = start; b < i; b += KERB_BLOCK) {
           const end = Math.min(b + KERB_BLOCK + 1, i);
           if (end - b < 2) continue;
           const red = Math.floor((b - start) / KERB_BLOCK) % 2 === 0;
-          const colour = red ? "#C6392C" : "#FFFFFF";
-          fillRibbon(outerReach.slice(b, end), outerRoad.slice(b, end), colour);
-          fillRibbon(innerRoad.slice(b, end), innerReach.slice(b, end), colour);
+          const colour = red ? "#C6392C" : "#2E343A";
+          fillRibbon(outerReach.slice(b, end), outerInner.slice(b, end), colour);
+          fillRibbon(innerInner.slice(b, end), innerReach.slice(b, end), colour);
         }
         start = null;
       }
@@ -6798,7 +6807,7 @@ var HarborLoop = (() => {
     const innerKerb = edge(-ROAD_HALF_WIDTH);
     fillRibbon(outerKerb, outerRoad, paint.kerb);
     fillRibbon(innerRoad, innerKerb, paint.kerb);
-    drawCornerKerbs(outerRoad, innerRoad);
+    drawCornerKerbs(outerRoad);
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const laneOuter = projectPath(pathForLane(lane - 0.5));
       const laneInner = projectPath(pathForLane(lane + 0.5));
