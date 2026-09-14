@@ -3745,6 +3745,13 @@ var HarborLoop = (() => {
     target.fillStyle = tint;
     target.fillRect(0, 0, image.width, image.height);
     target.globalAlpha = 1;
+    const grain = groundTexture(target, "concrete");
+    if (grain) {
+      target.globalAlpha = 0.3;
+      target.fillStyle = grain;
+      target.fillRect(0, 0, image.width, image.height);
+      target.globalAlpha = 1;
+    }
     target.globalCompositeOperation = "destination-in";
     target.drawImage(source, 0, 0);
     target.globalCompositeOperation = "source-over";
@@ -3759,11 +3766,11 @@ var HarborLoop = (() => {
     const shadow2 = (_a = options.shadow) != null ? _a : 0.34;
     if (shadow2 > 0) {
       ctx.save();
-      ctx.fillStyle = "rgba(12,18,24,0.26)";
+      ctx.fillStyle = "rgba(12,18,24,0.34)";
       ctx.beginPath();
       ctx.ellipse(
-        x + SHADOW_X * width * 0.14,
-        y + SHADOW_Y * width * 0.14,
+        x + SHADOW_X * width * 0.2,
+        y + SHADOW_Y * width * 0.2,
         width * shadow2,
         height * shadow2 * 0.62,
         0,

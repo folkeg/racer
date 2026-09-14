@@ -16,6 +16,7 @@
 import { createOffscreenCanvas, ctx } from '../platform';
 import { propArt } from '../assets';
 import { SHADOW_X, SHADOW_Y } from './light';
+import { groundTexture } from './sprites';
 
 /**
  * Bringing bought art into the game's own language.
@@ -99,6 +100,21 @@ function harmonise(
   target.fillRect(0, 0, image.width, image.height);
   target.globalAlpha = 1;
 
+  // The same grain everything else on the board carries.
+  //
+  // The pack's own ground is a flat colour with a few speckles — its language
+  // puts all the detail in the objects and none in the surface — and ours is the
+  // other way round. Rather than flatten a board that was deliberately given
+  // material, the material is put on the sprites: one film of the same grain, so
+  // a tent and the sand it stands on are made of the same stuff.
+  const grain = groundTexture(target, 'concrete');
+  if (grain) {
+    target.globalAlpha = 0.3;
+    target.fillStyle = grain;
+    target.fillRect(0, 0, image.width, image.height);
+    target.globalAlpha = 1;
+  }
+
   // And put the original silhouette back.
   target.globalCompositeOperation = 'destination-in';
   target.drawImage(source, 0, 0);
@@ -141,11 +157,11 @@ export function drawArt(
 
   if (shadow > 0) {
     ctx.save();
-    ctx.fillStyle = 'rgba(12,18,24,0.26)';
+    ctx.fillStyle = 'rgba(12,18,24,0.34)';
     ctx.beginPath();
     ctx.ellipse(
-      x + SHADOW_X * width * 0.14,
-      y + SHADOW_Y * width * 0.14,
+      x + SHADOW_X * width * 0.2,
+      y + SHADOW_Y * width * 0.2,
       width * shadow,
       height * shadow * 0.62,
       0,
