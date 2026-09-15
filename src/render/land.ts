@@ -41,7 +41,9 @@ import { drawModel, yawFor, yawSprite } from './art';
 import { MODEL_SCALE, modelWidth } from '../assets';
 import { MODELS } from '../models.generated';
 import { BOARD_BOTTOM, BOARD_TOP } from './scenery';
-import { groundTexture } from './sprites';
+import { CAR_LENGTH, CAR_WIDTH, groundTexture, vehicleSprite } from './sprites';
+import { CAR_SHADOW_DISTANCE, SHADOW_X, SHADOW_Y } from './light';
+import type { VehicleStyle } from '../types';
 import { surfaceFor } from './surface';
 import type { GroundTile } from './surface';
 import type { Vec2 } from '../types';
@@ -556,19 +558,24 @@ export function drawLand(): void {
     if (material) drawZone(zone, material);
   }
 
-  // The hard edge goes on last and only where the ground was laid by someone,
-  // so a concrete yard has a kerb and a field does not.
+  // Then what is painted on it, then the hard edge, which goes on last and only
+  // where the ground was laid by someone: a concrete yard has a kerb and a field
+  // does not.
+  for (const zone of zones()) {
+    const material = materialFor(zone.kind);
+    if (material && material.made) drawMarkings(zone);
+  }
   for (const side of [-1, 1] as const) drawBoundaryEdge(side);
 }
 
 /** Fills one zone: solid if it was laid, feathered if it grew. */
 function drawZone(zone: Zone, material: Material): void {
   const grain = groundTexture(ctx, material.tile);
-  const steps = material.made ? [0] : SOFT_STEPS;
+  const steps: Array<[number, number]> = material.made
+    ? [[0, 1]]
+    : SOFT_STEPS.map((inset, i) => [inset, SOFT_ALPHA[i]] as [number, number]);
 
-  for (const [inset, alpha] of steps.map((value, i) =>
-    material.made ? [0, 1] : [value, SOFT_ALPHA[i]]
-  )) {
+  for (const [inset, alpha] of steps) {
     const outline = zoneOutline(zone, inset);
     if (outline.length < 6) continue;
 
@@ -603,12 +610,133 @@ function drawZone(zone: Zone, material: Material): void {
  * Four passes make a soft edge without a blur filter.
  *
  * Each is drawn a little further in and a little more opaque, so the outermost
- * ring of ground is a quarter strength and the middle is solid. It costs four
+ * ring of ground is a fifth strength and the middle is solid. It costs four
  * fills on a zone nobody will look at directly, and it is the difference between
  * a field and a patch.
  */
 const SOFT_STEPS = [14, 9, 4.5, 0];
 const SOFT_ALPHA = [0.22, 0.34, 0.5, 1];
+
+/**
+ * Parked cars, in muted paint.
+ *
+ * Never the traffic's blue. The player has to be able to count moving cars at a
+ * glance, and a car park full of the same colour as the traffic is a car park
+ * that has to be read before it can be dismissed. These are the colours a real
+ * car park is full of and the ones this board has none of.
+ */
+const PARKED: VehicleStyle[] = [
+  { body: '#C8C6C0', cabin: '#DEDCD6', window: '#5E666E', lights: '#EEE8D8', stripe: null, side: '#8A8882', rim: '#F2F0EA' },
+  { body: '#8A9098', cabin: '#9CA2AA', window: '#4A525A', lights: '#E8E4D8', stripe: null, side: '#5C646C', rim: '#B8BEC6' },
+  { body: '#7C4238', cabin: '#8E5044', window: '#46383A', lights: '#E8DCC8', stripe: null, side: '#4E2A24', rim: '#A66A5C' },
+  { body: '#4C5A50', cabin: '#5A6A5E', window: '#38423C', lights: '#E2E2D4', stripe: null, side: '#2E382F', rim: '#7A8A7C' },
+  { body: '#2E343A', cabin: '#3A424A', window: '#20262C', lights: '#DCDCD0', stripe: null, side: '#1A1E22', rim: '#5A646E' }
+];
+
+/**
+ * Paint on the made ground, and what parks on it.
+ *
+ * The cheapest density on the board, and the only kind that works on a yard too
+ * shallow to stand a building in — Grand Oval's is 35 units deep, and the only
+ * model in the city's list that fits across it is a small tank, which is how
+ * that straight ended up lined with eight identical barrels.
+ *
+ * Bays alone were tried first and read as a ladder painted on the ground, which
+ * is exactly what they are until something parks in them. The cars are what turn
+ * the marking into a place, and they cost nothing: the game already builds car
+ * sprites procedurally, so a full car park is a few hundred bytes of code and no
+ * bytes of art at all.
+ *
+ * One run of bays somewhere along the zone, not end to end. A car park the whole
+ * length of a straight is a runway.
+ */
+function drawMarkings(zone: Zone): void {
+  const n = centerPath.length;
+  const span = zone.i1 - zone.i0;
+  if (span < 40) return;
+  const depth = depthOf(zone);
+  if (depth < CAR_LENGTH * 1.1) return;
+
+  const random = seeded(zone.i0 * 7919 + zone.side * 13 + zone.want);
+  const from = zone.i0 + Math.floor(span * (0.08 + random() * 0.3));
+  const to = Math.min(zone.i1 - 6, from + Math.floor(span * (0.3 + random() * 0.32)));
+  if (to - from < 20) return;
+
+  // A bay is a car and a bit, and the row of them is set against one edge of the
+  // yard or the other.
+  const bay = Math.min(CAR_LENGTH * 1.2, depth * 0.66);
+  const back = random() < 0.5;
+  const inner = back ? 1 - bay / depth - 0.06 : 0.08;
+  const outer = inner + bay / depth;
+  const middle = (inner + outer) / 2;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(238,234,220,0.32)';
+  ctx.lineWidth = 0.9 * lateralUnit();
+  ctx.lineCap = 'round';
+
+  const parked: Array<{ x: number; y: number; angle: number; style: VehicleStyle }> = [];
+  let step = 0;
+  for (let i = from; i <= to; i++) {
+    if (step > 0) {
+      step -= 1;
+      continue;
+    }
+    const index = ((i % n) + n) % n;
+    const here = depthAt(zone.side, i);
+    if (here < CAR_LENGTH * 1.1) continue;
+
+    const a = offsetPoint(index, zone.side * (NEAR_GAP + here * inner));
+    const b = offsetPoint(index, zone.side * (NEAR_GAP + here * outer));
+    const pa = project(a.x, a.y);
+    const pb = project(b.x, b.y);
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+
+    // Most bays hold something; a car park with every bay full is a showroom.
+    if (random() < 0.62) {
+      const at = offsetPoint(index, zone.side * (NEAR_GAP + here * middle));
+      const ahead = centerPath[(index + 1) % n];
+      const behind = centerPath[(index - 1 + n) % n];
+      parked.push({
+        x: at.x,
+        y: at.y,
+        // Nose in: across the bay, which is across the yard.
+        angle: Math.atan2(ahead.y - behind.y, ahead.x - behind.x) + Math.PI / 2,
+        style: PARKED[Math.floor(random() * PARKED.length) % PARKED.length]
+      });
+    }
+
+    const ahead = centerPath[(index + 1) % n];
+    const behind = centerPath[(index - 1 + n) % n];
+    const perSample = Math.hypot(ahead.x - behind.x, ahead.y - behind.y) / 2 || 1;
+    step = Math.max(1, Math.round((CAR_WIDTH * 1.28) / perSample)) - 1;
+  }
+  ctx.restore();
+
+  for (const car of parked) {
+    const sprite = vehicleSprite(`parked-${car.style.body}`, car.style);
+    if (!sprite) continue;
+    const p = project(car.x, car.y);
+    const length = CAR_LENGTH * lateralUnit();
+    const width = CAR_WIDTH * lateralUnit();
+
+    ctx.save();
+    ctx.globalAlpha = 0.34;
+    ctx.translate(p.x + SHADOW_X * CAR_SHADOW_DISTANCE, p.y + SHADOW_Y * CAR_SHADOW_DISTANCE);
+    ctx.rotate(car.angle);
+    ctx.drawImage(sprite.shadow as unknown as CanvasImageSource, -length / 2, -width / 2, length, width);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(car.angle);
+    ctx.drawImage(sprite.image as unknown as CanvasImageSource, -length / 2, -width / 2, length, width);
+    ctx.restore();
+  }
+}
 
 /**
  * The outer edge, in unbroken runs.
@@ -861,15 +989,27 @@ function scatter(
 ): Placed[] {
   const depth = depthOf(zone);
   if (depth < 14) return [];
-  const kinds = names.filter((name) => MODELS[name]);
+  const n = centerPath.length;
+  // What will actually fit across this yard.
+  const kinds = names.filter(
+    (name) => MODELS[name] && MODELS[name].depth * MODEL_SCALE <= depth * 0.8
+  );
   if (kinds.length === 0) return [];
 
-  const n = centerPath.length;
+  // One kind is not clutter, it is a pattern.
+  //
+  // Grand Oval's yard is 35 units deep and the only model in the city's list
+  // that fits across it is a small tank, so the scatter filled the whole
+  // straight with eight identical barrels in a line — the most obviously
+  // machine-made thing on the board. Below two kinds the yard gets a token
+  // couple and is otherwise left as made ground, which is what a yard mostly is.
+  const limit = kinds.length >= 2 ? attempts : 2;
+
   const random = seeded(seed);
   const placed: Placed[] = [];
   const span = zone.i1 - zone.i0;
 
-  for (let a = 0; a < attempts; a++) {
+  for (let a = 0; a < attempts && placed.length < limit; a++) {
     const name = kinds[Math.floor(random() * kinds.length) % kinds.length];
     const info = MODELS[name];
     const along = info.width * MODEL_SCALE;

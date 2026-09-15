@@ -217,7 +217,7 @@ export const SURFACES: Record<string, Surface> = {
     props: [],
     propDensity: 0,
     structures: ['depot', 'shed', 'hall'],
-    clutter: ['container', 'container-b', 'container-c', 'tank-small']
+    clutter: ['container', 'container-b', 'container-c']
   },
 
   beach: {
@@ -261,8 +261,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'none',
     props: ['rock'],
     propDensity: 0.4,
-    structures: ['depot', 'hall'],
-    clutter: ['container-c', 'solar', 'tank-small']
+    structures: [],
+    clutter: []
   },
 
   city: {
@@ -310,7 +310,7 @@ export const SURFACES: Record<string, Surface> = {
     props: ['tree'],
     propDensity: 0.35,
     structures: ['hall', 'plant', 'depot', 'factory'],
-    clutter: ['solar', 'container-b', 'tank-small', 'water-tower']
+    clutter: ['solar', 'container', 'container-b', 'container-c']
   },
 
   industrial: {
@@ -394,8 +394,8 @@ export const SURFACES: Record<string, Surface> = {
     boundary: 'none',
     props: ['tree'],
     propDensity: 0.4,
-    structures: ['hall', 'depot'],
-    clutter: ['solar', 'tank-small']
+    structures: [],
+    clutter: []
   }
 };
 

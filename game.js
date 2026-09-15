@@ -3701,7 +3701,7 @@ var HarborLoop = (() => {
       props: [],
       propDensity: 0,
       structures: ["depot", "shed", "hall"],
-      clutter: ["container", "container-b", "container-c", "tank-small"]
+      clutter: ["container", "container-b", "container-c"]
     },
     beach: {
       // Wind ripples fall out of the same wave field as water with different
@@ -3744,8 +3744,8 @@ var HarborLoop = (() => {
       boundary: "none",
       props: ["rock"],
       propDensity: 0.4,
-      structures: ["depot", "hall"],
-      clutter: ["container-c", "solar", "tank-small"]
+      structures: [],
+      clutter: []
     },
     city: {
       // Night-ish tarmac yard. The ground is the same asphalt as the road, one
@@ -3792,7 +3792,7 @@ var HarborLoop = (() => {
       props: ["tree"],
       propDensity: 0.35,
       structures: ["hall", "plant", "depot", "factory"],
-      clutter: ["solar", "container-b", "tank-small", "water-tower"]
+      clutter: ["solar", "container", "container-b", "container-c"]
     },
     industrial: {
       // A works yard: stained concrete, rust, and nothing growing.
@@ -3874,8 +3874,8 @@ var HarborLoop = (() => {
       boundary: "none",
       props: ["tree"],
       propDensity: 0.4,
-      structures: ["hall", "depot"],
-      clutter: ["solar", "tank-small"]
+      structures: [],
+      clutter: []
     }
   };
   var TRACK_SURFACE = {
@@ -4585,14 +4585,16 @@ var HarborLoop = (() => {
       const material = materialFor(zone.kind);
       if (material) drawZone(zone, material);
     }
+    for (const zone of zones()) {
+      const material = materialFor(zone.kind);
+      if (material && material.made) drawMarkings(zone);
+    }
     for (const side of [-1, 1]) drawBoundaryEdge(side);
   }
   function drawZone(zone, material) {
     const grain = groundTexture(ctx, material.tile);
-    const steps = material.made ? [0] : SOFT_STEPS;
-    for (const [inset, alpha] of steps.map(
-      (value, i) => material.made ? [0, 1] : [value, SOFT_ALPHA[i]]
-    )) {
+    const steps = material.made ? [[0, 1]] : SOFT_STEPS.map((inset, i) => [inset, SOFT_ALPHA[i]]);
+    for (const [inset, alpha] of steps) {
       const outline = zoneOutline(zone, inset);
       if (outline.length < 6) continue;
       ctx.save();
@@ -4622,6 +4624,87 @@ var HarborLoop = (() => {
   }
   var SOFT_STEPS = [14, 9, 4.5, 0];
   var SOFT_ALPHA = [0.22, 0.34, 0.5, 1];
+  var PARKED = [
+    { body: "#C8C6C0", cabin: "#DEDCD6", window: "#5E666E", lights: "#EEE8D8", stripe: null, side: "#8A8882", rim: "#F2F0EA" },
+    { body: "#8A9098", cabin: "#9CA2AA", window: "#4A525A", lights: "#E8E4D8", stripe: null, side: "#5C646C", rim: "#B8BEC6" },
+    { body: "#7C4238", cabin: "#8E5044", window: "#46383A", lights: "#E8DCC8", stripe: null, side: "#4E2A24", rim: "#A66A5C" },
+    { body: "#4C5A50", cabin: "#5A6A5E", window: "#38423C", lights: "#E2E2D4", stripe: null, side: "#2E382F", rim: "#7A8A7C" },
+    { body: "#2E343A", cabin: "#3A424A", window: "#20262C", lights: "#DCDCD0", stripe: null, side: "#1A1E22", rim: "#5A646E" }
+  ];
+  function drawMarkings(zone) {
+    const n = centerPath.length;
+    const span = zone.i1 - zone.i0;
+    if (span < 40) return;
+    const depth = depthOf(zone);
+    if (depth < CAR_LENGTH * 1.1) return;
+    const random2 = seeded2(zone.i0 * 7919 + zone.side * 13 + zone.want);
+    const from = zone.i0 + Math.floor(span * (0.08 + random2() * 0.3));
+    const to = Math.min(zone.i1 - 6, from + Math.floor(span * (0.3 + random2() * 0.32)));
+    if (to - from < 20) return;
+    const bay = Math.min(CAR_LENGTH * 1.2, depth * 0.66);
+    const back = random2() < 0.5;
+    const inner = back ? 1 - bay / depth - 0.06 : 0.08;
+    const outer = inner + bay / depth;
+    const middle = (inner + outer) / 2;
+    ctx.save();
+    ctx.strokeStyle = "rgba(238,234,220,0.32)";
+    ctx.lineWidth = 0.9 * lateralUnit();
+    ctx.lineCap = "round";
+    const parked = [];
+    let step = 0;
+    for (let i = from; i <= to; i++) {
+      if (step > 0) {
+        step -= 1;
+        continue;
+      }
+      const index = (i % n + n) % n;
+      const here = depthAt(zone.side, i);
+      if (here < CAR_LENGTH * 1.1) continue;
+      const a = offsetPoint(index, zone.side * (NEAR_GAP + here * inner));
+      const b = offsetPoint(index, zone.side * (NEAR_GAP + here * outer));
+      const pa = project(a.x, a.y);
+      const pb = project(b.x, b.y);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+      if (random2() < 0.62) {
+        const at = offsetPoint(index, zone.side * (NEAR_GAP + here * middle));
+        const ahead2 = centerPath[(index + 1) % n];
+        const behind2 = centerPath[(index - 1 + n) % n];
+        parked.push({
+          x: at.x,
+          y: at.y,
+          // Nose in: across the bay, which is across the yard.
+          angle: Math.atan2(ahead2.y - behind2.y, ahead2.x - behind2.x) + Math.PI / 2,
+          style: PARKED[Math.floor(random2() * PARKED.length) % PARKED.length]
+        });
+      }
+      const ahead = centerPath[(index + 1) % n];
+      const behind = centerPath[(index - 1 + n) % n];
+      const perSample = Math.hypot(ahead.x - behind.x, ahead.y - behind.y) / 2 || 1;
+      step = Math.max(1, Math.round(CAR_WIDTH * 1.28 / perSample)) - 1;
+    }
+    ctx.restore();
+    for (const car of parked) {
+      const sprite = vehicleSprite(`parked-${car.style.body}`, car.style);
+      if (!sprite) continue;
+      const p = project(car.x, car.y);
+      const length = CAR_LENGTH * lateralUnit();
+      const width = CAR_WIDTH * lateralUnit();
+      ctx.save();
+      ctx.globalAlpha = 0.34;
+      ctx.translate(p.x + SHADOW_X * CAR_SHADOW_DISTANCE, p.y + SHADOW_Y * CAR_SHADOW_DISTANCE);
+      ctx.rotate(car.angle);
+      ctx.drawImage(sprite.shadow, -length / 2, -width / 2, length, width);
+      ctx.restore();
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(car.angle);
+      ctx.drawImage(sprite.image, -length / 2, -width / 2, length, width);
+      ctx.restore();
+    }
+  }
   function drawBoundaryEdge(side) {
     const line = boundary(side);
     const n = line.length;
@@ -4737,13 +4820,16 @@ var HarborLoop = (() => {
   function scatter(zone, names, attempts, seed, taken) {
     const depth = depthOf(zone);
     if (depth < 14) return [];
-    const kinds = names.filter((name) => MODELS[name]);
-    if (kinds.length === 0) return [];
     const n = centerPath.length;
+    const kinds = names.filter(
+      (name) => MODELS[name] && MODELS[name].depth * MODEL_SCALE <= depth * 0.8
+    );
+    if (kinds.length === 0) return [];
+    const limit = kinds.length >= 2 ? attempts : 2;
     const random2 = seeded2(seed);
     const placed = [];
     const span = zone.i1 - zone.i0;
-    for (let a = 0; a < attempts; a++) {
+    for (let a = 0; a < attempts && placed.length < limit; a++) {
       const name = kinds[Math.floor(random2() * kinds.length) % kinds.length];
       const info = MODELS[name];
       const along = info.width * MODEL_SCALE;
