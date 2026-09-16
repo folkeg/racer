@@ -68,15 +68,26 @@ const props: Record<string, WxImage | null> = {};
 /**
  * Design units per model unit.
  *
- * Calibrated against the road, which is 68 units wide, and against the yards the
- * board can actually hold, which are 44 to 96 deep. At 46 the only models that
- * fitted across a yard were the shallow ones — and the shallow ones in this kit
- * are the plain ones, so the fit test was quietly selecting for the most boring
- * building in the set and putting two of them side by side. At 38 a works is 79
- * across and 71 deep: four car lengths, the largest thing on the board by a
- * distance, and small enough that the interesting models fit too.
+ * Calibrated against the road, which is 68 units wide, by rendering the same
+ * circuit at 38, 48 and 58 and looking at the three side by side.
+ *
+ * At 38 the works yard is a cluster of small sheds — busy, but nothing in it is
+ * a landmark. At 58 three buildings fill the site and the rest of the yard is
+ * empty concrete; each one is impressive and there is no density left. 48 keeps
+ * both: a works is 100 units across and 90 deep, half as wide again as the
+ * racing surface and five car lengths, with room for five or six of them.
+ *
+ * This only became a free choice once the fit test stopped asking whether a
+ * building fits inside its yard. While it did, raising the scale meant deepening
+ * the yards, and deepening the yards meant the made ground swallowed the
+ * infield — see standsClear in render/land.ts.
  */
-export const MODEL_SCALE = 38;
+export let MODEL_SCALE = 48;
+
+/** Only for comparing sizes from the console. Not used by the game. */
+export function setModelScale(value: number): void {
+  MODEL_SCALE = value;
+}
 
 /** Every turn of every model, by the filename it is stored under. */
 function renderedSprites(): string[] {

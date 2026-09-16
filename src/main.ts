@@ -213,6 +213,8 @@ export { TRACKS } from './tracks';
 export { setTrack, activeTrackId } from './track';
 // Exported so the composition can be measured from the console rather than
 // guessed at from a screenshot.
-export { zones, facility, depthOf } from './render/land';
+export { zones, facility, depthOf, buildLine } from './render/land';
+export { setModelScale } from './assets';
+export { invalidateStaticLayer } from './render/staticLayer';
 export { totalStars, starsFor, modeUnlocked, modeUnlockCost, setUnlockOverride } from './progress';
 export { LANE_COUNT, LANE_GAP, ROAD_HALF_WIDTH, KERB_WIDTH } from './config';

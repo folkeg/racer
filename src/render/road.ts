@@ -17,7 +17,6 @@ import { surfaceFor } from './surface';
 import { ROAD_DEPTH, ROAD_WALL_HEIGHT, SHADOW_X, SHADOW_Y } from './light';
 import { fillNearFaces, fillRibbon, offsetPath } from './primitives';
 import { lateralUnit, project, projectPath, projectedHeading } from './camera';
-import { drawArt } from './art';
 import { groundTexture } from './sprites';
 
 /**
@@ -198,6 +197,8 @@ const CORNER_HYSTERESIS = 0.75;
 const CORNER_MERGE = 12;
 /** And a corner shorter than this is a tile, not a kerb. */
 const MIN_KERB_BLOCKS = 2;
+/** However long the corner, the kerb marks this much of it, about the apex. */
+const MAX_KERB_SAMPLES = 64;
 /** Blocks per run, in path samples. */
 const KERB_BLOCK = 7;
 /**
@@ -329,7 +330,63 @@ function cornerRuns(curvature: number[]): Array<[number, number]> {
     if (last && run[0] - last[1] <= CORNER_MERGE) last[1] = run[1];
     else merged.push([run[0], run[1]]);
   }
-  return merged.filter(([a, b]) => b - a >= MIN_KERB_BLOCKS * KERB_BLOCK);
+
+  // The lap is a loop, so the last run and the first may be one corner.
+  //
+  // They were not being joined, and on Tide Drop the top corner straddles sample
+  // zero: it came out as 74 samples plus a 2-sample offcut that was then thrown
+  // away for being under two blocks. A corner quietly missing its last two
+  // samples on one side only is exactly the kind of lopsidedness that gets
+  // noticed without being explicable.
+  if (merged.length > 1) {
+    const first = merged[0];
+    const last = merged[merged.length - 1];
+    if (first[0] + curvature.length - last[1] <= CORNER_MERGE) {
+      first[0] = last[0] - curvature.length;
+      merged.pop();
+    }
+  }
+
+  // Kerb the apex, not the whole sweep.
+  //
+  // Tide Drop's bottom bend turns for 123 samples — a quarter of the lap — and
+  // the curvature really does hold on longer up the left side than the right,
+  // so the kerb ran visibly further on one side than the other and read as a
+  // mistake: "怎么左边多右边少". It is not a mistake, it is the shape of the
+  // circuit, but a kerb that traces every degree of a long sweeper is not what a
+  // circuit has anyway. Real kerbing marks where the racing line touches, which
+  // is the apex. Centring a bounded run on the sharpest point of the corner is
+  // both more like the reference and symmetrical about the thing the eye uses to
+  // judge symmetry.
+  return merged
+    .filter(([a, b]) => b - a >= MIN_KERB_BLOCKS * KERB_BLOCK)
+    .map(([a, b]) => {
+      if (b - a <= MAX_KERB_SAMPLES) return [a, b] as [number, number];
+      let apex = a;
+      let sharpest = -1;
+      for (let i = a; i < b; i++) {
+        const value = curvature[((i % curvature.length) + curvature.length) % curvature.length];
+        if (value > sharpest) {
+          sharpest = value;
+          apex = i;
+        }
+      }
+      const half = MAX_KERB_SAMPLES / 2;
+      const from = Math.max(a, Math.min(apex - half, b - MAX_KERB_SAMPLES));
+      return [from, from + MAX_KERB_SAMPLES] as [number, number];
+    });
+}
+
+/**
+ * A slice that may start before zero, because a corner may straddle the start
+ * of the lap. Array.slice would read a negative index from the *end* and return
+ * the wrong piece of the circuit without complaining.
+ */
+function cyclicSlice<T>(points: T[], from: number, to: number): T[] {
+  const n = points.length;
+  const out: T[] = [];
+  for (let i = from; i < to; i++) out.push(points[((i % n) + n) % n]);
+  return out;
 }
 
 function drawCornerKerbs(): void {
@@ -343,8 +400,8 @@ function drawCornerKerbs(): void {
     const baseOuterIn = edge(ROAD_HALF_WIDTH - KERB_INSET);
     const baseInner = edge(-ROAD_HALF_WIDTH - KERB_REACH);
     const baseInnerIn = edge(-ROAD_HALF_WIDTH + KERB_INSET);
-    fillRibbon(baseOuter.slice(start, end), baseOuterIn.slice(start, end), '#2A2F35');
-    fillRibbon(baseInnerIn.slice(start, end), baseInner.slice(start, end), '#2A2F35');
+    fillRibbon(cyclicSlice(baseOuter, start, end), cyclicSlice(baseOuterIn, start, end), '#2A2F35');
+    fillRibbon(cyclicSlice(baseInnerIn, start, end), cyclicSlice(baseInner, start, end), '#2A2F35');
 
     // Blocks straddle the road's edge: a kerb is part of the road, it starts on
     // the racing surface and finishes past it in the run-off.
@@ -366,89 +423,30 @@ function drawCornerKerbs(): void {
       const from = start + Math.round((b * span) / blocks);
       const to = start + Math.round(((b + 1) * span) / blocks) + 1;
       if (to - from < 2) continue;
-      fillRibbon(outerReach.slice(from, to), outerInner.slice(from, to), '#C6392C');
-      fillRibbon(innerInner.slice(from, to), innerReach.slice(from, to), '#C6392C');
+      fillRibbon(cyclicSlice(outerReach, from, to), cyclicSlice(outerInner, from, to), '#C6392C');
+      fillRibbon(cyclicSlice(innerInner, from, to), cyclicSlice(innerReach, from, to), '#C6392C');
     }
   }
 }
 
 /**
- * Tyre stacks and barriers on the outside of the corners.
+ * There is no trackside furniture, and the reason is worth keeping.
  *
- * The densest, most purposeful scenery in the reference is not scattered on the
- * open ground at all — it is lined up where a car would leave the track. That is
- * why it reads as a circuit rather than as a field with objects in it: every
- * piece is there for a reason a driver understands.
+ * There was: one tyre wall and two barriers at the middle of each corner, on the
+ * reasoning that the densest scenery in the reference is lined up where a car
+ * would leave the track. The reasoning is right and the result was not. On an
+ * oval it puts exactly two clusters on the board, dead centre at the top and
+ * dead centre at the bottom, and three small objects on their own in the middle
+ * of a long bend do not read as a tyre wall — they read as "上下各有一个小圆点和
+ * 两条杠 不知道什么东西". The tyre stack is the worst of them: seen from directly
+ * above a stack of tyres is a ring with a hole in it, and it has now been asked
+ * about twice, in those words both times.
  *
- * It also puts the objects where the eye already is. Scattering more things into
- * the middle of a sand flat adds density nobody looks at; a stack of tyres at a
- * corner exit is in frame every single lap.
+ * What the reference actually has is *continuous* barrier — metres of it, run
+ * along the outside of every corner, the same object repeated close enough that
+ * nobody reads it as objects. Three of anything is a cluster; two hundred is a
+ * wall. That is a different feature, and until it exists this draws nothing.
  */
-const SIDE_SPACING = 9;
-
-function drawTrackSide(): void {
-  const path = pathAtOffset(0);
-  const signed = signedCurvature();
-  const peak = signed.reduce((most, v) => Math.max(most, Math.abs(v)), 0) || 1;
-  const surface = surfaceFor(activeTrackId);
-
-  // Grouped at a few points, not strung evenly round the bend.
-  //
-  // Spacing them uniformly along every corner produced a necklace of identical
-  // dots — the same even-spacing signature that has made every generated thing
-  // in this project look generated. A real circuit stacks tyres in a few walls
-  // where cars actually leave the road, with long clear stretches between, so
-  // the placement is clustered: find the middle of each turning stretch, and put
-  // one group there.
-  const groups: number[] = [];
-  let runStart: number | null = null;
-  for (let i = 0; i <= path.length; i++) {
-    const sharpness = i < path.length ? Math.abs(signed[i] ?? 0) / peak : 0;
-    const turning = sharpness > 0.4;
-    if (turning && runStart === null) runStart = i;
-    if (!turning && runStart !== null) {
-      const span = i - runStart;
-      // A long corner earns two walls, a short one earns one.
-      // One wall per corner, however long the corner is.
-      //
-      // Two on a long bend put ten stacks round the outside of it, which is
-      // back to a necklace of evenly spaced objects — the thing this clustering
-      // was introduced to avoid.
-      if (span > 26) groups.push(runStart + Math.floor(span / 2));
-      runStart = null;
-    }
-  }
-
-  for (const centre of groups) {
-    // A wall is a short row of stacks with a barrier at each end.
-    for (let n = -1; n <= 1; n++) {
-      const i = (centre + n * SIDE_SPACING + path.length) % path.length;
-      const k = signed[i] ?? 0;
-      const a = path[(i - 1 + path.length) % path.length];
-      const b = path[(i + 1) % path.length];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const side = k < 0 ? 1 : -1;
-      const offset = (ROAD_HALF_WIDTH + APRON_WIDTH + 10) * side;
-      const p = project(
-        path[i].x + (-dy / length) * offset,
-        path[i].y + (dx / length) * offset
-      );
-
-      const ends = Math.abs(n) === 1;
-      drawArt(ends ? 'barrier' : 'tyres', p.x, p.y, (ends ? 30 : 19) * p.scale, {
-        angle: Math.atan2(dy, dx),
-        tint: surface.artTint,
-        // Barely tinted, and not desaturated: a tyre wall that has been pulled
-        // towards the ground colour is a row of grey washers.
-        tintStrength: 0.1,
-        desaturate: 0,
-        shadow: 0.3
-      });
-    }
-  }
-}
 
 /** Offsets a plane path sideways, then projects it. */
 function edge(offset: number): ReturnType<typeof projectPath> {
@@ -537,7 +535,6 @@ export function drawTrack(): void {
   if (paint.seams) drawSlabSeams(outerRoad, innerRoad);
   drawEdgeGrime();
   drawStartLine();
-  drawTrackSide();
 }
 
 /**

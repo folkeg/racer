@@ -35,6 +35,7 @@ var HarborLoop = (() => {
     app: () => app,
     audio: () => audio,
     bestScore: () => bestScore,
+    buildLine: () => buildLine,
     canRevive: () => canRevive,
     careerPoints: () => careerPoints,
     clearCountdown: () => clearCountdown,
@@ -52,6 +53,7 @@ var HarborLoop = (() => {
     feelState: () => feelState,
     goBack: () => goBack,
     inputState: () => inputState,
+    invalidateStaticLayer: () => invalidateStaticLayer,
     isSeeded: () => isSeeded,
     laneButtonFlash: () => laneButtonFlash,
     loadMuted: () => loadMuted,
@@ -67,6 +69,7 @@ var HarborLoop = (() => {
     retryRun: () => retryRun,
     run: () => run,
     saveMuted: () => saveMuted,
+    setModelScale: () => setModelScale,
     setSeed: () => setSeed,
     setTrack: () => setTrack,
     setUnlockOverride: () => setUnlockOverride,
@@ -3314,7 +3317,10 @@ var HarborLoop = (() => {
     "cone"
   ];
   var props = {};
-  var MODEL_SCALE = 38;
+  var MODEL_SCALE = 48;
+  function setModelScale(value) {
+    MODEL_SCALE = value;
+  }
   function renderedSprites() {
     const names = [];
     for (const [name, info] of Object.entries(MODELS)) {
@@ -3836,7 +3842,12 @@ var HarborLoop = (() => {
       // to be the one thing the eye goes to.
       propDensity: 0.3,
       structures: ["works", "factory", "shed", "plant", "depot"],
-      clutter: ["tank", "container", "container-b", "chimney", "tank-small"]
+      // No chimney. It is a cylinder 41 units across, and this camera looks at it
+      // from ten degrees off vertical — so what reaches the board is its opening,
+      // a dark ring, and a dark ring lying on the ground is a manhole. The models
+      // that need a chimney have one built in, seen from the same angle, attached
+      // to a building that explains it.
+      clutter: ["tank", "container", "container-b", "tank-small"]
     },
     meadow: {
       tile: "grass",
@@ -4142,7 +4153,13 @@ var HarborLoop = (() => {
     ctx.fill();
   }
   var ART = {
-    rock: { name: "rock", width: 11 },
+    // No bought art for a rock.
+    //
+    // The pack's stone is a pale blue-grey, drawn for a green circuit, and on the
+    // works yard's brown ground it reads as an ice cube — which is what it has
+    // looked like in every screenshot of that circuit. A rock is the one prop that
+    // must be made of the ground it is lying on, and the ground is a different
+    // colour on every world, so it is drawn from the world's own palette below.
     // The small ones come in groups.
     //
     // A drum is half a metre across and a car is four, so at its true relative
@@ -4191,12 +4208,13 @@ var HarborLoop = (() => {
     }
     switch (prop.kind) {
       case "rock": {
+        const world = surfaceFor(activeTrackId);
         shadow(x, y + 1.5 * s, 5.5 * s, 3 * s);
-        ctx.fillStyle = "#6E6A60";
+        ctx.fillStyle = world.island.tops[0];
         ctx.beginPath();
         ctx.ellipse(x, y, 5 * s, 3.6 * s, 0.3, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#918C7E";
+        ctx.fillStyle = world.island.beach;
         ctx.beginPath();
         ctx.ellipse(x - 1.1 * s, y - 1.1 * s, 3 * s, 2 * s, 0.3, 0, Math.PI * 2);
         ctx.fill();
@@ -4309,10 +4327,10 @@ var HarborLoop = (() => {
 
   // src/render/land.ts
   var NEAR_GAP = ROAD_HALF_WIDTH + 10;
-  var DEPTHS = [96, 80, 66, 54, 44, 36, 28];
-  var FOLD_TOLERANCE = 0.88;
+  var DEPTHS = [80, 66, 54, 44, 36, 28];
+  var FOLD_TOLERANCE = 0.95;
   var ZONE_LENGTH = 66;
-  var YARD_SAMPLES = 190;
+  var YARD_SAMPLES = 250;
   var YARD_MIN_DEPTH = 38;
   var MIN_DEPTH = 22;
   var cachedTrack2 = null;
@@ -4484,23 +4502,26 @@ var HarborLoop = (() => {
     const profile = cachedDepth.get(side);
     return profile ? profile[i % centerPath.length] : 0;
   }
-  function zoneOutline(zone, inset = 0) {
+  function zoneOutline(zone, inset = 0, bite = -1) {
     const n = centerPath.length;
-    const bite = inset > 0 ? Math.round(inset * 0.9) : -1;
     const from = zone.i0 + bite;
     const to = zone.i1 - bite;
     if (to - from < 4) return [];
-    const points = [];
+    const live = [];
     for (let i = from; i < to; i++) {
-      const depth = depthAt(zone.side, i) - inset;
-      if (depth <= 0) continue;
-      points.push(offsetPoint((i % n + n) % n, zone.side * (NEAR_GAP + depth)));
+      if (depthAt(zone.side, i) - inset > SLIVER) live.push((i % n + n) % n);
     }
-    for (let i = to - 1; i >= from; i--) {
-      points.push(offsetPoint((i % n + n) % n, zone.side * (NEAR_GAP + inset * 0.35)));
+    if (live.length < 4) return [];
+    const points = [];
+    for (const i of live) {
+      points.push(offsetPoint(i, zone.side * (NEAR_GAP + depthAt(zone.side, i) - inset)));
+    }
+    for (let k = live.length - 1; k >= 0; k--) {
+      points.push(offsetPoint(live[k], zone.side * (NEAR_GAP + inset * 0.35)));
     }
     return points;
   }
+  var SLIVER = 7;
   function buildLine(zone, fraction) {
     const n = centerPath.length;
     const out = [];
@@ -4586,16 +4607,15 @@ var HarborLoop = (() => {
       if (material) drawZone(zone, material);
     }
     for (const zone of zones()) {
-      const material = materialFor(zone.kind);
-      if (material && material.made) drawMarkings(zone);
+      if (zone.kind === "gravel") drawMarkings(zone);
     }
     for (const side of [-1, 1]) drawBoundaryEdge(side);
   }
   function drawZone(zone, material) {
     const grain = groundTexture(ctx, material.tile);
-    const steps = material.made ? [[0, 1]] : SOFT_STEPS.map((inset, i) => [inset, SOFT_ALPHA[i]]);
-    for (const [inset, alpha] of steps) {
-      const outline = zoneOutline(zone, inset);
+    const steps = material.made ? END_BITES.map((bite, i) => [0, END_ALPHA[i], bite]) : SOFT_STEPS.map((inset, i) => [inset, SOFT_ALPHA[i], Math.round(inset * 1.1)]);
+    for (const [inset, alpha, bite] of steps) {
+      const outline = zoneOutline(zone, inset, bite);
       if (outline.length < 6) continue;
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -4624,6 +4644,8 @@ var HarborLoop = (() => {
   }
   var SOFT_STEPS = [14, 9, 4.5, 0];
   var SOFT_ALPHA = [0.22, 0.34, 0.5, 1];
+  var END_BITES = [14, 8, 3, -1];
+  var END_ALPHA = [0.3, 0.45, 0.7, 1];
   var PARKED = [
     { body: "#C8C6C0", cabin: "#DEDCD6", window: "#5E666E", lights: "#EEE8D8", stripe: null, side: "#8A8882", rim: "#F2F0EA" },
     { body: "#8A9098", cabin: "#9CA2AA", window: "#4A525A", lights: "#E8E4D8", stripe: null, side: "#5C646C", rim: "#B8BEC6" },
@@ -4749,11 +4771,19 @@ var HarborLoop = (() => {
     flush();
     ctx.restore();
   }
-  var YARD_GAP = 9;
-  var YARD_MARGIN = 26;
+  var YARD_GAP = 7;
+  var YARD_MARGIN = 16;
+  function standsClear(index, side, offset, halfAcross, radius) {
+    if (offset - halfAcross < ROAD_HALF_WIDTH + APRON_CLEARANCE) return false;
+    const point = offsetPoint(index, side * offset);
+    if (point.x - radius < 6 || point.x + radius > 384) return false;
+    if (point.y - radius < BOARD_TOP + 4 || point.y + radius > BOARD_BOTTOM - 4) return false;
+    return distanceToTrack(point) >= radius * 0.85 + 10;
+  }
+  var APRON_CLEARANCE = 22;
   function clashes(placed, x, y, radius) {
     for (const other of placed) {
-      if (Math.hypot(other.x - x, other.y - y) < (other.radius + radius) * 0.82) return true;
+      if (Math.hypot(other.x - x, other.y - y) < (other.radius + radius) * 0.7) return true;
     }
     return false;
   }
@@ -4770,7 +4800,7 @@ var HarborLoop = (() => {
     }
     const total = step[step.length - 1];
     const random2 = seeded2(seed);
-    const margin = Math.min(YARD_MARGIN, total * 0.1);
+    const margin = Math.min(YARD_MARGIN, total * 0.07);
     const n = centerPath.length;
     const placed = [];
     let at = margin;
@@ -4789,15 +4819,22 @@ var HarborLoop = (() => {
       while (i < step.length - 1 && step[i] < centre) i++;
       const index = ((zone.i0 + i) % n + n) % n;
       const here = depthAt(zone.side, index);
-      if (across > here * maxShare) {
+      const radius = Math.max(along, across) * 0.42;
+      const wanted = NEAR_GAP + here * (anchor + (random2() - 0.5) * 0.16);
+      let offset = 0;
+      for (let tries = 0; tries < 14; tries++) {
+        const candidate = wanted + tries * 6;
+        if (standsClear(index, zone.side, candidate, across / 2, radius)) {
+          offset = candidate;
+          break;
+        }
+      }
+      if (offset === 0) {
         at += along * 0.4 + gap;
         continue;
       }
-      const half = across / 2 / Math.max(1, here);
-      const wanted = anchor + (random2() - 0.5) * 0.16;
-      const fraction = Math.min(Math.max(wanted, half + 0.04), 1 - half - 0.04);
-      const point = offsetPoint(index, zone.side * (NEAR_GAP + here * fraction));
-      const radius = Math.max(along, across) * 0.42;
+      const point = offsetPoint(index, zone.side * offset);
+      void maxShare;
       if (clashes(taken, point.x, point.y, radius) || clashes(placed, point.x, point.y, radius)) {
         at += gap;
         continue;
@@ -4821,9 +4858,7 @@ var HarborLoop = (() => {
     const depth = depthOf(zone);
     if (depth < 14) return [];
     const n = centerPath.length;
-    const kinds = names.filter(
-      (name) => MODELS[name] && MODELS[name].depth * MODEL_SCALE <= depth * 0.8
-    );
+    const kinds = names.filter((name) => MODELS[name]);
     if (kinds.length === 0) return [];
     const limit = kinds.length >= 2 ? attempts : 2;
     const random2 = seeded2(seed);
@@ -4834,15 +4869,13 @@ var HarborLoop = (() => {
       const info = MODELS[name];
       const along = info.width * MODEL_SCALE;
       const across = info.depth * MODEL_SCALE;
-      const offset = 0.06 + random2() * 0.88;
-      const index = (Math.round(zone.i0 + offset * span) % n + n) % n;
+      const along_t = 0.06 + random2() * 0.88;
+      const index = (Math.round(zone.i0 + along_t * span) % n + n) % n;
       const here = depthAt(zone.side, index);
-      if (across > here * 0.8) continue;
-      const half = across / 2 / Math.max(1, here);
-      const wanted = 0.42 + random2() * 0.5;
-      const fraction = Math.min(Math.max(wanted, half + 0.03), 1 - half - 0.03);
-      const point = offsetPoint(index, zone.side * (NEAR_GAP + here * fraction));
       const radius = Math.max(along, across) * 0.46;
+      const offset = NEAR_GAP + here * (0.42 + random2() * 0.55);
+      if (!standsClear(index, zone.side, offset, across / 2, radius)) continue;
+      const point = offsetPoint(index, zone.side * offset);
       if (clashes(taken, point.x, point.y, radius) || clashes(placed, point.x, point.y, radius)) {
         continue;
       }
@@ -4868,8 +4901,9 @@ var HarborLoop = (() => {
       if (zone.kind !== "yard") continue;
       const seed = index * 977 + zone.i0 * 31 + zone.want;
       const site = [];
-      site.push(...row(zone, 0.58, 0.95, world.structures, YARD_GAP, seed, 6, site));
-      site.push(...scatter(zone, world.clutter, 90, seed + 13, site));
+      site.push(...row(zone, 0.38, 0.95, world.structures, YARD_GAP, seed, 9, site));
+      site.push(...scatter(zone, [...world.structures, ...world.clutter], 140, seed + 13, site));
+      site.push(...scatter(zone, world.clutter, 140, seed + 29, site));
       placed.push(...site);
     }
     return placed;
@@ -7015,6 +7049,7 @@ var HarborLoop = (() => {
   var CORNER_HYSTERESIS = 0.75;
   var CORNER_MERGE = 12;
   var MIN_KERB_BLOCKS = 2;
+  var MAX_KERB_SAMPLES = 64;
   var KERB_BLOCK = 7;
   var KERB_REACH = 4;
   var KERB_INSET = 3.2;
@@ -7105,7 +7140,35 @@ var HarborLoop = (() => {
       if (last && run2[0] - last[1] <= CORNER_MERGE) last[1] = run2[1];
       else merged.push([run2[0], run2[1]]);
     }
-    return merged.filter(([a, b]) => b - a >= MIN_KERB_BLOCKS * KERB_BLOCK);
+    if (merged.length > 1) {
+      const first = merged[0];
+      const last = merged[merged.length - 1];
+      if (first[0] + curvature.length - last[1] <= CORNER_MERGE) {
+        first[0] = last[0] - curvature.length;
+        merged.pop();
+      }
+    }
+    return merged.filter(([a, b]) => b - a >= MIN_KERB_BLOCKS * KERB_BLOCK).map(([a, b]) => {
+      if (b - a <= MAX_KERB_SAMPLES) return [a, b];
+      let apex = a;
+      let sharpest = -1;
+      for (let i = a; i < b; i++) {
+        const value = curvature[(i % curvature.length + curvature.length) % curvature.length];
+        if (value > sharpest) {
+          sharpest = value;
+          apex = i;
+        }
+      }
+      const half = MAX_KERB_SAMPLES / 2;
+      const from = Math.max(a, Math.min(apex - half, b - MAX_KERB_SAMPLES));
+      return [from, from + MAX_KERB_SAMPLES];
+    });
+  }
+  function cyclicSlice(points, from, to) {
+    const n = points.length;
+    const out = [];
+    for (let i = from; i < to; i++) out.push(points[(i % n + n) % n]);
+    return out;
   }
   function drawCornerKerbs() {
     const curvature = centreCurvature();
@@ -7114,8 +7177,8 @@ var HarborLoop = (() => {
       const baseOuterIn = edge(ROAD_HALF_WIDTH - KERB_INSET);
       const baseInner = edge(-ROAD_HALF_WIDTH - KERB_REACH);
       const baseInnerIn = edge(-ROAD_HALF_WIDTH + KERB_INSET);
-      fillRibbon(baseOuter.slice(start, end), baseOuterIn.slice(start, end), "#2A2F35");
-      fillRibbon(baseInnerIn.slice(start, end), baseInner.slice(start, end), "#2A2F35");
+      fillRibbon(cyclicSlice(baseOuter, start, end), cyclicSlice(baseOuterIn, start, end), "#2A2F35");
+      fillRibbon(cyclicSlice(baseInnerIn, start, end), cyclicSlice(baseInner, start, end), "#2A2F35");
       const outerReach = edge(ROAD_HALF_WIDTH + KERB_REACH - 0.7);
       const outerInner = edge(ROAD_HALF_WIDTH - KERB_INSET + 0.7);
       const innerReach = edge(-ROAD_HALF_WIDTH - KERB_REACH + 0.7);
@@ -7127,55 +7190,8 @@ var HarborLoop = (() => {
         const from = start + Math.round(b * span / blocks);
         const to = start + Math.round((b + 1) * span / blocks) + 1;
         if (to - from < 2) continue;
-        fillRibbon(outerReach.slice(from, to), outerInner.slice(from, to), "#C6392C");
-        fillRibbon(innerInner.slice(from, to), innerReach.slice(from, to), "#C6392C");
-      }
-    }
-  }
-  var SIDE_SPACING = 9;
-  function drawTrackSide() {
-    var _a, _b;
-    const path = pathAtOffset(0);
-    const signed = signedCurvature();
-    const peak = signed.reduce((most, v) => Math.max(most, Math.abs(v)), 0) || 1;
-    const surface = surfaceFor(activeTrackId);
-    const groups = [];
-    let runStart = null;
-    for (let i = 0; i <= path.length; i++) {
-      const sharpness = i < path.length ? Math.abs((_a = signed[i]) != null ? _a : 0) / peak : 0;
-      const turning = sharpness > 0.4;
-      if (turning && runStart === null) runStart = i;
-      if (!turning && runStart !== null) {
-        const span = i - runStart;
-        if (span > 26) groups.push(runStart + Math.floor(span / 2));
-        runStart = null;
-      }
-    }
-    for (const centre of groups) {
-      for (let n = -1; n <= 1; n++) {
-        const i = (centre + n * SIDE_SPACING + path.length) % path.length;
-        const k = (_b = signed[i]) != null ? _b : 0;
-        const a = path[(i - 1 + path.length) % path.length];
-        const b = path[(i + 1) % path.length];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const length = Math.hypot(dx, dy) || 1;
-        const side = k < 0 ? 1 : -1;
-        const offset = (ROAD_HALF_WIDTH + APRON_WIDTH + 10) * side;
-        const p = project(
-          path[i].x + -dy / length * offset,
-          path[i].y + dx / length * offset
-        );
-        const ends = Math.abs(n) === 1;
-        drawArt(ends ? "barrier" : "tyres", p.x, p.y, (ends ? 30 : 19) * p.scale, {
-          angle: Math.atan2(dy, dx),
-          tint: surface.artTint,
-          // Barely tinted, and not desaturated: a tyre wall that has been pulled
-          // towards the ground colour is a row of grey washers.
-          tintStrength: 0.1,
-          desaturate: 0,
-          shadow: 0.3
-        });
+        fillRibbon(cyclicSlice(outerReach, from, to), cyclicSlice(outerInner, from, to), "#C6392C");
+        fillRibbon(cyclicSlice(innerInner, from, to), cyclicSlice(innerReach, from, to), "#C6392C");
       }
     }
   }
@@ -7229,7 +7245,6 @@ var HarborLoop = (() => {
     if (paint.seams) drawSlabSeams(outerRoad, innerRoad);
     drawEdgeGrime();
     drawStartLine();
-    drawTrackSide();
   }
   var SEAM_SPACING = 6;
   function drawSlabVariation(outer, inner) {

@@ -209,7 +209,13 @@ function shadow(x: number, y: number, w: number, h: number): void {
  * a stated scale rather than one tuned by eye until it looked about right.
  */
 const ART: Partial<Record<PropKind, { name: string; width: number; group?: number }>> = {
-  rock: { name: 'rock', width: 11 },
+  // No bought art for a rock.
+  //
+  // The pack's stone is a pale blue-grey, drawn for a green circuit, and on the
+  // works yard's brown ground it reads as an ice cube — which is what it has
+  // looked like in every screenshot of that circuit. A rock is the one prop that
+  // must be made of the ground it is lying on, and the ground is a different
+  // colour on every world, so it is drawn from the world's own palette below.
   // The small ones come in groups.
   //
   // A drum is half a metre across and a car is four, so at its true relative
@@ -266,12 +272,17 @@ function drawProp(prop: Prop): void {
 
   switch (prop.kind) {
     case 'rock': {
+      // Made of the ground it is lying on, but not out of the world's darkest
+      // colour: `cliff` is a vertical face seen edge-on and at #332F29 on the
+      // works yard it made a rock read as a manhole cover. A boulder lying in
+      // the open is the same stuff as the ground with a lit top.
+      const world = surfaceFor(activeTrackId);
       shadow(x, y + 1.5 * s, 5.5 * s, 3 * s);
-      ctx.fillStyle = '#6E6A60';
+      ctx.fillStyle = world.island.tops[0];
       ctx.beginPath();
       ctx.ellipse(x, y, 5 * s, 3.6 * s, 0.3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#918C7E';
+      ctx.fillStyle = world.island.beach;
       ctx.beginPath();
       ctx.ellipse(x - 1.1 * s, y - 1.1 * s, 3 * s, 2 * s, 0.3, 0, Math.PI * 2);
       ctx.fill();

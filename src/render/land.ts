@@ -82,10 +82,22 @@ export interface Zone {
 }
 
 /** The deepest a skirt is allowed to get, and the ladder tried below it. */
-const DEPTHS = [96, 80, 66, 54, 44, 36, 28];
+const DEPTHS = [80, 66, 54, 44, 36, 28];
 
-/** How far the offset may collapse before the band has folded over itself. */
-const FOLD_TOLERANCE = 0.88;
+/**
+ * How much of the room between the track and the next thing a skirt may take.
+ *
+ * It started as a fold test — an offset larger than a corner's radius turns the
+ * band inside out — and 0.88 was loose enough to pass. It is doing a second job
+ * that matters more. Where the circuit runs back alongside itself, as Tide
+ * Drop's return straight does, the skirts from the two sides both reach towards
+ * the middle of the corridor and stop just short of each other, leaving a long
+ * diagonal sliver of bare ground between two pale plates: the infield read as
+ * pieces of card laid down rather than as ground. Held back to 0.95 the skirt
+ * stays a band beside the track, parallel to it, with open ground down the
+ * middle — which is the shape the reference actually has.
+ */
+const FOLD_TOLERANCE = 0.95;
 
 /** Zones are this long, give or take. Long enough that each reads as somewhere. */
 const ZONE_LENGTH = 66;
@@ -99,7 +111,7 @@ const ZONE_LENGTH = 66;
  * held a single shed. The buildings set the scale of the ground they need, not
  * the other way round.
  */
-const YARD_SAMPLES = 190;
+const YARD_SAMPLES = 250;
 
 /** And it is not worth calling a facility unless the ground is this deep. */
 const YARD_MIN_DEPTH = 38;
@@ -398,33 +410,49 @@ function depthAt(side: 1 | -1, i: number): number {
 /**
  * A zone as a closed polygon, optionally shrunk on all four sides.
  *
- * `inset` is what makes a soft edge possible without a blur: the same zone drawn
- * four times, each a little smaller and a little more opaque, is a gradient. It
- * shrinks in arc as well as in depth, so the ends fade too — a field that stops
- * dead across the lap is a rectangle, and a rectangle is the thing this board
- * has been accused of three times.
+ * Two shrinks, and they are separate on purpose. `inset` pulls the far edge in,
+ * which is how a soft edge is made without a blur: the same zone drawn four
+ * times, each a little narrower and a little more opaque, is a gradient. `bite`
+ * pulls the *ends* in along the lap, which is a different problem — even a
+ * hard-edged surface like a concrete apron should not stop dead across the lap
+ * on a straight line, because that line is a crease, and a crease across the
+ * run-off is the first thing anybody notices about it.
  *
- * At inset zero it reaches one sample into each neighbour instead, so two
- * hard-edged zones meet without a hairline of bare ground between them.
+ * At bite -1 the zone reaches one sample into each neighbour instead, so two
+ * fills meet without a hairline of bare ground between them.
  */
-export function zoneOutline(zone: Zone, inset = 0): Vec2[] {
+export function zoneOutline(zone: Zone, inset = 0, bite = -1): Vec2[] {
   const n = centerPath.length;
-  const bite = inset > 0 ? Math.round(inset * 0.9) : -1;
   const from = zone.i0 + bite;
   const to = zone.i1 - bite;
   if (to - from < 4) return [];
 
-  const points: Vec2[] = [];
+  // The samples that actually have ground on them, and both edges built from
+  // that same list.
+  //
+  // The far edge used to skip pinched samples while the near edge kept every
+  // one of them, so wherever the skirt narrowed to nothing the polygon closed up
+  // into a long thin tongue with an outline round it — a pale strip snaking
+  // across the infield that read as a path or a stream. A shape is only a shape
+  // if both its sides agree about where it is.
+  const live: number[] = [];
   for (let i = from; i < to; i++) {
-    const depth = depthAt(zone.side, i) - inset;
-    if (depth <= 0) continue;
-    points.push(offsetPoint(((i % n) + n) % n, zone.side * (NEAR_GAP + depth)));
+    if (depthAt(zone.side, i) - inset > SLIVER) live.push(((i % n) + n) % n);
   }
-  for (let i = to - 1; i >= from; i--) {
-    points.push(offsetPoint(((i % n) + n) % n, zone.side * (NEAR_GAP + inset * 0.35)));
+  if (live.length < 4) return [];
+
+  const points: Vec2[] = [];
+  for (const i of live) {
+    points.push(offsetPoint(i, zone.side * (NEAR_GAP + depthAt(zone.side, i) - inset)));
+  }
+  for (let k = live.length - 1; k >= 0; k--) {
+    points.push(offsetPoint(live[k], zone.side * (NEAR_GAP + inset * 0.35)));
   }
   return points;
 }
+
+/** Narrower than this and the skirt is not ground, it is a line. */
+const SLIVER = 7;
 
 /** The line things stand on inside a zone, and the way the zone runs there. */
 export function buildLine(zone: Zone, fraction: number): Array<Vec2 & { angle: number }> {
@@ -562,21 +590,37 @@ export function drawLand(): void {
   // where the ground was laid by someone: a concrete yard has a kerb and a field
   // does not.
   for (const zone of zones()) {
-    const material = materialFor(zone.kind);
-    if (material && material.made) drawMarkings(zone);
+    // Not in the works yard.
+    //
+    // A car park is a place people arrive at; a works yard is a place lorries
+    // turn in. Putting both in the same zone stacked a row of parked cars
+    // against the wall of the factory, which is the one place on a works site
+    // nobody parks — "那些车感觉有点奇怪 可以不用在工厂旁边堆". They go in the
+    // made ground elsewhere on the lap instead, which also spreads what is on
+    // the board over more of it.
+    if (zone.kind === 'gravel') drawMarkings(zone);
   }
   for (const side of [-1, 1] as const) drawBoundaryEdge(side);
 }
 
-/** Fills one zone: solid if it was laid, feathered if it grew. */
+/**
+ * Fills one zone.
+ *
+ * Grown ground is feathered on all four sides; made ground keeps its hard long
+ * edges — somebody poured it to a line — but still fades at the ends, because
+ * nothing on a circuit stops square across the lap. The first version let made
+ * zones end on a straight cut and the result was a set of pale wedges with
+ * diagonal creases through the run-off: "缓冲区做的还不自然 尤其是上面".
+ */
 function drawZone(zone: Zone, material: Material): void {
   const grain = groundTexture(ctx, material.tile);
-  const steps: Array<[number, number]> = material.made
-    ? [[0, 1]]
-    : SOFT_STEPS.map((inset, i) => [inset, SOFT_ALPHA[i]] as [number, number]);
+  const steps: Array<[number, number, number]> = material.made
+    ? END_BITES.map((bite, i) => [0, END_ALPHA[i], bite] as [number, number, number])
+    : SOFT_STEPS.map((inset, i) =>
+        [inset, SOFT_ALPHA[i], Math.round(inset * 1.1)] as [number, number, number]);
 
-  for (const [inset, alpha] of steps) {
-    const outline = zoneOutline(zone, inset);
+  for (const [inset, alpha, bite] of steps) {
+    const outline = zoneOutline(zone, inset, bite);
     if (outline.length < 6) continue;
 
     ctx.save();
@@ -616,6 +660,10 @@ function drawZone(zone: Zone, material: Material): void {
  */
 const SOFT_STEPS = [14, 9, 4.5, 0];
 const SOFT_ALPHA = [0.22, 0.34, 0.5, 1];
+
+/** Made ground keeps its long edges hard and fades only at the ends. */
+const END_BITES = [14, 8, 3, -1];
+const END_ALPHA = [0.3, 0.45, 0.7, 1];
 
 /**
  * Parked cars, in muted paint.
@@ -826,9 +874,9 @@ export interface Placed {
 }
 
 /** Gap between neighbours, in plane units. Tight: a yard is not a sculpture park. */
-const YARD_GAP = 9;
+const YARD_GAP = 7;
 /** And an equal margin at each end, so the row does not run off the splay. */
-const YARD_MARGIN = 26;
+const YARD_MARGIN = 16;
 
 /**
  * Lays one row of things along the yard.
@@ -851,10 +899,55 @@ const YARD_MARGIN = 26;
  * one where two sheds share a wall. The jitter is seeded off the yard, so it is
  * the same yard every run.
  */
+/**
+ * Whether a thing of this size can stand at this offset from the centre line.
+ *
+ * The test used to be "does it fit inside the zone's depth", which tied the size
+ * of every building to how deep the board happened to let the made ground be —
+ * so making the factories bigger meant making the yards deeper, and making the
+ * yards deeper meant the skirts swallowed the infield. They are not the same
+ * constraint and should never have been one test.
+ *
+ * A building is not standing *on* the yard the way a plate stands on a mat; the
+ * yard is where a site clusters, and a shed whose back wall is past the edge of
+ * the concrete is what every real industrial estate looks like. What actually
+ * constrains it is two things, and only two: it may not reach into the run-off,
+ * and it may not fall off the board.
+ */
+function standsClear(
+  index: number,
+  side: 1 | -1,
+  offset: number,
+  halfAcross: number,
+  radius: number
+): boolean {
+  // Towards the racing, only the depth of the thing matters.
+  //
+  // Testing this with the bounding circle is what kept the big models out: a
+  // shed is 119 units long and 61 deep, and lying parallel to the track — which
+  // is how it is always laid — only 30 of it reaches towards the tarmac. Using
+  // the circle charged it 55, which on a yard 80 deep left a band about twenty
+  // units wide for it to stand in, so most of the site simply failed to place.
+  if (offset - halfAcross < ROAD_HALF_WIDTH + APRON_CLEARANCE) return false;
+
+  const point = offsetPoint(index, side * offset);
+  if (point.x - radius < 6 || point.x + radius > 384) return false;
+  if (point.y - radius < BOARD_TOP + 4 || point.y + radius > BOARD_BOTTOM - 4) return false;
+  // Clear of every other part of the circuit, not just the bit beside it. The
+  // circle is right here: another fold can lie at any angle to this one.
+  return distanceToTrack(point) >= radius * 0.85 + 10;
+}
+
+/** Run-off plus breathing room. Nothing may stand inside this. */
+const APRON_CLEARANCE = 22;
+
 /** Whether a footprint would land on something already standing there. */
 function clashes(placed: Placed[], x: number, y: number, radius: number): boolean {
   for (const other of placed) {
-    if (Math.hypot(other.x - x, other.y - y) < (other.radius + radius) * 0.82) return true;
+    // Radii are of the bounding circle, and a building is a rectangle inside
+    // it, so two that are nearly touching by this measure are still a good way
+    // apart on the ground. Packed: a works site is packed.
+    if (Math.hypot(other.x - x, other.y - y) < (other.radius + radius) * 0.70) return true;
   }
   return false;
 }
@@ -906,7 +999,7 @@ function row(
   }
   const total = step[step.length - 1];
   const random = seeded(seed);
-  const margin = Math.min(YARD_MARGIN, total * 0.1);
+  const margin = Math.min(YARD_MARGIN, total * 0.07);
   const n = centerPath.length;
 
   const placed: Placed[] = [];
@@ -930,21 +1023,26 @@ function row(
     const index = (((zone.i0 + i) % n) + n) % n;
     const here = depthAt(zone.side, index);
 
-    if (across > here * maxShare) {
-      // Too deep for the skirt at this point. Step on rather than give up: the
-      // skirt is deeper further along, and that is where this belongs.
+    // Where across the skirt this one stands: the row's anchor, jittered, then
+    // walked outward until it stands clear of the racing and the frame. A
+    // building may overhang the back of the yard; it may not overhang the
+    // run-off.
+    const radius = Math.max(along, across) * 0.42;
+    const wanted = NEAR_GAP + here * (anchor + (random() - 0.5) * 0.16);
+    let offset = 0;
+    for (let tries = 0; tries < 14; tries++) {
+      const candidate = wanted + tries * 6;
+      if (standsClear(index, zone.side, candidate, across / 2, radius)) {
+        offset = candidate;
+        break;
+      }
+    }
+    if (offset === 0) {
       at += along * 0.4 + gap;
       continue;
     }
-
-    // Where across the skirt this one stands: the row's anchor, jittered, then
-    // pushed in only as far as it has to be to keep its own footprint on the
-    // ground it is standing on.
-    const half = across / 2 / Math.max(1, here);
-    const wanted = anchor + (random() - 0.5) * 0.16;
-    const fraction = Math.min(Math.max(wanted, half + 0.04), 1 - half - 0.04);
-    const point = offsetPoint(index, zone.side * (NEAR_GAP + here * fraction));
-    const radius = Math.max(along, across) * 0.42;
+    const point = offsetPoint(index, zone.side * offset);
+    void maxShare;
 
     if (clashes(taken, point.x, point.y, radius) || clashes(placed, point.x, point.y, radius)) {
       at += gap;
@@ -991,9 +1089,7 @@ function scatter(
   if (depth < 14) return [];
   const n = centerPath.length;
   // What will actually fit across this yard.
-  const kinds = names.filter(
-    (name) => MODELS[name] && MODELS[name].depth * MODEL_SCALE <= depth * 0.8
-  );
+  const kinds = names.filter((name) => MODELS[name]);
   if (kinds.length === 0) return [];
 
   // One kind is not clutter, it is a pattern.
@@ -1015,18 +1111,16 @@ function scatter(
     const along = info.width * MODEL_SCALE;
     const across = info.depth * MODEL_SCALE;
 
-    const offset = 0.06 + random() * 0.88;
-    const index = ((Math.round(zone.i0 + offset * span) % n) + n) % n;
+    const along_t = 0.06 + random() * 0.88;
+    const index = ((Math.round(zone.i0 + along_t * span) % n) + n) % n;
     const here = depthAt(zone.side, index);
-    if (across > here * 0.8) continue;
 
-    const half = across / 2 / Math.max(1, here);
     // Biased towards the back of the yard: the near strip is the apron, and a
     // works yard has one because lorries have to turn somewhere.
-    const wanted = 0.42 + random() * 0.5;
-    const fraction = Math.min(Math.max(wanted, half + 0.03), 1 - half - 0.03);
-    const point = offsetPoint(index, zone.side * (NEAR_GAP + here * fraction));
     const radius = Math.max(along, across) * 0.46;
+    const offset = NEAR_GAP + here * (0.42 + random() * 0.55);
+    if (!standsClear(index, zone.side, offset, across / 2, radius)) continue;
+    const point = offsetPoint(index, zone.side * offset);
     if (clashes(taken, point.x, point.y, radius) || clashes(placed, point.x, point.y, radius)) {
       continue;
     }
@@ -1065,9 +1159,19 @@ export function facility(): Placed[] {
     if (zone.kind !== 'yard') continue;
     const seed = index * 977 + zone.i0 * 31 + zone.want;
     const site: Placed[] = [];
-    // The near strip stays clear: that is the apron.
-    site.push(...row(zone, 0.58, 0.95, world.structures, YARD_GAP, seed, 6, site));
-    site.push(...scatter(zone, world.clutter, 90, seed + 13, site));
+    // The frontage is where the buildings go, and it is not where the yard is
+    // deepest.
+    //
+    // A yard on the inside of a bend loses length the further in you go: Tide
+    // Drop's runs 401 units along its near edge and 193 along its far one, so a
+    // row laid down the middle of it had 205 usable units and fitted two
+    // buildings. The row moved forward, where the ground is longest, and
+    // everything behind it is filled by area instead of by frontage.
+    site.push(...row(zone, 0.38, 0.95, world.structures, YARD_GAP, seed, 9, site));
+    // Then the rest of the yard, buildings and all. Scattering only the small
+    // stuff left a works site with two buildings and a lot of empty concrete.
+    site.push(...scatter(zone, [...world.structures, ...world.clutter], 140, seed + 13, site));
+    site.push(...scatter(zone, world.clutter, 140, seed + 29, site));
     placed.push(...site);
   }
   return placed;

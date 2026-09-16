@@ -355,7 +355,12 @@ export const SURFACES: Record<string, Surface> = {
     // to be the one thing the eye goes to.
     propDensity: 0.3,
     structures: ['works', 'factory', 'shed', 'plant', 'depot'],
-    clutter: ['tank', 'container', 'container-b', 'chimney', 'tank-small']
+    // No chimney. It is a cylinder 41 units across, and this camera looks at it
+    // from ten degrees off vertical — so what reaches the board is its opening,
+    // a dark ring, and a dark ring lying on the ground is a manhole. The models
+    // that need a chimney have one built in, seen from the same angle, attached
+    // to a building that explains it.
+    clutter: ['tank', 'container', 'container-b', 'tank-small']
   },
 
   meadow: {
