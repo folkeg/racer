@@ -41,6 +41,26 @@
       {
         "value": "tools",
         "type": "folder"
+      },
+      {
+        "value": ".artreview",
+        "type": "folder"
+      },
+      {
+        "value": ".claude",
+        "type": "folder"
+      },
+      {
+        "value": "NOTES.md",
+        "type": "file"
+      },
+      {
+        "value": "README.md",
+        "type": "file"
+      },
+      {
+        "value": "WECHAT_ONBOARDING.md",
+        "type": "file"
       }
     ],
     "include": []
